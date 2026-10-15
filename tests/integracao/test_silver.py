@@ -3,13 +3,14 @@ from datetime import date
 
 import psycopg
 import pytest
+from psycopg import sql
 
 from srag_agente.banco import conectar
 from srag_agente.dados.carga_raw import carregar_raw
 from srag_agente.dados.qualidade import gerar_relatorio_qualidade
 from srag_agente.dados.transformar import transformar
 from tests.dados import oraculo
-from tests.dados.amostra import escrever_csv
+from tests.dados.amostra import COLUNAS, escrever_csv
 
 pytestmark = pytest.mark.integracao
 
@@ -226,3 +227,94 @@ def test_agente_nao_le_a_silver(cfg_teste, banco_carregado):
         pytest.raises(psycopg.errors.InsufficientPrivilege),
     ):
         conn.execute("SELECT count(*) FROM silver.casos")
+
+
+# --- Janela de datas robusta a notificação absurda ------------------------------------------
+# Valores escritos à mão a partir da amostra: notificações de 2025-01-02 a 2025-06-26,
+# mediana 2025-04-16, último sintoma em 2025-06-25. 2025-01-02 - 365 dias = 2024-01-03.
+JANELA_DA_AMOSTRA = (date(2024, 1, 3), date(2025, 6, 26))
+HOJE_DA_AMOSTRA = date(2025, 6, 25)
+ABSURDAS = {
+    "1695": "1695-01-17 02:32:37.742690304",
+    "2202": "2202-06-07",
+}
+
+
+def _linha_absurda(numero: str, valor: str) -> dict[str, str]:
+    linha = dict.fromkeys(COLUNAS, "")
+    linha.update({
+        "NU_NOTIFIC": numero, "DT_NOTIFIC": valor, "DT_SIN_PRI": valor, "DT_INTERNA": valor,
+        "SG_UF_NOT": "SP", "NU_IDADE_N": "40", "TP_IDADE": "3",
+    })  # fmt: skip
+    return linha
+
+
+def _inserir_na_raw(conn, linhas: list[dict[str, str]]) -> None:
+    colunas = sql.SQL(", ").join(sql.Identifier(c.lower()) for c in COLUNAS)
+    marcadores = sql.SQL(", ").join(sql.Placeholder() * len(COLUNAS))
+    comando = sql.SQL("INSERT INTO raw.srag ({}) VALUES ({})").format(colunas, marcadores)
+    for linha in linhas:
+        conn.execute(comando, [linha[c] for c in COLUNAS])
+
+
+@pytest.mark.parametrize("anos", [["1695"], ["2202"], ["1695", "2202"]])
+def test_notificacao_absurda_nao_move_a_janela_nem_o_hoje(cfg_teste, banco_carregado, anos):
+    extras = [_linha_absurda(f"8{i}", ABSURDAS[ano]) for i, ano in enumerate(anos)]
+    assert oraculo.limites(banco_carregado + extras) == JANELA_DA_AMOSTRA
+
+    # Tudo numa transação desfeita no fim: a amostra da sessão não muda.
+    with conectar(cfg_teste, "etl") as conn:
+        try:
+            _inserir_na_raw(conn, extras)
+            transformar(conn, SILVER)
+            assert conn.execute("SELECT minimo, maximo FROM silver.limites").fetchone() == (
+                JANELA_DA_AMOSTRA
+            )
+            assert conn.execute("SELECT max(dt_sintomas) FROM silver.casos").fetchone()[0] == (
+                HOJE_DA_AMOSTRA
+            )
+            nulas = conn.execute(
+                "SELECT count(*) FILTER (WHERE dt_notificacao IS NULL), "
+                "count(*) FILTER (WHERE dt_sintomas IS NULL), "
+                "count(*) FILTER (WHERE dt_internacao IS NULL AND hospitalizado = 'ignorado') "
+                "FROM silver.casos"
+            ).fetchone()
+            assert nulas == (len(anos), len(anos), len(anos))
+            descartadas = conn.execute(
+                "SELECT linhas_afetadas FROM silver.qualidade "
+                "WHERE regra = 'notificacao_atipica_fora_do_calculo_da_janela'"
+            ).fetchone()[0]
+            assert descartadas == len(anos)
+        finally:
+            conn.rollback()
+
+
+def test_sem_notificacao_valida_a_janela_falha_fechado(cfg_teste, banco_carregado):
+    linha = _linha_absurda("81", "")
+    linha["DT_SIN_PRI"] = "2025-05-14"
+    assert oraculo.limites([linha]) == (None, None)
+    with conectar(cfg_teste, "etl") as conn:
+        try:
+            conn.execute("DELETE FROM raw.srag")
+            _inserir_na_raw(conn, [linha])
+            transformar(conn, SILVER)
+            assert conn.execute("SELECT minimo, maximo FROM silver.limites").fetchone() == (
+                None,
+                None,
+            )
+            assert conn.execute("SELECT count(dt_sintomas) FROM silver.casos").fetchone() == (0,)
+        finally:
+            conn.rollback()
+
+
+def test_oraculo_le_notificacao_com_hora_e_usa_a_mediana_inferior():
+    # Número par de notificações: a mediana é a menor das duas do meio (como percentile_disc).
+    linhas = [
+        {"DT_NOTIFIC": "2025-03-01 00:00:00.000000000"},
+        {"DT_NOTIFIC": "2025-03-10"},
+        {"DT_NOTIFIC": "2025-03-20"},
+        {"DT_NOTIFIC": "2026-03-10"},  # a 365 dias da mediana (2025-03-10): ainda plausível
+    ]
+    assert oraculo.limites(linhas) == (date(2024, 3, 1), date(2026, 3, 10))
+    linhas[-1] = {"DT_NOTIFIC": "2026-03-11"}  # a 366 dias: fica fora do cálculo
+    assert oraculo.limites(linhas) == (date(2024, 3, 1), date(2025, 3, 20))

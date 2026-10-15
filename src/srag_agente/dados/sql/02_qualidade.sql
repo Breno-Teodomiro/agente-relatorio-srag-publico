@@ -37,7 +37,10 @@ WITH contagens AS (
 )
 SELECT v.regra, v.coluna, v.linhas_afetadas::int, c.total_linhas::int
 FROM contagens AS c
+CROSS JOIN silver.limites AS l
 CROSS JOIN LATERAL (VALUES
+  -- DT_NOTIFIC a mais de 365 dias da mediana: fica fora do cálculo da janela (01_silver.sql).
+  ('notificacao_atipica_fora_do_calculo_da_janela', 'dt_notific', l.notificacoes_atipicas),
   ('data_invalida_ou_fora_do_periodo', 'dt_notific', c.dt_notific),
   ('data_invalida_ou_fora_do_periodo', 'dt_sin_pri', c.dt_sin_pri),
   ('data_invalida_ou_fora_do_periodo', 'dt_interna', c.dt_interna),

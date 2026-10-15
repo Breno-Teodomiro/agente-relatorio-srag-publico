@@ -158,8 +158,13 @@ notificação, faixa etária, datas de notificação/sintomas/internação/UTI/e
 
 - `""` e `9` → categoria "ignorado", sem apagar a linha.
 - Data: aceita o prefixo `AAAA-MM-DD` (há valores com hora e nanossegundos). Fora de
-  [mín(`DT_NOTIFIC`) − 365 dias, máx(`DT_NOTIFIC`)] → `NULL` (a base tem internações nos anos 1695 e 2202).
-- Idade fora de 0–120 anos → `NULL`. UF fora das 27 → `NULL`.
+  [mín(`DT_NOTIFIC` plausível) − 365 dias, máx(`DT_NOTIFIC` plausível)] → `NULL` (a base tem
+  internações nos anos 1695 e 2202).
+- `DT_NOTIFIC` plausível = a até 365 dias da mediana das `DT_NOTIFIC` válidas. Assim uma única
+  notificação absurda não alarga a janela nem move o "hoje". As descartadas do cálculo são
+  contadas em `silver.qualidade`. Sem notificação válida, toda data vira `NULL`.
+- Idade em anos completos: `TP_IDADE` 1 (dias) ÷ 365 e 2 (meses) ÷ 12, por divisão inteira (a base
+  tem idade em meses acima de 11). Fora de 0–120 anos → `NULL`. UF fora das 27 → `NULL`.
 - `EVOLUCAO` vazia = "sem desfecho" (caso em aberto), separada de `9` = "ignorado".
 - `CLASSI_FIN` vazia = `em_investigacao` (caso ainda sem classificação final), separada de `9` = "ignorado".
 - Cada regra registra quantas linhas afetou em `silver.qualidade`.

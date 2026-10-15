@@ -67,14 +67,36 @@ BEGIN
   END;
 END $$;
 
--- Limites de data derivados da própria base: um ano antes da 1ª notificação até a última.
+-- Janela de datas aceitas, derivada da própria base e robusta a notificação absurda:
+-- 1. notificações plausíveis = a até 365 dias da mediana das DT_NOTIFIC válidas;
+-- 2. janela = [menor plausível − 365 dias, maior plausível].
+-- Sem o passo 1, uma única DT_NOTIFIC de 1695 ou 2202 alargaria a janela de todas as datas
+-- e moveria o "hoje" (máx. DT_SIN_PRI). Sem notificação válida, tudo NULL (falha fechada).
 -- DT_NOTIFIC passa pela mesma leitura das outras datas (prefixo, dia inexistente → NULL).
 DROP TABLE IF EXISTS silver.limites CASCADE;
 CREATE TABLE silver.limites AS
-SELECT min(d) - 365 AS minimo, max(d) AS maximo
-FROM (
-  SELECT silver.para_data(dt_notific, '-infinity'::date, 'infinity'::date) AS d FROM raw.srag
-) AS notificacoes;
+WITH notificacoes AS (
+  SELECT d
+  FROM (
+    SELECT silver.para_data(dt_notific, '-infinity'::date, 'infinity'::date) AS d
+    FROM raw.srag
+  ) AS lidas
+  WHERE d IS NOT NULL
+),
+referencia AS (
+  -- percentile_disc devolve uma data que existe na base (mediana inferior se a contagem é par).
+  SELECT percentile_disc(0.5) WITHIN GROUP (ORDER BY d) AS mediana FROM notificacoes
+),
+classificadas AS (
+  SELECT n.d, n.d BETWEEN r.mediana - 365 AND r.mediana + 365 AS plausivel
+  FROM notificacoes AS n CROSS JOIN referencia AS r
+)
+SELECT
+  min(d) FILTER (WHERE plausivel) - 365 AS minimo,
+  max(d) FILTER (WHERE plausivel) AS maximo,
+  (SELECT mediana FROM referencia) AS mediana,
+  count(*) FILTER (WHERE NOT plausivel)::int AS notificacoes_atipicas
+FROM classificadas;
 
 DROP TABLE IF EXISTS silver.casos CASCADE;
 CREATE TABLE silver.casos AS

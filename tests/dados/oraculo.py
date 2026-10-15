@@ -3,6 +3,7 @@
 Os testes comparam o SQL com este oráculo sobre a mesma amostra.
 """
 
+import math
 import re
 from collections import Counter
 from datetime import date, timedelta
@@ -14,6 +15,7 @@ UFS_VALIDAS = {
 
 _PREFIXO_DATA = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 _IDADE = re.compile(r"[0-9]{1,3}")
+ANO = 365  # dias
 _DIAS_POR_UNIDADE = {"1": 365, "2": 12, "3": 1}  # TP_IDADE: 1 = dias, 2 = meses, 3 = anos
 
 
@@ -27,9 +29,20 @@ def para_data(valor: str | None, minimo: date | None, maximo: date | None) -> da
     return d if minimo <= d <= maximo else None
 
 
-def limites(linhas: list[dict]) -> tuple[date, date]:
-    notificacoes = [date.fromisoformat(linha["DT_NOTIFIC"]) for linha in linhas]
-    return min(notificacoes) - timedelta(days=365), max(notificacoes)
+def limites(linhas: list[dict]) -> tuple[date | None, date | None]:
+    """Janela de datas aceitas, robusta a notificação absurda.
+
+    1. Notificações plausíveis = a até 365 dias da mediana (inferior, como `percentile_disc`).
+    2. Janela = [menor plausível - 365 dias, maior plausível]. Sem notificação válida: nula.
+    """
+    notificacoes = sorted(
+        d for linha in linhas if (d := para_data(linha["DT_NOTIFIC"], date.min, date.max))
+    )
+    if not notificacoes:
+        return None, None
+    mediana = notificacoes[math.ceil(len(notificacoes) / 2) - 1]
+    plausiveis = [d for d in notificacoes if abs((d - mediana).days) <= ANO]
+    return plausiveis[0] - timedelta(days=ANO), plausiveis[-1]
 
 
 def _sim_nao(valor: str) -> str:
