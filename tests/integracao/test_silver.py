@@ -14,7 +14,6 @@ from tests.dados.amostra import COLUNAS, escrever_csv
 
 pytestmark = pytest.mark.integracao
 
-SILVER = ("01_silver.sql", "02_qualidade.sql")
 SENSIVEIS = {"nu_notific", "dt_nasc", "id_municip", "cs_raca", "cs_sexo"}
 COLUNAS_PERMITIDAS = {
     "id_caso", "uf", "faixa_etaria", "dt_notificacao", "dt_sintomas", "dt_internacao",
@@ -163,18 +162,21 @@ def _foto(conn) -> tuple:
 def test_transformar_e_idempotente(cfg_teste, banco_carregado):
     with conectar(cfg_teste, "etl", autocommit=True) as conn:
         antes = _foto(conn)
-        transformar(conn, SILVER)
-        transformar(conn, SILVER)
+        transformar(conn)
+        transformar(conn)
         assert _foto(conn) == antes
 
 
 def test_transformar_que_falha_no_meio_nao_muda_nada(cfg_teste, banco_carregado):
     # Autocommit é o caso difícil: sem bloco de transação, o 01 ficaria gravado sozinho.
+    # O 01 derruba as views da gold (CASCADE): a falha também não pode deixá-la sem elas.
+    consulta = "SELECT 'silver.casos'::regclass::oid, to_regclass('gold.indicadores')::oid"
     with conectar(cfg_teste, "etl", autocommit=True) as conn:
-        oid_antes = conn.execute("SELECT 'silver.casos'::regclass::oid").fetchone()[0]
+        antes = conn.execute(consulta).fetchone()
         with pytest.raises(FileNotFoundError):
-            transformar(conn, ("01_silver.sql", "nao_existe.sql"))
-        assert conn.execute("SELECT 'silver.casos'::regclass::oid").fetchone()[0] == oid_antes
+            transformar(conn, ("01_silver.sql", "nao_existe.sql", "03_gold.sql"))
+        assert conn.execute(consulta).fetchone() == antes
+    assert all(antes)
 
 
 def test_dois_transformar_ao_mesmo_tempo_nao_quebram(cfg_teste, banco_carregado):
@@ -185,7 +187,7 @@ def test_dois_transformar_ao_mesmo_tempo_nao_quebram(cfg_teste, banco_carregado)
         try:
             with conectar(cfg_teste, "etl", autocommit=True) as conn:
                 largada.wait()
-                transformar(conn, SILVER)
+                transformar(conn)
         except BaseException as erro:  # o teste quer ver qualquer falha das duas threads
             erros.append(erro)
 
@@ -208,7 +210,7 @@ def test_recarga_da_raw_seguida_de_transformar_reconstroi(cfg_teste, banco_carre
     with conectar(cfg_teste, "etl", autocommit=True) as conn:
         antes = _foto(conn)
         carregar_raw(conn, csv)
-        transformar(conn, SILVER)
+        transformar(conn)
         assert _foto(conn) == antes
 
 
@@ -266,7 +268,7 @@ def test_notificacao_absurda_nao_move_a_janela_nem_o_hoje(cfg_teste, banco_carre
     with conectar(cfg_teste, "etl") as conn:
         try:
             _inserir_na_raw(conn, extras)
-            transformar(conn, SILVER)
+            transformar(conn)
             assert conn.execute("SELECT minimo, maximo FROM silver.limites").fetchone() == (
                 JANELA_DA_AMOSTRA
             )
@@ -297,7 +299,7 @@ def test_sem_notificacao_valida_a_janela_falha_fechado(cfg_teste, banco_carregad
         try:
             conn.execute("DELETE FROM raw.srag")
             _inserir_na_raw(conn, [linha])
-            transformar(conn, SILVER)
+            transformar(conn)
             assert conn.execute("SELECT minimo, maximo FROM silver.limites").fetchone() == (
                 None,
                 None,

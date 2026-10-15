@@ -10,6 +10,9 @@ subir:
 parar:
 	docker compose down
 
+carga:
+	uv run python -m srag_agente.dados
+
 testes:
 	EXIGIR_BANCO=1 uv run pytest --cov=srag_agente --cov-report=term-missing
 

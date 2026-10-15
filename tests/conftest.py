@@ -33,7 +33,7 @@ def banco_carregado(cfg_teste, tmp_path_factory) -> list[dict[str, str]]:
     csv = escrever_csv(tmp_path_factory.mktemp("dados") / "amostra.csv", linhas)
     with conectar(cfg_teste, "etl") as conn:
         carregar_raw(conn, csv)
-        transformar(conn, ("01_silver.sql", "02_qualidade.sql"))
+        transformar(conn)
     return linhas
 
 

@@ -103,3 +103,76 @@ def limpar(linhas: list[dict]) -> list[dict]:
 
 def contar(casos: list[dict], campo: str) -> Counter:
     return Counter(c[campo] for c in casos)
+
+
+# --- Gold -------------------------------------------------------------------------------------
+# Mesmas definições das views da gold: 'BR' = Brasil inteiro, 'ND' = UF inválida (nula na silver).
+CONSOLIDACAO = 14  # dias
+
+
+def _por_uf(casos: list[dict]) -> dict[str, list[dict]]:
+    grupos: dict[str, list[dict]] = {"BR": list(casos)}
+    for caso in casos:
+        grupos.setdefault(caso["uf"] or "ND", []).append(caso)
+    return grupos
+
+
+def _conta(casos: list[dict], campo: str, valores: set[str]) -> int:
+    return sum(1 for c in casos if c[campo] in valores)
+
+
+def indicadores(casos: list[dict]) -> dict[str, tuple]:
+    """Por UF: (total, óbitos, com desfecho, UTI sim, UTI informada, covid sim, covid informada,
+    gripe sim, gripe informada, primeiro sintoma, último sintoma)."""
+    resultado = {}
+    for uf, grupo in _por_uf(casos).items():
+        datas = [c["dt_sintomas"] for c in grupo if c["dt_sintomas"]]
+        resultado[uf] = (
+            len(grupo),
+            _conta(grupo, "evolucao", {"obito"}),
+            _conta(grupo, "evolucao", {"cura", "obito", "obito_outras_causas"}),
+            _conta(grupo, "uti", {"sim"}),
+            _conta(grupo, "uti", {"sim", "nao"}),
+            _conta(grupo, "vacina_covid", {"sim"}),
+            _conta(grupo, "vacina_covid", {"sim", "nao"}),
+            _conta(grupo, "vacina_gripe", {"sim"}),
+            _conta(grupo, "vacina_gripe", {"sim", "nao"}),
+            min(datas, default=None),
+            max(datas, default=None),
+        )
+    return resultado
+
+
+def janelas(casos: list[dict]) -> dict[str, tuple]:
+    """Por UF: (7d atual, 7d anterior, 30d atual, 30d anterior, em consolidação).
+
+    Só entram UFs com algum caso de data de sintomas válida (como em `gold.casos_diarios`).
+    """
+    referencia = max(c["dt_sintomas"] for c in casos if c["dt_sintomas"])
+    consolidada = referencia - timedelta(days=CONSOLIDACAO)
+
+    def soma(grupo: list[dict], de: int, ate: int) -> int:
+        inicio, fim = consolidada - timedelta(days=de), consolidada - timedelta(days=ate)
+        return sum(1 for c in grupo if c["dt_sintomas"] and inicio <= c["dt_sintomas"] <= fim)
+
+    return {
+        uf: (
+            soma(grupo, 6, 0),
+            soma(grupo, 13, 7),
+            soma(grupo, 29, 0),
+            soma(grupo, 59, 30),
+            sum(1 for c in grupo if c["dt_sintomas"] and c["dt_sintomas"] > consolidada),
+        )
+        for uf, grupo in _por_uf(casos).items()
+        if any(c["dt_sintomas"] for c in grupo)
+    }
+
+
+def distribuicao(casos: list[dict]) -> Counter:
+    """Contagem por (dimensão, UF, categoria)."""
+    contagem: Counter = Counter()
+    for uf, grupo in _por_uf(casos).items():
+        for dimensao in ("classificacao", "faixa_etaria"):  # o nome da dimensão é o do campo
+            for caso in grupo:
+                contagem[(dimensao, uf, caso[dimensao])] += 1
+    return contagem
