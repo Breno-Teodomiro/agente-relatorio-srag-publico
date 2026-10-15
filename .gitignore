@@ -1,0 +1,32 @@
+# Dados brutos (públicos, mas pesados e com dado de saúde) — nunca versionar
+*.zip
+*.csv
+dados/brutos/
+
+# Enunciado do desafio (conteúdo da Indicium)
+Desafio Certificação AI Engineer.pdf
+
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Saídas locais (o exemplo em relatorios/exemplo/ é versionado)
+relatorios/*
+!relatorios/exemplo/
+logs/
+
+# Cache de modelos de embedding
+.cache/
+
+# Cópia original na raiz (a versionada está em dados/referencia/)
+/Dicionario_de_Dados_SRAG_Hospitalizado.pdf
