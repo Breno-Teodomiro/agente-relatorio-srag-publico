@@ -9,6 +9,7 @@ from srag_agente.banco import conectar
 from srag_agente.config import Config
 from srag_agente.dados.bootstrap import preparar_banco
 from srag_agente.dados.carga_raw import carregar_raw
+from srag_agente.dados.transformar import transformar
 from tests.dados.amostra import escrever_csv, gerar_linhas
 
 BANCO_TESTE = "srag_teste"
@@ -32,6 +33,7 @@ def banco_carregado(cfg_teste, tmp_path_factory) -> list[dict[str, str]]:
     csv = escrever_csv(tmp_path_factory.mktemp("dados") / "amostra.csv", linhas)
     with conectar(cfg_teste, "etl") as conn:
         carregar_raw(conn, csv)
+        transformar(conn, ("01_silver.sql", "02_qualidade.sql"))
     return linhas
 
 
