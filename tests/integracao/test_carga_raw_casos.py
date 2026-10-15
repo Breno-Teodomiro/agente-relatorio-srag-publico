@@ -82,3 +82,24 @@ def test_vazios_entre_aspas_ficam_como_texto_vazio(cfg_carga, tmp_path):
     with conectar(cfg_carga, "etl") as conn:
         carregar_raw(conn, origem)
     assert _municipios(cfg_carga) == [""]
+
+
+def test_falha_no_meio_em_autocommit_tambem_mantem_a_raw_anterior(cfg_carga, tmp_path):
+    boa = _csv(tmp_path, CABECALHO + '"SP";"ANTES"\n', "utf-8")
+    with conectar(cfg_carga, "etl", autocommit=True) as conn:
+        carregar_raw(conn, boa)
+
+    quebrada = tmp_path / "quebrada.csv"
+    quebrada.write_bytes((CABECALHO + '"SP";"NOVA"\n"SP";"X";"COLUNA A MAIS"\n').encode())
+    with conectar(cfg_carga, "etl", autocommit=True) as conn:
+        with pytest.raises(errors.BadCopyFileFormat):
+            carregar_raw(conn, quebrada)
+        assert conn.execute("SELECT 1").fetchone() == (1,)
+    assert _municipios(cfg_carga) == ["ANTES"]
+
+
+def test_carga_em_autocommit_fica_gravada(cfg_carga, tmp_path):
+    origem = _csv(tmp_path, CABECALHO + '"SP";"GRAVADA"\n', "utf-8")
+    with conectar(cfg_carga, "etl", autocommit=True) as conn:
+        assert carregar_raw(conn, origem) == 1
+    assert _municipios(cfg_carga) == ["GRAVADA"]

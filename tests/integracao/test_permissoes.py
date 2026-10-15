@@ -113,21 +113,19 @@ def test_consulta_longa_do_agente_e_cancelada_em_5s(conn_agente):
 # --- Auditor ---------------------------------------------------------------------------------
 
 
-def test_auditor_grava_le_e_atualiza_a_auditoria(conn_auditor, tabelas_de_teste):
+def test_auditor_grava_e_le_a_auditoria(conn_auditor, tabelas_de_teste):
     (id_evento,) = conn_auditor.execute(
         "INSERT INTO auditoria._teste_permissao (evento) VALUES ('inicio') RETURNING id"
     ).fetchone()
-    conn_auditor.execute(
-        "UPDATE auditoria._teste_permissao SET evento = 'fim' WHERE id = %s", (id_evento,)
-    )
     assert conn_auditor.execute(
         "SELECT evento FROM auditoria._teste_permissao WHERE id = %s", (id_evento,)
-    ).fetchone() == ("fim",)
+    ).fetchone() == ("inicio",)
 
 
 @pytest.mark.parametrize(
     "comando",
     [
+        "UPDATE auditoria._teste_permissao SET evento = 'adulterado'",
         "DELETE FROM auditoria._teste_permissao",
         "SELECT * FROM raw.srag",
         "SELECT * FROM gold._teste_permissao",

@@ -71,28 +71,23 @@ def ler_cabecalho(fluxo: BinaryIO, codificacao: Codificacao = "UTF8") -> list[st
 def carregar_raw(conn: psycopg.Connection, origem: Path) -> int:
     """Recria `raw.srag` e copia o CSV por streaming. Devolve o total de linhas carregadas.
 
-    Tudo numa transação: se a cópia falhar, a `raw.srag` anterior continua como estava.
+    Tudo num bloco `conn.transaction()`: se a cópia falhar, a `raw.srag` anterior continua
+    como estava, com a conexão em autocommit ou não. Se o chamador já tiver uma transação
+    aberta, o bloco vira savepoint e a confirmação final fica com ele.
     """
     codificacao = detectar_codificacao(origem)
-    try:
-        with abrir_csv(origem) as fluxo:
-            colunas = ler_cabecalho(fluxo, codificacao)
-            identificadores = sql.SQL(", ").join(sql.Identifier(c) for c in colunas)
-            definicoes = sql.SQL(", ").join(
-                sql.SQL("{} text").format(sql.Identifier(c)) for c in colunas
-            )
-            conn.execute("DROP TABLE IF EXISTS raw.srag CASCADE")
-            conn.execute(sql.SQL("CREATE TABLE raw.srag ({})").format(definicoes))
-            copia = sql.SQL(
-                "COPY raw.srag ({}) FROM STDIN WITH (FORMAT csv, DELIMITER ';', ENCODING {})"
-            ).format(identificadores, sql.Literal(codificacao))
-            with conn.cursor() as cursor, cursor.copy(copia) as destino:
-                while bloco := fluxo.read(TAMANHO_BLOCO):
-                    destino.write(bloco)
-        total = conn.execute("SELECT count(*) FROM raw.srag").fetchone()[0]
-        conn.commit()
-    except Exception:
-        if not conn.closed:
-            conn.rollback()
-        raise
-    return total
+    with conn.transaction(), abrir_csv(origem) as fluxo:
+        colunas = ler_cabecalho(fluxo, codificacao)
+        identificadores = sql.SQL(", ").join(sql.Identifier(c) for c in colunas)
+        definicoes = sql.SQL(", ").join(
+            sql.SQL("{} text").format(sql.Identifier(c)) for c in colunas
+        )
+        conn.execute("DROP TABLE IF EXISTS raw.srag CASCADE")
+        conn.execute(sql.SQL("CREATE TABLE raw.srag ({})").format(definicoes))
+        copia = sql.SQL(
+            "COPY raw.srag ({}) FROM STDIN WITH (FORMAT csv, DELIMITER ';', ENCODING {})"
+        ).format(identificadores, sql.Literal(codificacao))
+        with conn.cursor() as cursor, cursor.copy(copia) as destino:
+            while bloco := fluxo.read(TAMANHO_BLOCO):
+                destino.write(bloco)
+        return conn.execute("SELECT count(*) FROM raw.srag").fetchone()[0]

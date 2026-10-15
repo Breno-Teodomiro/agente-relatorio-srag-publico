@@ -11,7 +11,7 @@ parar:
 	docker compose down
 
 testes:
-	uv run pytest --cov=srag_agente --cov-report=term-missing
+	EXIGIR_BANCO=1 uv run pytest --cov=srag_agente --cov-report=term-missing
 
 lint:
 	uv run ruff check . && uv run ruff format --check .

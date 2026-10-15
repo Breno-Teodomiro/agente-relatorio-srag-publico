@@ -16,9 +16,12 @@ ALTER ROLE srag_agente SET statement_timeout = '5s';
 ALTER DEFAULT PRIVILEGES FOR ROLE srag_etl IN SCHEMA gold
   GRANT SELECT ON TABLES TO srag_agente;
 
--- Auditor: só grava e lê a auditoria.
+-- Auditor: só grava e lê a auditoria (sem UPDATE/DELETE: o registro não se reescreve).
+-- ALTER DEFAULT PRIVILEGES só acrescenta; o REVOKE limpa concessões de versões anteriores.
 GRANT USAGE ON SCHEMA auditoria TO srag_auditor;
 ALTER DEFAULT PRIVILEGES FOR ROLE srag_etl IN SCHEMA auditoria
-  GRANT SELECT, INSERT, UPDATE ON TABLES TO srag_auditor;
+  REVOKE ALL ON TABLES FROM srag_auditor;
+ALTER DEFAULT PRIVILEGES FOR ROLE srag_etl IN SCHEMA auditoria
+  GRANT SELECT, INSERT ON TABLES TO srag_auditor;
 ALTER DEFAULT PRIVILEGES FOR ROLE srag_etl IN SCHEMA auditoria
   GRANT USAGE ON SEQUENCES TO srag_auditor;
