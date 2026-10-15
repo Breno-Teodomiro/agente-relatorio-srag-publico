@@ -4,7 +4,7 @@ from srag_agente.banco import conectar
 from srag_agente.config import Config
 from srag_agente.dados.bootstrap import preparar_banco
 from srag_agente.dados.carga_raw import carregar_raw
-from srag_agente.dados.transformar import transformar
+from srag_agente.dados.transformar import transformar, travar_transformacao
 
 
 def executar_carga(cfg: Config) -> int:
@@ -15,6 +15,7 @@ def executar_carga(cfg: Config) -> int:
     """
     preparar_banco(cfg, cfg.pg_banco)
     with conectar(cfg, "etl") as conn, conn.transaction():
+        travar_transformacao(conn)  # antes da raw: mesma ordem de travas do `transformar`
         total = carregar_raw(conn, cfg.arquivo_dados)
         transformar(conn)
     return total

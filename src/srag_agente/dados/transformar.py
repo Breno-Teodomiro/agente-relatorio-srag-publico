@@ -15,6 +15,16 @@ RECRIA_DEPENDENTES = {"01_silver.sql": "03_gold.sql"}
 TRAVA_TRANSFORMACAO = 7_350_301
 
 
+def travar_transformacao(conn: psycopg.Connection) -> None:
+    """Pega a trava consultiva até o fim da transação (reentrante na mesma sessão).
+
+    Ordem de travas única no projeto: consultiva → raw → silver/gold. Quem vai mexer na raw
+    (a carga) pega esta trava ANTES; senão a carga segura a raw esperando a consultiva enquanto
+    um `transformar` segura a consultiva esperando a raw, e o Postgres derruba um dos dois.
+    """
+    conn.execute("SELECT pg_advisory_xact_lock(%s)", (TRAVA_TRANSFORMACAO,))
+
+
 def _conferir_dependentes(arquivos: tuple[str, ...]) -> None:
     """Recusa, antes de tocar no banco, uma lista que derrubaria a gold sem recriá-la.
 
@@ -41,6 +51,6 @@ def transformar(
     """
     _conferir_dependentes(arquivos)
     with conn.transaction():
-        conn.execute("SELECT pg_advisory_xact_lock(%s)", (TRAVA_TRANSFORMACAO,))
+        travar_transformacao(conn)
         for nome in arquivos:
             conn.execute(ler_sql(nome))
