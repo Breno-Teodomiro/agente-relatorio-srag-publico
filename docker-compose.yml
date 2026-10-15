@@ -1,0 +1,17 @@
+services:
+  banco:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: ${PG_SENHA_ADMIN:?defina PG_SENHA_ADMIN no .env}
+      POSTGRES_DB: srag
+    ports:
+      - "5435:5432"
+    volumes:
+      - dados_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  dados_pg:
