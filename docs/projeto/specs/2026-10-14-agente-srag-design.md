@@ -74,7 +74,8 @@ explica por que está chamando. O motivo vai para a auditoria. Nenhuma ferrament
 | Ferramenta | Parâmetros | Retorno |
 |---|---|---|
 | `consultar_metricas` | `metrica` ∈ {aumento_casos, mortalidade, uti, vacinacao}, `uf?` | valor, numerador, denominador, excluídos, período, definição, limitação |
-| `consultar_serie` | `tipo` ∈ {diaria_30d, mensal_12m}, `uf?` | pontos + flags `em_consolidacao` / `fora_da_base` |
+| `consultar_serie` | `tipo` ∈ {diaria_30d, mensal_12m}, `uf?` | pontos + flags `em_consolidacao` / `fora_da_base` / `parcial` |
+| `consultar_distribuicao` | `dimensao` ∈ {classificacao, faixa_etaria}, `uf?` | casos e percentual por categoria |
 | `buscar_noticias` | `termo`, `janela` ∈ {periodo_dos_dados, cenario_atual} | título, fonte, data, url, trecho (≤500 car.) marcado como externo |
 | `consultar_dicionario` | `pergunta` | trechos do dicionário + página de origem (RAG pgvector) |
 
@@ -105,7 +106,11 @@ e excluídos (vazio/ignorado).
 | Taxa de UTI | `UTI=1` ÷ `UTI ∈ {1,2}` | **Não é ocupação de leitos**: a base não tem capacidade. É a proporção de casos de SRAG internados em UTI. Ocupação real exige CNES (evolução futura) |
 | Taxa de vacinação | `VACINA_COV=1` ÷ `VACINA_COV ∈ {1,2}`. Ao lado: gripe (`VACINA`) | É vacinação **entre os internados**, não da população |
 
-Quebra complementar: casos por `CLASSI_FIN` (influenza, outro vírus, outro agente, não especificado,
+Mortalidade, UTI e vacinação são calculadas sobre **todo o período da base** (temporada 2025 até a data
+de referência). Em janelas curtas, a mortalidade ficaria enviesada, porque os casos recentes ainda não
+têm desfecho.
+
+Quebra complementar: casos por `CLASSI_FIN` e por faixa etária (influenza, outro vírus, outro agente, não especificado,
 COVID-19).
 
 **Gráficos**
@@ -134,9 +139,9 @@ sensível.
 **Removidos na passagem raw → silver (minimização, LGPD art. 6º, III):** `NU_NOTIFIC`, `DT_NASC`,
 município (notificação, residência e internação), `CS_RACA`, `CS_ETINIA`, `CS_ESCOL_N`, `PAC_COCBO`,
 `PAC_DSCBO`, `NM_UN_INTE` e códigos de unidade, lotes de vacina, `TEM_CPF`, `POV_CT`, `ESTRANG`, campos
-de texto livre (`*_DES`, `*_OUT`, `MORB_DESC`). Fica: UF de notificação, sexo, faixa etária, datas
-necessárias, sintomas-chave, `HOSPITAL`, `UTI`, `SUPORT_VEN`, `EVOLUCAO`, `CLASSI_FIN`, `VACINA`,
-`VACINA_COV`. A lista final, com o motivo de cada coluna, fica em `docs/DICIONARIO_SILVER.md`.
+de texto livre (`*_DES`, `*_OUT`, `MORB_DESC`), sexo e sintomas (nenhuma métrica usa). Fica: UF de
+notificação, faixa etária, datas de notificação/sintomas/internação/UTI/evolução, `HOSPITAL`, `UTI`,
+`SUPORT_VEN`, `EVOLUCAO`, `CLASSI_FIN`, `VACINA`, `VACINA_COV`. A lista final, com o motivo de cada coluna, fica em `docs/DICIONARIO_SILVER.md`.
 
 **Proteções, cada uma com teste automatizado**
 
@@ -152,7 +157,10 @@ necessárias, sintomas-chave, `HOSPITAL`, `UTI`, `SUPORT_VEN`, `EVOLUCAO`, `CLAS
 ### 5.1 Qualidade (silver)
 
 - `""` e `9` → categoria "ignorado", sem apagar a linha.
-- Data inválida ou fora do período → `NULL`. Idade fora de 0–120 anos → `NULL`.
+- Data: aceita o prefixo `AAAA-MM-DD` (há valores com hora e nanossegundos). Fora de
+  [mín(`DT_NOTIFIC`) − 365 dias, máx(`DT_NOTIFIC`)] → `NULL` (a base tem internações nos anos 1695 e 2202).
+- Idade fora de 0–120 anos → `NULL`. UF fora das 27 → `NULL`.
+- `EVOLUCAO` vazia = "sem desfecho" (caso em aberto), separada de `9` = "ignorado".
 - Cada regra registra quantas linhas afetou em `silver.qualidade`.
 - `make qualidade` gera `docs/QUALIDADE_DADOS.md`. Número nunca é escrito à mão.
 
