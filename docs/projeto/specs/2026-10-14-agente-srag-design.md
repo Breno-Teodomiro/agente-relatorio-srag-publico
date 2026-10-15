@@ -161,6 +161,7 @@ notificação, faixa etária, datas de notificação/sintomas/internação/UTI/e
   [mín(`DT_NOTIFIC`) − 365 dias, máx(`DT_NOTIFIC`)] → `NULL` (a base tem internações nos anos 1695 e 2202).
 - Idade fora de 0–120 anos → `NULL`. UF fora das 27 → `NULL`.
 - `EVOLUCAO` vazia = "sem desfecho" (caso em aberto), separada de `9` = "ignorado".
+- `CLASSI_FIN` vazia = `em_investigacao` (caso ainda sem classificação final), separada de `9` = "ignorado".
 - Cada regra registra quantas linhas afetou em `silver.qualidade`.
 - `make qualidade` gera `docs/QUALIDADE_DADOS.md`. Número nunca é escrito à mão.
 
