@@ -26,7 +26,7 @@ evolução futura) o que só agrega valor de negócio. Ver seção 10.
 
 ## 2. Os dados
 
-- Arquivo: `INFLUD25_DATASUS-Versao26-06-2025.zip` → CSV `;`, `latin-1`, 194 colunas, ~165 mil linhas.
+- Arquivo: `INFLUD25_DATASUS-Versao26-06-2025.zip` → CSV `;`, UTF-8 (medido no arquivo; o plano previa latin-1), 194 colunas, ~165 mil linhas.
 - Período de `DT_SIN_PRI`: 29/12/2024 a 25/06/2025.
 - `NU_NOTIFIC` é único (sem duplicados). Nenhum caso com sintoma após a notificação.
 - Idade em `NU_IDADE_N` + `TP_IDADE` (1 = dias, 2 = meses, 3 = anos).
