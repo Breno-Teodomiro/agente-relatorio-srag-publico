@@ -133,8 +133,8 @@ sensível.
 |---|---|---|
 | `raw` | CSV como veio: 194 colunas, tudo `text`, carga via `COPY` | `srag_etl` |
 | `silver` | ~20 colunas tipadas e limpas, chave interna no lugar de `NU_NOTIFIC`, idade → faixa etária | `srag_etl` |
-| `gold` | **somente views agregadas** | `srag_agente` (SELECT) |
-| `auditoria` | execuções e eventos do agente | `srag_auditor` (INSERT/SELECT), usado só pelo registro de auditoria, nunca pelas ferramentas do LLM |
+| `gold` | **somente views agregadas** + a tabela `dicionario_trechos` (texto do dicionário público, para o RAG) | `srag_agente` (SELECT) |
+| `auditoria` | execuções e eventos do agente | `srag_auditor` (INSERT/SELECT; UPDATE só nas colunas de encerramento de `execucoes` e só enquanto `em_andamento`; eventos não se alteram), usado só pelo registro de auditoria, nunca pelas ferramentas do LLM |
 
 **Removidos na passagem raw → silver (minimização, LGPD art. 6º, III):** `NU_NOTIFIC`, `DT_NASC`,
 município (notificação, residência e internação), `CS_RACA`, `CS_ETINIA`, `CS_ESCOL_N`, `PAC_COCBO`,
