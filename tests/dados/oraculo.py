@@ -176,3 +176,35 @@ def distribuicao(casos: list[dict]) -> Counter:
             for caso in grupo:
                 contagem[(dimensao, uf, caso[dimensao])] += 1
     return contagem
+
+
+COM_DESFECHO = {"cura", "obito", "obito_outras_causas"}
+
+
+def do_recorte(casos: list[dict], uf: str) -> list[dict]:
+    return casos if uf == "BR" else [c for c in casos if c["uf"] == uf]
+
+
+def razao(casos: list[dict], uf: str, campo: str, positivos: set, informados: set) -> float:
+    recorte = do_recorte(casos, uf)
+    denominador = sum(1 for c in recorte if c[campo] in informados)
+    numerador = sum(1 for c in recorte if c[campo] in positivos)
+    return numerador / denominador
+
+
+def mortalidade(casos, uf="BR"):
+    return razao(casos, uf, "evolucao", {"obito"}, COM_DESFECHO)
+
+
+def uti(casos, uf="BR"):
+    return razao(casos, uf, "uti", {"sim"}, {"sim", "nao"})
+
+
+def vacinacao(casos, uf="BR"):
+    return razao(casos, uf, "vacina_covid", {"sim"}, {"sim", "nao"})
+
+
+def casos_entre(casos: list[dict], uf: str, inicio: date, fim: date) -> int:
+    return sum(
+        1 for c in do_recorte(casos, uf) if c["dt_sintomas"] and inicio <= c["dt_sintomas"] <= fim
+    )
