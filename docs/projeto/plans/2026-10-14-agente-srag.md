@@ -2984,7 +2984,7 @@ pytestmark = pytest.mark.integracao
 
 PAGINAS = [
     "Evolução do caso 1-Cura 2-Óbito 3-Óbito por outras causas 9-Ignorado\nEVOLUCAO\n"
-    "Internado em UTI? 1-Sim 2-Não 9-Ignorado\nUTI\n"
+    "Internado em UTI? 1-Sim 2-Não 9-Ignorado. O paciente foi internado em UTI?\nUTI\n"
 ]
 
 
@@ -3801,7 +3801,7 @@ git commit -m "feat: trilha de auditoria em memória, Postgres e JSONL"
 **Files:**
 - Create: `src/srag_agente/modelos.py`, `src/srag_agente/guardrails/entrada.py`, `src/srag_agente/guardrails/saida.py`, `src/srag_agente/guardrails/limites.py`
 - Modify: `src/srag_agente/guardrails/padroes.py` (dados pessoais)
-- Modify: `tests/fakes.py` (`texto_valido()`)
+- Modify: `tests/fakes.py` (`texto_valido()`, `texto_neutro()`)
 - Create: `tests/guardrails/test_entrada.py`, `tests/guardrails/test_saida.py`, `tests/guardrails/test_limites.py`
 
 **Interfaces:**
@@ -3950,6 +3950,20 @@ def texto_valido(**substituir):
     }
     campos.update(substituir)
     return TextoRelatorio(**campos)
+
+
+def texto_neutro():
+    """Texto sem números nem citações: passa em qualquer cenário de evidências."""
+    from srag_agente.modelos import ComentarioMetrica, TextoRelatorio
+
+    return TextoRelatorio(
+        resumo_executivo="Relatório gerado a partir das evidências disponíveis.",
+        comentarios_metricas=[ComentarioMetrica(metrica=m, comentario="Ver o cartão.")
+                              for m in ("aumento_casos", "mortalidade", "uti", "vacinacao")],
+        contexto_periodo_dados="Nenhuma notícia foi citada nesta seção.",
+        cenario_atual="Nenhuma notícia foi citada nesta seção.",
+        limitacoes="A taxa de UTI não mede ocupação de leitos.",
+    )
 ```
 
 - [ ] **Step 4: Testes dos guardrails (falhando)**
@@ -4839,7 +4853,7 @@ from srag_agente.agente.nos import AVISO_COBERTURA, Dependencias
 from srag_agente.auditoria.registro import Auditoria
 from srag_agente.guardrails.entrada import ClassificacaoEscopo
 from srag_agente.guardrails.limites import Limites
-from tests.fakes import CHAMADAS_COMPLETAS, HOJE, ferramentas_falsas, texto_valido
+from tests.fakes import CHAMADAS_COMPLETAS, HOJE, ferramentas_falsas, texto_neutro, texto_valido
 
 USO = {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
 
@@ -4925,7 +4939,7 @@ def test_uf_sem_casos_gera_relatorio_parcial_e_nao_quebra():
 
 def test_limite_de_chamadas_para_e_marca_parcial():
     deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
-                 limites=Limites(max_chamadas_ferramenta=3))
+                 redator=_redator(texto_neutro()), limites=Limites(max_chamadas_ferramenta=3))
     estado = _rodar(deps)
     assert estado["chamadas_ferramenta"] == 3
     assert estado["status"] == "parcial"
@@ -5278,3 +5292,1487 @@ make lint
 git add src/srag_agente/agente tests
 git commit -m "feat: grafo do agente com orquestrador, cobertura, redator e guardrails"
 ```
+
+---
+
+### Task 14: Relatório (HTML autocontido, Markdown, gráficos e anexo de auditoria)
+
+**Files:**
+- Create: `src/srag_agente/relatorio/__init__.py`, `src/srag_agente/relatorio/formatacao.py`, `src/srag_agente/relatorio/graficos.py`, `src/srag_agente/relatorio/montar.py`
+- Create: `src/srag_agente/relatorio/templates/relatorio.html.j2`, `src/srag_agente/relatorio/templates/relatorio.md.j2`
+- Create: `tests/unit/test_relatorio.py`
+
+**Interfaces:**
+- Consumes: `Evidencia`, `TextoRelatorio`, `NoticiaCitavel`, `numerar_noticias`, `Auditoria`, `CATALOGO`.
+- Produces:
+  - `pct(fracao, casas=1) -> str`, `variacao(fracao) -> str`, `inteiro(valor) -> str`, `data_br(valor) -> str`, `mes_br(rotulo) -> str`.
+  - `grafico_diario(serie: dict, tema: Literal["escuro", "claro"], formato: Literal["svg", "png"] = "svg") -> bytes`; `grafico_mensal(...)` com a mesma assinatura.
+  - `AVISO_FIXO`, `DadosRelatorio` (dataclass frozen), `ArquivosRelatorio(pasta, html, markdown, auditoria)`, `montar_dados(*, evidencias, id_execucao, status, uf, data_execucao, texto, avisos, violacoes, auditoria, provedor, modelo, tokens_entrada, tokens_saida, custo_usd, pergunta_extra=None) -> DadosRelatorio`, `montar_relatorio(dados, auditoria, pasta_base: Path) -> ArquivosRelatorio`.
+
+- [ ] **Step 1: Testes (falhando)**
+
+`tests/unit/test_relatorio.py`:
+
+```python
+from uuid import uuid4
+
+import pytest
+
+from srag_agente.auditoria.registro import Auditoria
+from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br, pct, variacao
+from srag_agente.relatorio.graficos import grafico_diario, grafico_mensal
+from srag_agente.relatorio.montar import AVISO_FIXO, montar_dados, montar_relatorio
+from tests.fakes import HOJE, evidencias_completas, texto_valido
+
+
+def test_formatacao_brasileira():
+    assert pct(0.0796) == "8,0%" and pct(None) == "—"
+    assert variacao(0.2) == "+20,0%" and variacao(-0.125) == "−12,5%"
+    assert inteiro(53476) == "53.476" and inteiro("<5") == "<5"
+    assert data_br("2025-06-25") == "25/06/2025" and mes_br("2025-06") == "jun/25"
+
+
+@pytest.fixture
+def evidencias():
+    return evidencias_completas()
+
+
+def _serie(evidencias, tipo):
+    return next(e.dados for e in evidencias if e.dados.get("tipo") == tipo)
+
+
+def test_graficos_saem_em_svg_e_png(evidencias):
+    assert b"<svg" in grafico_diario(_serie(evidencias, "diaria_30d"), "escuro")
+    assert grafico_mensal(_serie(evidencias, "mensal_12m"), "claro", "png").startswith(b"\x89PNG")
+
+
+def test_grafico_aguenta_valor_suprimido(evidencias):
+    serie = _serie(evidencias, "diaria_30d")
+    serie = {**serie, "pontos": [{**p, "casos": "<5"} for p in serie["pontos"]]}
+    assert b"<svg" in grafico_diario(serie, "claro")
+
+
+def _montar(tmp_path, evidencias, **mudar):
+    auditoria = Auditoria()
+    auditoria.iniciar_execucao(provedor="openrouter", modelo="openai/gpt-4.1-mini", parametros={},
+                               versao_codigo="abc", hash_prompts="h")
+    auditoria.registrar("ferramentas", "ferramenta", ferramenta="consultar_metricas",
+                        motivo="preciso da mortalidade")
+    campos = dict(evidencias=evidencias, id_execucao=auditoria.id_execucao, status="ok", uf="BR",
+                  data_execucao=HOJE, texto=texto_valido(), avisos=[], violacoes=[],
+                  auditoria=auditoria, provedor="openrouter", modelo="openai/gpt-4.1-mini",
+                  tokens_entrada=1000, tokens_saida=200, custo_usd=0.00072)
+    campos.update(mudar)
+    return montar_relatorio(montar_dados(**campos), auditoria, tmp_path)
+
+
+def test_relatorio_tem_tudo_o_que_o_desafio_pede(tmp_path, evidencias):
+    arquivos = _montar(tmp_path, evidencias)
+    html = arquivos.html.read_text(encoding="utf-8")
+    for esperado in ("Taxa de aumento de casos", "Taxa de mortalidade", "Taxa de internação em UTI",
+                     "Taxa de vacinação", "+20,0%", "10,0%", "<svg", AVISO_FIXO,
+                     'href="#ref-1"', "Como este relatório foi gerado", "preciso da mortalidade"):
+        assert esperado in html, esperado
+    markdown = arquivos.markdown.read_text(encoding="utf-8")
+    assert "graficos/diaria_30d.png" in markdown and "graficos/mensal_12m.png" in markdown
+    assert (arquivos.pasta / "graficos" / "diaria_30d.png").exists()
+    assert len(arquivos.auditoria.read_text().splitlines()) == 2
+
+
+def test_texto_do_llm_e_escapado_no_html(tmp_path, evidencias):
+    texto = texto_valido(resumo_executivo="<script>alert(1)</script> Casos estáveis.")
+    html = _montar(tmp_path, evidencias, texto=texto).html.read_text(encoding="utf-8")
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_link_de_noticia_que_nao_e_http_e_neutralizado(tmp_path, evidencias):
+    for e in evidencias:
+        if e.ferramenta == "buscar_noticias":
+            e.dados["noticias"][0]["url"] = "javascript:alert(1)"
+    html = _montar(tmp_path, evidencias).html.read_text(encoding="utf-8")
+    assert "javascript:alert" not in html
+
+
+def test_faixa_de_revisao_humana(tmp_path, evidencias):
+    arquivos = _montar(tmp_path, evidencias, status="revisao_humana",
+                       violacoes=["numero_nao_conferido: '50,0%' em resumo_executivo"])
+    html = arquivos.html.read_text(encoding="utf-8")
+    assert "Revisão humana necessária" in html and "50,0%" in html
+
+
+def test_relatorio_sem_texto_ainda_sai_com_numeros(tmp_path, evidencias):
+    arquivos = _montar(tmp_path, evidencias, texto=None, status="revisao_humana",
+                       violacoes=["saida_invalida: json inválido"])
+    assert "10,0%" in arquivos.html.read_text(encoding="utf-8")
+```
+
+Run: `uv run pytest tests/unit/test_relatorio.py -v` → Expected: FAIL (`ModuleNotFoundError`).
+
+- [ ] **Step 2: Formatação e gráficos**
+
+`src/srag_agente/relatorio/__init__.py`:
+
+```python
+"""Relatório final: números e gráficos vêm das evidências (SQL); o LLM só entra no texto."""
+```
+
+`src/srag_agente/relatorio/formatacao.py`:
+
+```python
+"""Formatação brasileira (vírgula decimal, ponto de milhar, dd/mm/aaaa)."""
+
+from datetime import date
+
+MESES = ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez")
+
+
+def pct(fracao: float | None, casas: int = 1) -> str:
+    if fracao is None:
+        return "—"
+    return f"{fracao * 100:.{casas}f}".replace(".", ",") + "%"
+
+
+def variacao(fracao: float | None) -> str:
+    if fracao is None:
+        return "—"
+    sinal = "+" if fracao > 0 else "−" if fracao < 0 else ""
+    return sinal + pct(abs(fracao))
+
+
+def inteiro(valor: int | str | None) -> str:
+    if valor is None:
+        return "—"
+    if isinstance(valor, str):
+        return valor  # já suprimido ("<5")
+    return f"{valor:,}".replace(",", ".")
+
+
+def data_br(valor: date | str | None) -> str:
+    if not valor:
+        return "—"
+    data = date.fromisoformat(valor) if isinstance(valor, str) else valor
+    return data.strftime("%d/%m/%Y")
+
+
+def mes_br(rotulo: str) -> str:
+    ano, mes = rotulo.split("-")
+    return f"{MESES[int(mes) - 1]}/{ano[2:]}"
+```
+
+`src/srag_agente/relatorio/graficos.py`:
+
+```python
+"""Os dois gráficos obrigatórios: SVG (HTML, temas escuro e claro) e PNG (Markdown/README)."""
+
+import io
+from typing import Literal
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402 — o backend precisa ser definido antes
+from matplotlib.patches import Patch  # noqa: E402
+
+from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br  # noqa: E402
+
+Tema = Literal["escuro", "claro"]
+Formato = Literal["svg", "png"]
+
+plt.rcParams["svg.fonttype"] = "none"  # texto continua texto no SVG (menor e acessível)
+
+TEMAS: dict[str, dict[str, str]] = {
+    "escuro": {"fundo": "#24272e", "texto": "#d6d9de", "grade": "#3a3f48", "barra": "#6fa8dc",
+               "clara": "#3d5a73", "nota": "#9aa0a8"},
+    "claro": {"fundo": "#ffffff", "texto": "#2b2f36", "grade": "#e3e6ea", "barra": "#2f6db5",
+              "clara": "#a9c4e6", "nota": "#5f6670"},
+}
+
+
+def _altura(casos: int | str | None) -> float:
+    return float(casos) if isinstance(casos, int) else 0.0  # "<5" e None não viram barra
+
+
+def _figura(tema: Tema):
+    cores = TEMAS[tema]
+    figura, eixo = plt.subplots(figsize=(9, 3.6), dpi=110)
+    figura.patch.set_facecolor(cores["fundo"])
+    eixo.set_facecolor(cores["fundo"])
+    for lado in ("top", "right"):
+        eixo.spines[lado].set_visible(False)
+    for lado in ("left", "bottom"):
+        eixo.spines[lado].set_color(cores["grade"])
+    eixo.tick_params(colors=cores["texto"], labelsize=8)
+    eixo.yaxis.grid(True, color=cores["grade"], linewidth=0.6)
+    eixo.set_axisbelow(True)
+    return figura, eixo, cores
+
+
+def _exportar(figura, formato: Formato) -> bytes:
+    buffer = io.BytesIO()
+    figura.savefig(buffer, format=formato, bbox_inches="tight",
+                   facecolor=figura.get_facecolor())
+    plt.close(figura)
+    return buffer.getvalue()
+
+
+def grafico_diario(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
+    figura, eixo, cores = _figura(tema)
+    pontos = serie["pontos"]
+    barras = eixo.bar(range(len(pontos)), [_altura(p["casos"]) for p in pontos],
+                      color=[cores["clara"] if p["em_consolidacao"] else cores["barra"]
+                             for p in pontos])
+    for barra, ponto in zip(barras, pontos, strict=True):
+        if ponto["em_consolidacao"]:
+            barra.set_hatch("//")
+            barra.set_edgecolor(cores["fundo"])
+    indices = list(range(0, len(pontos), 5))
+    eixo.set_xticks(indices, [data_br(pontos[i]["rotulo"])[:5] for i in indices])
+    eixo.set_title(f"Casos diários de SRAG — 30 dias até {data_br(serie['data_referencia'])}",
+                   color=cores["texto"], fontsize=10, loc="left")
+    eixo.legend(handles=[Patch(color=cores["barra"], label="Consolidado"),
+                         Patch(facecolor=cores["clara"], hatch="//",
+                               label="Em consolidação (14 dias mais recentes)")],
+                frameon=False, labelcolor=cores["texto"], fontsize=8, loc="upper left")
+    return _exportar(figura, formato)
+
+
+def grafico_mensal(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
+    figura, eixo, cores = _figura(tema)
+    pontos = serie["pontos"]
+    posicoes = range(len(pontos))
+    barras = eixo.bar(posicoes, [_altura(p["casos"]) for p in pontos], color=cores["barra"])
+    for barra, ponto in zip(barras, pontos, strict=True):
+        if ponto["parcial"]:
+            barra.set_hatch("//")
+            barra.set_edgecolor(cores["fundo"])
+    eixo.bar_label(barras, labels=["" if p["fora_da_base"] else inteiro(p["casos"])
+                                   for p in pontos], fontsize=7, color=cores["texto"], padding=2)
+    for indice, ponto in enumerate(pontos):
+        if ponto["fora_da_base"]:
+            eixo.text(indice, 0, "sem\ndados", ha="center", va="bottom", fontsize=7,
+                      color=cores["nota"])
+    eixo.set_xticks(list(posicoes), [mes_br(p["rotulo"]) for p in pontos])
+    eixo.set_title("Casos mensais de SRAG — últimos 12 meses", color=cores["texto"],
+                   fontsize=10, loc="left")
+    eixo.legend(handles=[Patch(color=cores["barra"], label="Mês completo"),
+                         Patch(facecolor=cores["barra"], hatch="//", label="Mês parcial")],
+                frameon=False, labelcolor=cores["texto"], fontsize=8, loc="upper left")
+    return _exportar(figura, formato)
+```
+
+- [ ] **Step 3: Montagem e templates**
+
+`src/srag_agente/relatorio/montar.py`:
+
+```python
+"""Monta o relatório final: HTML autocontido, Markdown com PNGs e auditoria.jsonl."""
+
+import re
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+from urllib.parse import urlparse
+from uuid import UUID
+
+from jinja2 import Environment, PackageLoader, select_autoescape
+from markupsafe import Markup, escape
+
+from srag_agente.auditoria.registro import Auditoria
+from srag_agente.ferramentas.registro import Evidencia
+from srag_agente.metricas.catalogo import CATALOGO
+from srag_agente.modelos import NoticiaCitavel, TextoRelatorio, numerar_noticias
+from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br, pct, variacao
+from srag_agente.relatorio.graficos import grafico_diario, grafico_mensal
+
+AVISO_FIXO = (
+    "Prova de conceito. Não substitui avaliação clínica nem boletim epidemiológico oficial."
+)
+ROTULOS_STATUS = {"ok": "concluído", "parcial": "parcial",
+                  "revisao_humana": "revisão humana necessária", "erro": "erro"}
+NOMES_CATEGORIAS = {
+    "influenza": "Influenza", "covid19": "COVID-19", "outro_virus": "Outro vírus respiratório",
+    "outro_agente": "Outro agente", "nao_especificado": "Não especificado",
+    "em_investigacao": "Em investigação", "ignorado": "Ignorado",
+}
+GRAFICOS = (("diaria_30d", grafico_diario), ("mensal_12m", grafico_mensal))
+
+
+@dataclass(frozen=True)
+class DadosRelatorio:
+    id_execucao: UUID
+    status: str
+    uf: str
+    data_execucao: date
+    data_referencia: date | None
+    metricas: list[dict]
+    series: dict[str, dict]
+    distribuicoes: list[dict]
+    noticias: list[NoticiaCitavel]
+    texto: TextoRelatorio | None
+    avisos: list[str]
+    violacoes: list[str]
+    eventos: list[dict]
+    provedor: str
+    modelo: str
+    tokens_entrada: int
+    tokens_saida: int
+    custo_usd: float
+    versao_codigo: str
+    hash_prompts: str
+    pergunta_extra: str | None = None
+
+
+@dataclass(frozen=True)
+class ArquivosRelatorio:
+    pasta: Path
+    html: Path
+    markdown: Path
+    auditoria: Path
+
+
+def montar_dados(
+    *, evidencias: list[Evidencia], id_execucao: UUID, status: str, uf: str,
+    data_execucao: date, texto: TextoRelatorio | None, avisos: list[str], violacoes: list[str],
+    auditoria: Auditoria, provedor: str, modelo: str, tokens_entrada: int, tokens_saida: int,
+    custo_usd: float, pergunta_extra: str | None = None,
+) -> DadosRelatorio:
+    def dados(ferramenta: str) -> list[dict]:
+        return [e.dados for e in evidencias
+                if e.ferramenta == ferramenta and e.dados.get("uf", uf) == uf]
+
+    por_chave = {m["chave"]: m for m in dados("consultar_metricas")}
+    series = {s["tipo"]: s for s in dados("consultar_serie")}
+    data_referencia = next((date.fromisoformat(s["data_referencia"]) for s in series.values()),
+                           None)
+    return DadosRelatorio(
+        id_execucao=id_execucao, status=status, uf=uf, data_execucao=data_execucao,
+        data_referencia=data_referencia,
+        metricas=[por_chave[chave] for chave in CATALOGO if chave in por_chave],
+        series=series, distribuicoes=dados("consultar_distribuicao"),
+        noticias=numerar_noticias(evidencias), texto=texto, avisos=list(avisos),
+        violacoes=list(violacoes), eventos=list(auditoria.eventos), provedor=provedor,
+        modelo=modelo, tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
+        custo_usd=custo_usd, versao_codigo=auditoria.execucao.get("versao_codigo", ""),
+        hash_prompts=auditoria.execucao.get("hash_prompts", ""), pergunta_extra=pergunta_extra,
+    )
+
+
+def _citacoes(texto: str | None) -> Markup:
+    """Escapa o texto do LLM e só então transforma [n] em link para a referência."""
+    if not texto:
+        return Markup("")
+    return Markup(re.sub(r"\[(\d+)\]", r'<a href="#ref-\1">[\1]</a>', str(escape(texto))))
+
+
+def _url_segura(url: str) -> str:
+    return url if urlparse(url).scheme in {"http", "https"} else "#"
+
+
+def _ambiente() -> Environment:
+    ambiente = Environment(
+        loader=PackageLoader("srag_agente.relatorio", "templates"),
+        autoescape=select_autoescape(enabled_extensions=("html.j2",), default_for_string=True),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    ambiente.filters.update(pct=pct, variacao=variacao, inteiro=inteiro, data_br=data_br,
+                            mes_br=mes_br, citacoes=_citacoes, url_segura=_url_segura,
+                            categoria=lambda c: NOMES_CATEGORIAS.get(c, c))
+    return ambiente
+
+
+def _svg(conteudo: bytes) -> Markup:
+    texto = conteudo.decode("utf-8")
+    return Markup(texto[texto.index("<svg"):])  # sem a declaração XML, para embutir no HTML
+
+
+def montar_relatorio(dados: DadosRelatorio, auditoria: Auditoria,
+                     pasta_base: Path) -> ArquivosRelatorio:
+    pasta = pasta_base / f"{dados.data_execucao:%Y-%m-%d}_{dados.uf}_{str(dados.id_execucao)[:8]}"
+    (pasta / "graficos").mkdir(parents=True, exist_ok=True)
+    graficos: dict[str, dict[str, Markup]] = {}
+    for tipo, desenhar in GRAFICOS:
+        if (serie := dados.series.get(tipo)) is None:
+            continue
+        graficos[tipo] = {tema: _svg(desenhar(serie, tema)) for tema in ("escuro", "claro")}
+        (pasta / "graficos" / f"{tipo}.png").write_bytes(desenhar(serie, "claro", "png"))
+
+    contexto = {
+        "d": dados,
+        "graficos": graficos,
+        "aviso": AVISO_FIXO,
+        "rotulo_status": ROTULOS_STATUS.get(dados.status, dados.status),
+        "comentarios": ({c.metrica: c.comentario for c in dados.texto.comentarios_metricas}
+                        if dados.texto else {}),
+    }
+    ambiente = _ambiente()
+    html = pasta / "relatorio.html"
+    html.write_text(ambiente.get_template("relatorio.html.j2").render(**contexto),
+                    encoding="utf-8")
+    markdown = pasta / "relatorio.md"
+    markdown.write_text(ambiente.get_template("relatorio.md.j2").render(**contexto),
+                        encoding="utf-8")
+    return ArquivosRelatorio(pasta=pasta, html=html, markdown=markdown,
+                             auditoria=auditoria.gravar_jsonl(pasta / "auditoria.jsonl"))
+```
+
+`src/srag_agente/relatorio/templates/relatorio.html.j2` (tema escuro por padrão, botão para claro; grafite, não preto puro):
+
+```html
+<!doctype html>
+<html lang="pt-BR" data-tema="escuro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório SRAG — {{ "Brasil" if d.uf == "BR" else d.uf }}</title>
+<style>
+:root{--fundo:#1f2228;--cartao:#2a2e36;--texto:#d6d9de;--suave:#9aa0a8;--borda:#3a3f48;
+--acento:#6fa8dc;--alerta:#e8b07c;--perigo:#ec9a9a}
+[data-tema="claro"]{--fundo:#f6f7f9;--cartao:#ffffff;--texto:#2b2f36;--suave:#5f6670;
+--borda:#e3e6ea;--acento:#2f6db5;--alerta:#a8590f;--perigo:#b42318}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--texto);
+font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.6rem;margin:0 0 4px}
+h2{font-size:1.15rem;margin:32px 0 12px;border-bottom:1px solid var(--borda);padding-bottom:6px}
+.topo{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.meta,.pequeno{color:var(--suave);font-size:.88rem}
+.faixa{border-left:4px solid var(--alerta);background:var(--cartao);padding:10px 14px;
+margin:12px 0;border-radius:6px}
+.faixa.perigo{border-color:var(--perigo)}
+.cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.cartao,details,figure{background:var(--cartao);border:1px solid var(--borda);border-radius:10px}
+.cartao{padding:14px}
+.valor{font-size:1.9rem;font-weight:650;color:var(--acento)}
+figure{margin:12px 0;padding:8px;overflow-x:auto}
+figure svg{max-width:100%;height:auto}
+[data-tema="escuro"] .graf-claro,[data-tema="claro"] .graf-escuro{display:none}
+.tabela{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{border-bottom:1px solid var(--borda);padding:6px 8px;text-align:left;vertical-align:top}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+details{padding:10px 14px}
+a{color:var(--acento)}
+button{background:var(--cartao);color:var(--texto);border:1px solid var(--borda);
+border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
+footer{margin-top:40px;color:var(--suave);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+<header class="topo">
+  <div>
+    <h1>Relatório de SRAG — {{ "Brasil" if d.uf == "BR" else d.uf }}</h1>
+    <div class="meta">Dados até <strong>{{ d.data_referencia|data_br }}</strong> (Open DATASUS,
+      SIVEP-Gripe) · gerado em {{ d.data_execucao|data_br }} · situação:
+      <strong>{{ rotulo_status }}</strong> · execução {{ (d.id_execucao|string)[:8] }}</div>
+  </div>
+  <button type="button" id="tema">Alternar tema claro/escuro</button>
+</header>
+
+{% if d.status == "revisao_humana" %}
+<div class="faixa perigo"><strong>Revisão humana necessária.</strong> O texto gerado não passou na
+conferência automática:
+  <ul>{% for v in d.violacoes %}<li>{{ v }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% for aviso_execucao in d.avisos %}
+<div class="faixa">{{ aviso_execucao }}</div>
+{% endfor %}
+
+{% if d.texto %}
+<h2>Resumo</h2>
+<p>{{ d.texto.resumo_executivo|citacoes }}</p>
+{% endif %}
+
+<h2>Métricas</h2>
+<div class="cartoes">
+{% for m in d.metricas %}
+  <section class="cartao">
+    <div class="pequeno">{{ m.nome }}</div>
+    <div class="valor">{{ m.valor|variacao if m.chave == "aumento_casos" else m.valor|pct }}</div>
+    <div class="pequeno">
+    {% if m.chave == "aumento_casos" %}
+      {{ m.numerador|inteiro }} casos contra {{ m.denominador|inteiro }} na semana anterior
+    {% else %}
+      {{ m.numerador|inteiro }} de {{ m.denominador|inteiro }}
+    {% endif %}
+      · {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }}</div>
+    {% if m.chave == "vacinacao" and m.complemento.vacina_gripe is not none %}
+    <div class="pequeno">Vacina contra gripe: {{ m.complemento.vacina_gripe|pct }}</div>
+    {% endif %}
+    {% if comentarios.get(m.chave) %}<p>{{ comentarios[m.chave]|citacoes }}</p>{% endif %}
+    <details>
+      <summary class="pequeno">Como é calculada</summary>
+      <p class="pequeno">{{ m.definicao }}</p>
+      <p class="pequeno"><strong>Limitação:</strong> {{ m.limitacao }}</p>
+      <p class="pequeno">Fora do cálculo: {{ m.excluidos|inteiro }} registros.</p>
+    </details>
+  </section>
+{% endfor %}
+</div>
+
+<h2>Evolução dos casos</h2>
+{% for tipo in ("diaria_30d", "mensal_12m") %}
+{% if graficos.get(tipo) %}
+<figure>
+  <div class="graf-escuro">{{ graficos[tipo]["escuro"] }}</div>
+  <div class="graf-claro">{{ graficos[tipo]["claro"] }}</div>
+  <figcaption class="pequeno">{{ d.series[tipo].nota }}</figcaption>
+</figure>
+{% endif %}
+{% endfor %}
+
+{% if d.distribuicoes %}
+<h2>Perfil dos casos</h2>
+{% for dist in d.distribuicoes %}
+<div class="tabela"><table>
+  <caption class="pequeno" style="text-align:left">Por {{ "agente causador" if
+    dist.dimensao == "classificacao" else "faixa etária" }}</caption>
+  <thead><tr><th>Categoria</th><th>Casos</th><th>%</th></tr></thead>
+  <tbody>
+  {% for c in dist.categorias %}
+    <tr><td>{{ c.categoria|categoria }}</td><td class="num">{{ c.casos|inteiro }}</td>
+      <td class="num">{{ c.percentual|pct }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endfor %}
+{% endif %}
+
+{% if d.texto %}
+<h2>Contexto do período dos dados</h2>
+<p>{{ d.texto.contexto_periodo_dados|citacoes }}</p>
+<h2>Cenário atual (notícias recentes)</h2>
+<p>{{ d.texto.cenario_atual|citacoes }}</p>
+{% if d.texto.resposta_pergunta_extra %}
+<h2>Pergunta complementar</h2>
+<p class="pequeno">{{ d.pergunta_extra }}</p>
+<p>{{ d.texto.resposta_pergunta_extra|citacoes }}</p>
+{% endif %}
+<h2>Limitações</h2>
+<p>{{ d.texto.limitacoes|citacoes }}</p>
+{% endif %}
+
+<h2>Referências</h2>
+{% if d.noticias %}
+<ol>
+{% for n in d.noticias %}
+  <li id="ref-{{ n.id }}" value="{{ n.id }}">{{ n.titulo }} — {{ n.fonte }}{% if n.data %},
+    {{ n.data|data_br }}{% endif %} ·
+    <a href="{{ n.url|url_segura }}" rel="noopener noreferrer" target="_blank">abrir</a>
+    <span class="pequeno">· {{ "período dos dados" if n.janela == "periodo_dos_dados" else
+      "cenário atual" }}{% if n.confiavel %} · fonte reconhecida{% endif %}</span></li>
+{% endfor %}
+</ol>
+{% else %}
+<p>Nenhuma notícia foi encontrada nas buscas desta execução.</p>
+{% endif %}
+
+<h2>Como este relatório foi gerado</h2>
+<details open>
+  <summary>Governança e auditoria desta execução</summary>
+  <p class="pequeno">Modelo: {{ d.provedor }} / {{ d.modelo }} · tokens:
+    {{ d.tokens_entrada|inteiro }} de entrada e {{ d.tokens_saida|inteiro }} de saída · custo
+    estimado: US$ {{ "%.4f"|format(d.custo_usd) }} · código {{ d.versao_codigo }} · prompts
+    {{ d.hash_prompts }}</p>
+  <p class="pequeno">Os números dos cartões, tabelas e gráficos vêm de SQL na camada gold. O texto
+    foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais).
+    A trilha completa está em <code>auditoria.jsonl</code> e na tabela
+    <code>auditoria.eventos</code>.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>#</th><th>Etapa</th><th>Tipo</th><th>Ferramenta</th>
+      <th>Motivo / resultado</th><th>ms</th></tr></thead>
+    <tbody>
+    {% for e in d.eventos %}
+      <tr><td class="num">{{ e.sequencia }}</td><td>{{ e.no }}</td><td>{{ e.tipo }}</td>
+        <td>{{ e.ferramenta or "" }}</td>
+        <td>{{ e.motivo or "" }}
+        {% if e.tipo == "guardrail" and e.resultado and e.resultado.aprovado is defined %}
+          {{ "aprovado" if e.resultado.aprovado else "reprovado" }}
+        {% endif %}
+        {% if e.erro %} <strong>erro:</strong> {{ e.erro|truncate(160) }}{% endif %}</td>
+        <td class="num">{{ e.duracao_ms if e.duracao_ms is not none else "" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</details>
+
+<footer>{{ aviso }}</footer>
+</main>
+<script>
+(function () {
+  var raiz = document.documentElement;
+  try { var salvo = localStorage.getItem("srag-tema"); if (salvo) raiz.dataset.tema = salvo; }
+  catch (e) {}
+  document.getElementById("tema").addEventListener("click", function () {
+    raiz.dataset.tema = raiz.dataset.tema === "escuro" ? "claro" : "escuro";
+    try { localStorage.setItem("srag-tema", raiz.dataset.tema); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>
+```
+
+`src/srag_agente/relatorio/templates/relatorio.md.j2`:
+
+```jinja
+# Relatório de SRAG — {{ "Brasil" if d.uf == "BR" else d.uf }}
+
+Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · gerado em {{ d.data_execucao|data_br }} · situação: **{{ rotulo_status }}**
+
+{% if d.status == "revisao_humana" %}
+> **Revisão humana necessária.** O texto gerado não passou na conferência automática:
+{% for v in d.violacoes %}
+> - {{ v }}
+{% endfor %}
+
+{% endif %}
+{% for aviso_execucao in d.avisos %}
+> {{ aviso_execucao }}
+
+{% endfor %}
+{% if d.texto %}
+## Resumo
+
+{{ d.texto.resumo_executivo }}
+
+{% endif %}
+## Métricas
+
+| Métrica | Valor | Base | Período |
+|---|---:|---|---|
+{% for m in d.metricas %}
+| {{ m.nome }} | {{ m.valor|variacao if m.chave == "aumento_casos" else m.valor|pct }} | {{ m.numerador|inteiro }} de {{ m.denominador|inteiro }} | {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }} |
+{% endfor %}
+
+{% for m in d.metricas %}
+- **{{ m.nome }}.** {{ comentarios.get(m.chave, "") }} *Limitação: {{ m.limitacao }}*
+{% endfor %}
+
+## Evolução dos casos
+
+![Casos diários de SRAG nos últimos 30 dias](graficos/diaria_30d.png)
+
+![Casos mensais de SRAG nos últimos 12 meses](graficos/mensal_12m.png)
+
+{% if d.texto %}
+## Contexto do período dos dados
+
+{{ d.texto.contexto_periodo_dados }}
+
+## Cenário atual (notícias recentes)
+
+{{ d.texto.cenario_atual }}
+
+{% if d.texto.resposta_pergunta_extra %}
+## Pergunta complementar
+
+> {{ d.pergunta_extra }}
+
+{{ d.texto.resposta_pergunta_extra }}
+
+{% endif %}
+## Limitações
+
+{{ d.texto.limitacoes }}
+
+{% endif %}
+## Referências
+
+{% for n in d.noticias %}
+{{ n.id }}. [{{ n.titulo }}]({{ n.url|url_segura }}) — {{ n.fonte }}{% if n.data %}, {{ n.data|data_br }}{% endif %} ({{ "período dos dados" if n.janela == "periodo_dos_dados" else "cenário atual" }})
+{% else %}
+Nenhuma notícia foi encontrada nas buscas desta execução.
+{% endfor %}
+
+---
+
+Modelo {{ d.provedor }} / {{ d.modelo }} · {{ d.tokens_entrada|inteiro }} + {{ d.tokens_saida|inteiro }} tokens · custo estimado US$ {{ "%.4f"|format(d.custo_usd) }} · código {{ d.versao_codigo }} · trilha completa em `auditoria.jsonl`.
+
+*{{ aviso }}*
+```
+
+- [ ] **Step 4: Rodar e ver passar; olhar o HTML de verdade**
+
+Run: `uv run pytest tests/unit/test_relatorio.py -v` → Expected: todos passam.
+
+Validação visual (pelo efeito, não pelo teste): gerar um relatório com os dublês num script de rascunho na pasta temporária da sessão, abrir o `relatorio.html` no navegador e conferir: tema escuro legível, botão alterna o tema, os dois gráficos aparecem nos dois temas, nada estoura a largura em 375 px (DevTools, modo celular).
+
+- [ ] **Step 5: Commit**
+
+```bash
+make lint
+git add src/srag_agente/relatorio tests
+git commit -m "feat: relatório HTML/Markdown com gráficos, referências e anexo de auditoria"
+```
+
+---
+
+### Task 15: Núcleo, CLI, imagem Docker e observabilidade opcional
+
+**Files:**
+- Create: `src/srag_agente/nucleo.py`, `src/srag_agente/cli.py`, `Dockerfile`, `.dockerignore`
+- Delete: `src/srag_agente/dados/__main__.py`, `src/srag_agente/rag/__main__.py` (a CLI os substitui)
+- Modify: `docker-compose.yml` (serviço `app`), `Makefile` (todos os alvos)
+- Create: `tests/unit/test_cli.py`, `tests/integracao/test_nucleo.py`
+
+**Interfaces:**
+- Consumes: tudo das Tasks 1–14.
+- Produces: `Componentes(provedor, modelo, modelo_orquestrador, redator, classificador, buscador, embedder, callbacks)`, `componentes_reais(cfg) -> Componentes`, `callbacks_observabilidade(cfg) -> list`, `ResultadoExecucao(id_execucao, status, arquivos, tokens_entrada, tokens_saida, custo_usd)`, `gerar_relatorio(cfg, *, uf="BR", pergunta_extra=None, hoje=None, componentes=None) -> ResultadoExecucao`; `cli.main(argv=None) -> int` com subcomandos `carga`, `indexar`, `qualidade`, `relatorio [--uf UF] [--pergunta TEXTO]`, `grafo`.
+
+- [ ] **Step 1: Testes (falhando)**
+
+`tests/unit/test_cli.py`:
+
+```python
+import pytest
+
+from srag_agente.cli import main
+
+
+def test_grafo_gera_o_mermaid_a_partir_do_codigo(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert main(["grafo"]) == 0
+    conteudo = (tmp_path / "docs" / "grafo_langgraph.mmd").read_text(encoding="utf-8")
+    for no in ("guardrail_entrada", "orquestrador", "ferramentas", "verificar_cobertura",
+               "redator", "guardrail_saida"):
+        assert no in conteudo
+
+
+def test_uf_invalida_e_recusada_antes_de_tudo():
+    with pytest.raises(SystemExit) as saida:
+        main(["relatorio", "--uf", "ZZ"])
+    assert saida.value.code == 2
+```
+
+`tests/integracao/test_nucleo.py`:
+
+```python
+import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+
+from srag_agente.nucleo import Componentes, gerar_relatorio
+from tests.fakes import CHAMADAS_COMPLETAS, HOJE, BuscadorFalso, embedder_falso, texto_neutro
+
+pytestmark = pytest.mark.integracao
+
+USO = {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
+
+
+def _componentes():
+    chamadas = [{"name": n, "args": {**a, "motivo": "evidência obrigatória do relatório"},
+                 "id": f"c{i}"} for i, (n, a) in enumerate(CHAMADAS_COMPLETAS)]
+    orquestrador = GenericFakeChatModel(messages=iter([
+        AIMessage(content="", tool_calls=chamadas, usage_metadata=USO),
+        AIMessage(content="EVIDENCIAS_COMPLETAS", usage_metadata=USO),
+    ]))
+    return Componentes(provedor="falso", modelo="falso", modelo_orquestrador=orquestrador,
+                       redator=lambda contexto: (texto_neutro(), (200, 80)),
+                       classificador=lambda texto: (None, (0, 0)),
+                       buscador=BuscadorFalso(), embedder=embedder_falso)
+
+
+def test_gera_relatorio_de_ponta_a_ponta_e_audita_no_banco(cfg_teste, banco_carregado, conn_etl,
+                                                          tmp_path):
+    cfg = cfg_teste.model_copy(update={"pasta_relatorios": tmp_path})
+    resultado = gerar_relatorio(cfg, hoje=HOJE, componentes=_componentes())
+
+    assert resultado.status == "ok"
+    assert "Relatório de SRAG" in resultado.arquivos.html.read_text(encoding="utf-8")
+    # Pelo efeito: a trilha está no banco, com o motivo de cada ferramenta.
+    ferramentas = conn_etl.execute(
+        "SELECT count(*) FROM auditoria.eventos WHERE id_execucao = %s AND tipo = 'ferramenta' "
+        "AND motivo IS NOT NULL", (resultado.id_execucao,)).fetchone()[0]
+    assert ferramentas == len(CHAMADAS_COMPLETAS)
+    status, custo = conn_etl.execute(
+        "SELECT status, custo_usd FROM auditoria.execucoes WHERE id_execucao = %s",
+        (resultado.id_execucao,)).fetchone()
+    assert status == "ok" and float(custo) > 0
+```
+
+Run: `uv run pytest tests/unit/test_cli.py tests/integracao/test_nucleo.py -v` → Expected: FAIL (`ModuleNotFoundError`).
+
+- [ ] **Step 2: Implementar `nucleo.py`**
+
+```python
+"""Ponto único de geração do relatório (CLI hoje; uma tela Streamlit chamaria o mesmo)."""
+
+import logging
+from dataclasses import dataclass, field
+from datetime import date
+from uuid import UUID
+
+import httpx
+from langchain_core.runnables import Runnable
+
+from srag_agente.agente.grafo import executar_agente
+from srag_agente.agente.llm import (
+    Redator,
+    criar_classificador,
+    criar_modelos,
+    criar_redator,
+    estimar_custo,
+    modelo_com_ferramentas,
+    modelo_estruturado,
+)
+from srag_agente.agente.nos import Dependencias
+from srag_agente.agente.prompts import hash_prompts
+from srag_agente.auditoria.registro import AuditoriaPostgres
+from srag_agente.auditoria.versao import versao_codigo
+from srag_agente.banco import conectar
+from srag_agente.config import Config
+from srag_agente.ferramentas.dicionario import BuscaDicionario
+from srag_agente.ferramentas.noticias import BuscadorNoticias
+from srag_agente.ferramentas.registro import Buscador, criar_ferramentas, especificacoes
+from srag_agente.guardrails.entrada import ClassificacaoEscopo, Classificador
+from srag_agente.guardrails.limites import Limites
+from srag_agente.guardrails.padroes import mascarar_pii
+from srag_agente.metricas.repositorio import DadosIndisponiveis, RepositorioGold
+from srag_agente.modelos import TextoRelatorio
+from srag_agente.rag.embeddings import Embedder, criar_embedder
+from srag_agente.relatorio.montar import ArquivosRelatorio, montar_dados, montar_relatorio
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class Componentes:
+    """Peças externas (LLM, notícias, embeddings). Os testes trocam por dublês."""
+
+    provedor: str
+    modelo: str
+    modelo_orquestrador: Runnable
+    redator: Redator
+    classificador: Classificador
+    buscador: Buscador
+    embedder: Embedder
+    callbacks: list = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ResultadoExecucao:
+    id_execucao: UUID
+    status: str
+    arquivos: ArquivosRelatorio
+    tokens_entrada: int
+    tokens_saida: int
+    custo_usd: float
+
+
+def callbacks_observabilidade(cfg: Config) -> list:
+    """Langfuse opcional: só liga se as duas chaves estiverem no .env."""
+    if not (cfg.langfuse_public_key and cfg.langfuse_secret_key):
+        return []
+    try:
+        from langfuse import Langfuse
+        from langfuse.langchain import CallbackHandler
+    except ImportError:
+        log.warning("Chaves do Langfuse definidas, mas o extra 'observabilidade' não está "
+                    "instalado (uv sync --all-extras).")
+        return []
+    Langfuse(public_key=cfg.langfuse_public_key.get_secret_value(),
+             secret_key=cfg.langfuse_secret_key.get_secret_value(), host=cfg.langfuse_host)
+    return [CallbackHandler()]
+
+
+def componentes_reais(cfg: Config) -> Componentes:
+    modelos = criar_modelos(cfg)
+    tavily = cfg.tavily_api_key.get_secret_value() if cfg.tavily_api_key else None
+    return Componentes(
+        provedor=modelos[0].provedor,
+        modelo=modelos[0].modelo,
+        modelo_orquestrador=modelo_com_ferramentas(modelos, especificacoes()),
+        redator=criar_redator(modelo_estruturado(modelos, TextoRelatorio)),
+        classificador=criar_classificador(modelo_estruturado(modelos, ClassificacaoEscopo)),
+        buscador=BuscadorNoticias(httpx.Client(), tavily or None),
+        embedder=criar_embedder(cfg.pasta_cache_modelos),
+        callbacks=callbacks_observabilidade(cfg),
+    )
+
+
+def gerar_relatorio(
+    cfg: Config,
+    *,
+    uf: str = "BR",
+    pergunta_extra: str | None = None,
+    hoje: date | None = None,
+    componentes: Componentes | None = None,
+) -> ResultadoExecucao:
+    hoje = hoje or date.today()
+    componentes = componentes or componentes_reais(cfg)
+    with conectar(cfg, "agente", autocommit=True) as conn_agente, \
+         conectar(cfg, "auditor", autocommit=True) as conn_auditor:
+        auditoria = AuditoriaPostgres(conn_auditor)
+        id_execucao = auditoria.iniciar_execucao(
+            provedor=componentes.provedor,
+            modelo=componentes.modelo,
+            parametros={"uf": uf, "data_execucao": hoje.isoformat(),
+                        "pergunta_extra": mascarar_pii(pergunta_extra)[0] if pergunta_extra
+                        else None},
+            versao_codigo=versao_codigo(),
+            hash_prompts=hash_prompts(),
+        )
+        repo = RepositorioGold(conn_agente)
+        deps = Dependencias(
+            modelo_orquestrador=componentes.modelo_orquestrador,
+            redator=componentes.redator,
+            classificador=componentes.classificador,
+            ferramentas=criar_ferramentas(repo, componentes.buscador,
+                                          BuscaDicionario(conn_agente, componentes.embedder),
+                                          hoje=lambda: hoje),
+            auditoria=auditoria,
+            limites=Limites(max_chamadas_ferramenta=cfg.max_chamadas_ferramenta,
+                            max_tokens=cfg.max_tokens_execucao),
+        )
+        try:
+            estado = executar_agente(deps, uf=uf, pergunta_extra=pergunta_extra,
+                                     data_execucao=hoje, callbacks=componentes.callbacks)
+        except Exception as erro:
+            auditoria.registrar("nucleo", "decisao", erro=f"{type(erro).__name__}: {erro}"[:500])
+            auditoria.finalizar_execucao(status="erro", data_referencia=None, tokens_entrada=0,
+                                         tokens_saida=0, custo_usd=0.0)
+            raise
+
+        tokens_entrada, tokens_saida = estado["tokens_entrada"], estado["tokens_saida"]
+        custo = estimar_custo(tokens_entrada, tokens_saida, cfg)
+        try:
+            data_referencia = repo.referencia().data_referencia
+        except DadosIndisponiveis:
+            data_referencia = None
+        auditoria.finalizar_execucao(status=estado["status"], data_referencia=data_referencia,
+                                     tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
+                                     custo_usd=custo)
+        dados = montar_dados(
+            evidencias=estado["evidencias"], id_execucao=id_execucao, status=estado["status"],
+            uf=uf, data_execucao=hoje, texto=estado["texto"], avisos=estado["avisos"],
+            violacoes=estado["violacoes"], auditoria=auditoria, provedor=componentes.provedor,
+            modelo=componentes.modelo, tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
+            custo_usd=custo, pergunta_extra=estado["pergunta_extra"],
+        )
+        arquivos = montar_relatorio(dados, auditoria, cfg.pasta_relatorios)
+    log.info("Relatório %s em %s (situação: %s)", id_execucao, arquivos.pasta, estado["status"])
+    return ResultadoExecucao(id_execucao=id_execucao, status=estado["status"], arquivos=arquivos,
+                             tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
+                             custo_usd=custo)
+```
+
+- [ ] **Step 3: Implementar `cli.py` e apagar os `__main__.py`**
+
+```python
+"""Linha de comando: srag carga | indexar | qualidade | relatorio | grafo."""
+
+import argparse
+import logging
+from pathlib import Path
+from typing import get_args
+
+from srag_agente.ferramentas.registro import UF
+
+ARQUIVO_QUALIDADE = Path("docs/QUALIDADE_DADOS.md")
+ARQUIVO_GRAFO = Path("docs/grafo_langgraph.mmd")
+
+
+def _argumentos(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="srag", description="Agente de relatório de SRAG (PoC Indicium HealthCare)")
+    sub = parser.add_subparsers(dest="comando", required=True)
+    sub.add_parser("carga", help="cria papéis e schemas e carrega raw → silver → gold")
+    sub.add_parser("indexar", help="indexa o dicionário de dados para o RAG")
+    sub.add_parser("qualidade", help=f"gera {ARQUIVO_QUALIDADE}")
+    sub.add_parser("grafo", help=f"gera {ARQUIVO_GRAFO} a partir do código do agente")
+    relatorio = sub.add_parser("relatorio", help="gera o relatório com o agente")
+    relatorio.add_argument("--uf", default="BR", type=str.upper, choices=get_args(UF))
+    relatorio.add_argument("--pergunta", default=None,
+                           help="pergunta complementar (passa pelo guardrail de entrada)")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _argumentos(argv)
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    if args.comando == "grafo":  # não precisa de banco nem de chave
+        from srag_agente.agente.grafo import estrutura_mermaid
+
+        ARQUIVO_GRAFO.parent.mkdir(parents=True, exist_ok=True)
+        ARQUIVO_GRAFO.write_text(estrutura_mermaid(), encoding="utf-8")
+        print(f"Grafo salvo em {ARQUIVO_GRAFO}")
+        return 0
+
+    from srag_agente.banco import conectar
+    from srag_agente.config import Config
+
+    cfg = Config()
+    if args.comando == "carga":
+        from srag_agente.dados.bootstrap import preparar_banco
+        from srag_agente.dados.carga_raw import carregar_raw
+        from srag_agente.dados.transformar import transformar
+
+        preparar_banco(cfg, cfg.pg_banco)
+        with conectar(cfg, "etl") as conn:
+            total = carregar_raw(conn, cfg.arquivo_dados)
+            transformar(conn)
+        print(f"Carga concluída: {total:,} linhas na raw.".replace(",", "."))
+    elif args.comando == "indexar":
+        from srag_agente.rag.embeddings import criar_embedder
+        from srag_agente.rag.indexar import campos_da_raw, indexar_dicionario
+
+        with conectar(cfg, "etl") as conn:
+            total = indexar_dicionario(conn, cfg.arquivo_dicionario,
+                                       criar_embedder(cfg.pasta_cache_modelos),
+                                       campos_da_raw(conn))
+        print(f"Trechos do dicionário indexados: {total}")
+    elif args.comando == "qualidade":
+        from srag_agente.dados.qualidade import gerar_relatorio_qualidade
+
+        with conectar(cfg, "etl") as conn:
+            print(f"Gerado {gerar_relatorio_qualidade(conn, ARQUIVO_QUALIDADE)}")
+    elif args.comando == "relatorio":
+        from srag_agente.nucleo import gerar_relatorio
+
+        resultado = gerar_relatorio(cfg, uf=args.uf, pergunta_extra=args.pergunta)
+        print(f"Situação: {resultado.status}\nHTML: {resultado.arquivos.html}\n"
+              f"Markdown: {resultado.arquivos.markdown}\n"
+              f"Auditoria: {resultado.arquivos.auditoria}\n"
+              f"Custo estimado: US$ {resultado.custo_usd:.4f}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+```bash
+git rm src/srag_agente/dados/__main__.py src/srag_agente/rag/__main__.py
+```
+
+- [ ] **Step 4: Docker da aplicação e Makefile completo**
+
+`Dockerfile`:
+
+```dockerfile
+FROM python:3.12-slim
+COPY --from=ghcr.io/astral-sh/uv:0.10.10 /uv /usr/local/bin/uv
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+COPY src ./src
+RUN uv sync --frozen --no-dev
+ARG SRAG_VERSAO_CODIGO=desconhecida
+ENV SRAG_VERSAO_CODIGO=${SRAG_VERSAO_CODIGO} PATH="/app/.venv/bin:$PATH"
+RUN useradd --create-home srag && chown -R srag /app
+USER srag
+ENTRYPOINT ["srag"]
+CMD ["--help"]
+```
+
+`.dockerignore`:
+
+```
+.git
+.venv
+.env
+.env.*
+dados
+relatorios
+.cache
+docs
+tests
+**/__pycache__
+```
+
+Acrescentar ao `docker-compose.yml`, dentro de `services:`:
+
+```yaml
+  app:
+    build:
+      context: .
+      args:
+        SRAG_VERSAO_CODIGO: ${SRAG_VERSAO_CODIGO:-desconhecida}
+    profiles: ["app"]
+    env_file: .env
+    environment:
+      PG_HOST: banco
+      PG_PORTA: "5432"
+    volumes:
+      - ./dados:/app/dados:ro
+      - ./relatorios:/app/relatorios
+      - ./docs:/app/docs
+      - ./.cache:/app/.cache
+    depends_on:
+      banco:
+        condition: service_healthy
+```
+
+`Makefile` completo (substitui o da Task 1; receitas com **TAB**):
+
+```make
+.PHONY: instalar subir parar carga indexar qualidade grafo relatorio testes lint diagrama \
+        docker-build docker-relatorio tudo
+
+UF ?= BR
+
+instalar:
+	uv sync --all-extras
+	uv run pre-commit install
+
+subir:
+	docker compose up -d --wait banco
+
+parar:
+	docker compose down
+
+carga:
+	uv run srag carga
+
+indexar:
+	uv run srag indexar
+
+qualidade:
+	uv run srag qualidade
+
+grafo:
+	uv run srag grafo
+
+relatorio:
+	uv run srag relatorio --uf $(UF)
+
+testes:
+	uv run pytest --cov=srag_agente --cov-report=term-missing
+
+lint:
+	uv run ruff check . && uv run ruff format --check .
+
+docker-build:
+	SRAG_VERSAO_CODIGO=$$(git rev-parse --short HEAD) docker compose --profile app build app
+
+docker-relatorio:
+	docker compose --profile app run --rm app relatorio --uf $(UF)
+
+tudo: subir carga indexar relatorio
+```
+
+(O alvo `diagrama` entra na Task 17.)
+
+- [ ] **Step 5: Rodar os testes e provar a imagem pelo efeito**
+
+Run: `uv run pytest -v` → Expected: todos passam.
+
+Run:
+
+```bash
+make docker-build
+docker compose --profile app run --rm app grafo && ls -l docs/grafo_langgraph.mmd
+```
+
+Expected: imagem construída; o arquivo `docs/grafo_langgraph.mmd` é (re)criado pelo container.
+
+- [ ] **Step 6: Commit**
+
+```bash
+make lint
+git add -A src tests Dockerfile .dockerignore docker-compose.yml Makefile docs/grafo_langgraph.mmd
+git commit -m "feat: núcleo gerar_relatorio, CLI srag, imagem Docker e Langfuse opcional"
+```
+
+---
+
+### Task 16: Integração contínua (GitHub Actions)
+
+**Files:**
+- Create: `.github/workflows/ci.yml`
+
+**Interfaces:**
+- Consumes: `make lint`, `pytest`, fixture `banco_carregado` com `EXIGIR_BANCO=1` (falha em vez de pular).
+
+- [ ] **Step 1: Workflow**
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    services:
+      banco:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: admin-ci
+          POSTGRES_DB: srag
+        ports: ["5435:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 10
+    env:
+      PG_SENHA_ADMIN: admin-ci
+      PG_SENHA_ETL: etl-ci
+      PG_SENHA_AGENTE: agente-ci
+      PG_SENHA_AUDITOR: auditor-ci
+      EXIGIR_BANCO: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-extras --frozen
+      - run: uv run ruff check . && uv run ruff format --check .
+      - run: uv run pytest --cov=srag_agente --cov-report=term-missing
+
+  segredos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+- [ ] **Step 2: Enviar e conferir o resultado no GitHub (pelo efeito)**
+
+```bash
+git add .github/workflows/ci.yml
+git commit -m "ci: lint, testes com Postgres e varredura de segredos"
+git push
+gh run watch --exit-status $(gh run list --limit 1 --json databaseId --jq '.[0].databaseId')
+```
+
+Expected: os dois jobs verdes. Conferir no log do job `testes` que os testes de integração **rodaram** (aparecem como `PASSED`, não `SKIPPED`).
+
+---
+
+### Task 17: Diagrama conceitual da arquitetura (PDF exigido)
+
+**Files:**
+- Create: `docs/arquitetura.mmd`, `docs/arquitetura.pdf` (gerado)
+- Modify: `Makefile` (alvo `diagrama`)
+
+- [ ] **Step 1: Fonte do diagrama**
+
+`docs/arquitetura.mmd`:
+
+```mermaid
+---
+title: Agente de relatório de SRAG — arquitetura conceitual
+---
+flowchart LR
+  U["Profissional de saúde<br/>srag relatorio --uf"]
+
+  subgraph DADOS["Banco de dados — Postgres 16 + pgvector"]
+    CSV[("CSV Open DATASUS<br/>SRAG 2025")] -->|COPY sem tratamento| RAW[("raw")]
+    RAW -->|limpeza + minimização LGPD| SILVER[("silver")]
+    SILVER -->|somente agregados| GOLD[("gold — views")]
+    DIC[("Dicionário de dados<br/>PDF DATASUS")] -->|embeddings locais| VET[("gold.dicionario_trechos<br/>pgvector")]
+  end
+
+  subgraph AGENTE["Agente LangGraph"]
+    GE["Guardrail de entrada<br/>escopo · injeção · PII"]
+    ORQ{{"Agente principal<br/>ORQUESTRADOR"}}
+    COB["Verificação de cobertura<br/>(código)"]
+    RED["Redator"]
+    GS["Guardrail de saída<br/>números · citações · links · PII"]
+  end
+
+  subgraph TOOLS["Ferramentas (sem SQL livre, motivo obrigatório)"]
+    T1["consultar_metricas"]
+    T2["consultar_serie"]
+    T3["consultar_distribuicao"]
+    T4["buscar_noticias"]
+    T5["consultar_dicionario"]
+  end
+
+  LLM(["LLM<br/>OpenRouter gpt-4.1-mini<br/>reserva: OpenAI"])
+  NEWS(["Fontes de notícias<br/>Tavily · Google News RSS"])
+  AUD[("Auditoria<br/>auditoria.execucoes / eventos<br/>+ auditoria.jsonl")]
+  REL["Relatório HTML + Markdown<br/>4 métricas · 2 gráficos · comentários"]
+
+  U --> GE --> ORQ
+  ORQ <-->|tool calling| LLM
+  GE -.->|classificador de escopo| LLM
+  RED <-->|saída estruturada| LLM
+  ORQ --> T1 & T2 & T3 & T4 & T5
+  T1 & T2 & T3 -->|SQL fixo · usuário somente leitura| GOLD
+  T5 -->|busca vetorial| VET
+  T4 -->|HTTP · conteúdo tratado como dado| NEWS
+  ORQ --> COB
+  COB -->|faltou evidência| ORQ
+  COB --> RED --> GS
+  GS -->|reprovado: nova tentativa| RED
+  GS -->|aprovado ou revisão humana| REL
+  GE & ORQ & TOOLS & COB & RED & GS -.->|cada decisão + motivo| AUD
+```
+
+- [ ] **Step 2: Gerar o PDF e conferir pelo efeito**
+
+Makefile:
+
+```make
+diagrama:
+	docker run --rm -u "$$(id -u):$$(id -g)" -v "$$PWD/docs:/data" minlag/mermaid-cli:11.4.2 \
+	  -i /data/arquitetura.mmd -o /data/arquitetura.pdf -f -b white
+```
+
+(Se a tag `11.4.2` não existir, use a 11.x mais recente listada em hub.docker.com/r/minlag/mermaid-cli/tags e atualize o Makefile.)
+
+Run: `make diagrama && pdfinfo docs/arquitetura.pdf | grep Pages`
+Expected: `Pages: 1`.
+
+Conferir visualmente: renderizar a página em PNG (`uv run python -c "import pymupdf; pymupdf.open('docs/arquitetura.pdf')[0].get_pixmap(dpi=110).save('/tmp/arquitetura.png')"`) e abrir a imagem. Precisam aparecer, legíveis: o orquestrador, as 5 ferramentas, o LLM, o banco, as fontes de notícias e a auditoria. Se algum rótulo ficar ilegível, ajuste o `.mmd` e gere de novo.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/arquitetura.mmd docs/arquitetura.pdf Makefile
+git commit -m "docs: diagrama conceitual da arquitetura (Mermaid + PDF)"
+```
+
+---
+
+### Task 18: Documentação, decisões e relatório de exemplo real
+
+> Texto longo para leitura humana → o README é redigido à parte; os ADRs e o dicionário da silver podem ser feitos direto.
+
+**Files:**
+- Create: `docs/adr/0001-arquitetura-orquestrador-ferramentas-fechadas.md` … `docs/adr/0008-metricas-acumuladas-no-periodo.md`, `docs/DICIONARIO_SILVER.md`, `README.md`
+- Create (gerados): `docs/QUALIDADE_DADOS.md`, `docs/grafo_langgraph.mmd`, `relatorios/exemplo/` (relatório real)
+
+- [ ] **Step 1: ADRs** — um arquivo por decisão, no formato abaixo (Contexto, Decisão, Alternativas, Consequências; até ~25 linhas cada):
+
+```markdown
+# ADR 0001 — Orquestrador com ferramentas fechadas
+
+- **Status:** aceita (14/10/2026)
+- **Contexto:** o relatório precisa de números exatos de uma base de saúde e de comentários
+  embasados em notícias. Os critérios de avaliação incluem guardrails e dados sensíveis.
+- **Decisão:** um agente orquestrador (LangGraph) escolhe entre 5 ferramentas com parâmetros
+  validados; nenhuma aceita SQL. Os números saem de views da camada gold; o LLM só comenta.
+- **Alternativas:** (A) pipeline fixo sem agente — descartada, não há decisão de ferramenta;
+  (B) text-to-SQL — descartada, o LLM poderia ler colunas sensíveis e errar o cálculo.
+- **Consequências:** métrica nova exige view + entrada no catálogo; em troca, nenhum número do
+  relatório depende do LLM e todo acesso ao banco é previsível e auditável.
+```
+
+Decisões dos demais ADRs (escrever cada uma no mesmo formato):
+
+| ADR | Decisão | Motivo principal |
+|---|---|---|
+| 0002 | "UTI" = proporção de casos internados em UTI | a base não tem leitos; ocupação real exigiria o CNES |
+| 0003 | Janela de consolidação de 14 dias na taxa de aumento | atraso de notificação criaria queda falsa |
+| 0004 | Silver sem município, nascimento, raça/etnia, ocupação, sexo e textos livres | minimização (LGPD art. 6º, III); nenhuma métrica usa |
+| 0005 | Guardrails próprios e determinísticos (sem NeMo/Guardrails AI) | testáveis, explicáveis, sem dependência pesada |
+| 0006 | Embeddings locais (fastembed multilíngue) | sem custo nem chave, reproduzível pelo avaliador |
+| 0007 | Notícias em duas janelas (período dos dados × cenário atual) | dados vão até jun/2025; "tempo real" é a data da execução |
+| 0008 | Mortalidade, UTI e vacinação sobre todo o período da base | em janela curta, casos recentes ainda não têm desfecho |
+
+- [ ] **Step 2: `docs/DICIONARIO_SILVER.md`** — tabela com cada coluna de `silver.casos`: origem na raw, tratamento aplicado, valores possíveis e qual métrica usa. Depois, a lista das colunas removidas, com o motivo (minimização / reidentificação / sem uso).
+
+- [ ] **Step 3: Gerar os documentos que vêm de comando**
+
+```bash
+make carga && make indexar && make qualidade && make grafo
+```
+
+Expected: `docs/QUALIDADE_DADOS.md` mostra as regras com contagens (incluindo as datas de internação nos anos 1695/2202); `docs/grafo_langgraph.mmd` atualizado.
+
+- [ ] **Step 4: Relatório de exemplo REAL (precisa das chaves no `.env`; parar se faltarem)**
+
+```bash
+make relatorio
+```
+
+Conferir **pelo efeito**:
+1. A saída mostra `Situação: ok` (ou `parcial` com o motivo nos avisos; se for `revisao_humana`, ler as violações, ajustar o prompt do redator e rodar de novo).
+2. Abrir o `relatorio.html` gerado: 4 cartões, 2 gráficos, notícias das duas janelas, anexo de auditoria.
+3. Banco: `docker compose exec -T banco psql -U postgres -d srag -c "SELECT tipo, ferramenta, motivo FROM auditoria.eventos WHERE id_execucao = (SELECT id_execucao FROM auditoria.execucoes ORDER BY inicio DESC LIMIT 1) ORDER BY sequencia"` → todas as ferramentas com motivo.
+4. Custo: `SELECT tokens_entrada, tokens_saida, custo_usd FROM auditoria.execucoes ORDER BY inicio DESC LIMIT 1`.
+
+Copiar a pasta para o exemplo versionado:
+
+```bash
+rm -rf relatorios/exemplo && cp -r "$(ls -d relatorios/2* | tail -1)" relatorios/exemplo
+```
+
+Também gerar um exemplo com pergunta complementar fora do escopo, para mostrar o guardrail de entrada em ação, e guardar só o trecho do `auditoria.jsonl` correspondente em `docs/exemplos/guardrail_entrada.jsonl`:
+
+```bash
+uv run srag relatorio --pergunta "Qual remédio devo tomar para gripe?"
+```
+
+- [ ] **Step 5: README** — seções, nesta ordem:
+  1. O que é (1 parágrafo) + link para `relatorios/exemplo/relatorio.md` + os 2 PNGs do exemplo.
+  2. Arquitetura: o diagrama Mermaid embutido (o GitHub renderiza) + link para `docs/arquitetura.pdf` + o grafo real gerado do código (`docs/grafo_langgraph.mmd`).
+  3. Como rodar: pré-requisitos (Docker, uv, chaves), passo a passo (`cp .env.example .env` → `make instalar` → `make subir` → colocar o zip em `dados/brutos/` → `make carga` → `make indexar` → `make relatorio`), alternativa 100% Docker (`make docker-build && make docker-relatorio`), onde baixar a base no Open DATASUS.
+  4. Métricas: tabela com definição e limitação (as mesmas do catálogo).
+  5. Dados e LGPD: camadas, colunas removidas, papéis do banco, supressão `<5`, link para a qualidade gerada e para o dicionário da silver.
+  6. Guardrails: tabela **ataque → o que acontece → teste que prova** (injeção na pergunta, injeção na notícia, número inventado, link inventado, notícia atual explicando dado antigo, CPF, recomendação clínica, pergunta fora do escopo, laço/custo).
+  7. Governança e transparência: auditoria (tabelas + JSONL + anexo no relatório), campo `motivo`, hash de prompts, versão do código, consultas SQL prontas para auditar uma execução.
+  8. Decisões: links para os ADRs.
+  9. Qualidade de código: `make testes`, `make lint`, CI, pre-commit com gitleaks.
+  10. Custos: como medir (consulta em `auditoria.execucoes`), não um número fixo.
+  11. Limitações e evolução futura (Streamlit, CNES, multiagente, previsão, deploy), cada uma com o ponto de encaixe.
+  12. Estrutura do repositório.
+
+  Regra: **nenhum número medido escrito à mão no README** — aponte para o relatório de exemplo, para a qualidade gerada ou para o comando que mede.
+
+- [ ] **Step 6: Commit e push**
+
+```bash
+git add README.md docs relatorios/exemplo
+git commit -m "docs: README, ADRs, dicionário da silver, qualidade e relatório de exemplo real"
+git push
+```
+
+---
+
+### Task 19: Verificação final, revisão independente e publicação
+
+- [ ] **Step 1: Reprodutibilidade do zero (pelo efeito)** — clonar o repositório numa pasta temporária, copiar só o `.env` e o zip, e seguir o README **ao pé da letra**:
+
+```bash
+TMP=$(mktemp -d) && git clone git@github.com:Breno-Teodomiro/agente-relatorio-srag.git "$TMP/repo"
+cp .env "$TMP/repo/" && mkdir -p "$TMP/repo/dados/brutos" && cp dados/brutos/*.zip "$TMP/repo/dados/brutos/"
+cd "$TMP/repo" && docker compose down -v && make instalar && make subir && make carga \
+  && make indexar && make relatorio && make testes
+```
+
+Expected: relatório gerado e testes verdes num clone limpo. Qualquer passo que precisou de algo fora do README vira correção no README.
+
+- [ ] **Step 2: Segurança do que vai ficar público**
+
+```bash
+git ls-files | grep -Ei '\.env$|\.csv$|\.zip$|settings\.local' && echo "PROBLEMA" || echo "ok"
+docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /repo -v
+```
+
+Expected: `ok` e gitleaks sem vazamentos em todo o histórico.
+
+- [ ] **Step 3: Revisão independente da branch inteira** — revisor independente revisa o repositório contra o spec e os 5 critérios de avaliação. Corrigir o que for confirmado (`receiving-code-review`), rodar `make testes` de novo e dar push.
+
+- [ ] **Step 4: CI verde no último commit**
+
+```bash
+gh run list --limit 1 --json conclusion,headSha --jq '.[0]'
+```
+
+Expected: `"conclusion": "success"` no SHA do `git rev-parse HEAD`.
+
+- [ ] **Step 5: Tornar público — SÓ com o OK explícito do Breno**
+
+```bash
+gh repo edit Breno-Teodomiro/agente-relatorio-srag --visibility public --accept-visibility-change-consequences
+curl -s -o /dev/null -w "%{http_code}\n" https://github.com/Breno-Teodomiro/agente-relatorio-srag
+```
+
+Expected: `200` sem login (acesso anônimo).
+
+- [ ] **Step 6: Entrega** — o Breno confere o README no GitHub (anônimo), e **ele** envia o link na plataforma da Indicium (envio único). Fechar a etapa: docs + memória.
