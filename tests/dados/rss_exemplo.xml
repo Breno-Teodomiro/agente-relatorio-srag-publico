@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Google News</title>
+<item>
+  <title>Fiocruz alerta para alta de SRAG por influenza - Fiocruz</title>
+  <link>https://news.google.com/rss/articles/abc</link>
+  <pubDate>Fri, 20 Jun 2025 10:00:00 GMT</pubDate>
+  <description>&lt;a href="x"&gt;Boletim InfoGripe aponta aumento&lt;/a&gt;</description>
+  <source url="https://portal.fiocruz.br">Fiocruz</source>
+</item>
+<item>
+  <title>Notícia antiga fora da janela</title>
+  <link>https://news.google.com/rss/articles/velha</link>
+  <pubDate>Mon, 06 Jan 2025 10:00:00 GMT</pubDate>
+  <description>texto</description>
+  <source url="https://blog.exemplo.com">Blog</source>
+</item>
+</channel></rss>
