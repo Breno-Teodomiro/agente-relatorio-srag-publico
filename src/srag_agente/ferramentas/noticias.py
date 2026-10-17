@@ -1,5 +1,12 @@
-"""Busca de notícias em tempo real: Tavily (principal) com Google News RSS de reserva."""
+"""Busca de notícias em tempo real: Tavily (principal) com Google News RSS de reserva.
 
+A reserva é decidida DEPOIS dos filtros de janela e de injeção: um Tavily que responde mas não
+deixa nenhuma notícia aproveitável também aciona o RSS. Resposta inválida, grande demais ou item
+malformado não derrubam a busca; viram texto em ``erros``, sem a chave da API.
+"""
+
+import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from email.utils import parsedate_to_datetime
@@ -12,14 +19,18 @@ from pydantic import BaseModel
 
 from srag_agente.guardrails.conteudo_externo import (
     dominio_confiavel,
-    limpar_texto,
     sanitizar_texto_externo,
+    tem_injecao,
+    url_segura,
 )
 
 Janela = Literal["periodo_dos_dados", "cenario_atual"]
+Provedor = Literal["tavily", "google_news_rss", "nenhum"]
 URL_TAVILY = "https://api.tavily.com/search"
 URL_GOOGLE_NEWS = "https://news.google.com/rss/search"
 TIMEOUT_S = 20
+LIMITE_RESPOSTA_BYTES = 2_000_000
+LIMITE_MENSAGEM_ERRO = 300
 
 
 class Noticia(BaseModel):
@@ -37,10 +48,14 @@ class ResultadoBusca(BaseModel):
     janela: Janela
     inicio: date
     fim: date
-    provedor: Literal["tavily", "google_news_rss", "nenhum"]
+    provedor: Provedor
     noticias: list[Noticia]
     descartadas_por_injecao: int = 0
     erros: list[str] = []
+
+
+class RespostaInvalida(ValueError):  # noqa: N818 (nome em português, como DadosIndisponiveis)
+    """Resposta do provedor fora do formato esperado ou acima do limite de tamanho."""
 
 
 @dataclass(frozen=True)
@@ -53,17 +68,71 @@ class _ItemBruto:
     texto: str
 
 
-def _data(valor: str | None) -> date | None:
-    if not valor:
+def _texto(valor: object) -> str | None:
+    return valor if isinstance(valor, str) else None
+
+
+def _host(url: str) -> str:
+    try:
+        return urlparse(url).hostname or ""
+    except ValueError:
+        return ""
+
+
+def _data(valor: object) -> date | None:
+    if not isinstance(valor, str) or not valor:
         return None
     try:
         return date.fromisoformat(valor[:10])
-    except ValueError:
+    except (TypeError, ValueError):
         pass
     try:
         return parsedate_to_datetime(valor).date()
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, IndexError, OverflowError):
         return None
+
+
+def _item_tavily(bruto: object) -> _ItemBruto | None:
+    if not isinstance(bruto, dict):
+        return None
+    titulo, url = _texto(bruto.get("title")), _texto(bruto.get("url"))
+    conteudo = bruto.get("content") or ""
+    if titulo is None or not url or not isinstance(conteudo, str):
+        return None
+    return _ItemBruto(
+        titulo=titulo,
+        url=url,
+        url_fonte=url,
+        fonte=_host(url),
+        data=_data(bruto.get("published_date")),
+        texto=conteudo,
+    )
+
+
+def _item_rss(entrada: dict) -> _ItemBruto | None:
+    link = _texto(entrada.get("link"))
+    if not link:
+        return None
+    fonte = entrada.get("source")
+    fonte = fonte if isinstance(fonte, dict) else {}
+    publicado = entrada.get("published_parsed")
+    try:
+        data = date(*publicado[:3]) if publicado else None
+    except (TypeError, ValueError):
+        data = None
+    return _ItemBruto(
+        titulo=_texto(entrada.get("title")) or "",
+        url=link,
+        url_fonte=_texto(fonte.get("href")) or link,
+        fonte=_texto(fonte.get("title")) or "",
+        data=data,
+        texto=_texto(entrada.get("summary")) or "",
+    )
+
+
+def _registrar_malformados(erros: list[str], provedor: str, quantidade: int) -> None:
+    if quantidade:
+        erros.append(f"{provedor}: {quantidade} item(ns) malformado(s) ignorado(s)")
 
 
 class BuscadorNoticias:
@@ -72,8 +141,22 @@ class BuscadorNoticias:
         self._tavily_api_key = tavily_api_key
         self._max = max_resultados
 
-    def _tavily(self, termo: str, inicio: date, fim: date) -> list[_ItemBruto]:
-        resposta = self._http.post(
+    def _baixar(self, metodo: str, url: str, **kwargs) -> bytes:
+        """Baixa o corpo em pedaços e para assim que passa do limite (barra resposta gigante)."""
+        with self._http.stream(metodo, url, timeout=TIMEOUT_S, **kwargs) as resposta:
+            resposta.raise_for_status()
+            corpo = bytearray()
+            for pedaco in resposta.iter_bytes():
+                corpo += pedaco
+                if len(corpo) > LIMITE_RESPOSTA_BYTES:
+                    raise RespostaInvalida(
+                        f"resposta acima do limite de {LIMITE_RESPOSTA_BYTES} bytes"
+                    )
+        return bytes(corpo)
+
+    def _tavily(self, termo: str, inicio: date, fim: date, erros: list[str]) -> list[_ItemBruto]:
+        corpo = self._baixar(
+            "POST",
             URL_TAVILY,
             json={
                 "query": termo,
@@ -84,80 +167,66 @@ class BuscadorNoticias:
                 "search_depth": "basic",
             },
             headers={"Authorization": f"Bearer {self._tavily_api_key}"},
-            timeout=TIMEOUT_S,
         )
-        resposta.raise_for_status()
-        return [
-            _ItemBruto(
-                titulo=item.get("title", ""),
-                url=item.get("url", ""),
-                url_fonte=item.get("url", ""),
-                fonte=urlparse(item.get("url", "")).hostname or "",
-                data=_data(item.get("published_date")),
-                texto=item.get("content", ""),
-            )
-            for item in resposta.json().get("results", [])
-        ]
+        dados = json.loads(corpo)
+        resultados = dados.get("results") if isinstance(dados, dict) else None
+        if not isinstance(resultados, list):
+            raise RespostaInvalida("formato inesperado: falta a lista 'results'")
+        itens = [_item_tavily(bruto) for bruto in resultados]
+        _registrar_malformados(erros, "tavily", itens.count(None))
+        return [item for item in itens if item is not None]
 
-    def _rss(self, termo: str, inicio: date, fim: date) -> list[_ItemBruto]:
+    def _rss(self, termo: str, inicio: date, fim: date, erros: list[str]) -> list[_ItemBruto]:
         consulta = (
             f"{termo} after:{inicio.isoformat()} before:{(fim + timedelta(days=1)).isoformat()}"
         )
-        resposta = self._http.get(
+        corpo = self._baixar(
+            "GET",
             URL_GOOGLE_NEWS,
             params={"q": consulta, "hl": "pt-BR", "gl": "BR", "ceid": "BR:pt-419"},
-            timeout=TIMEOUT_S,
         )
-        resposta.raise_for_status()
-        itens = []
-        for entrada in feedparser.parse(resposta.content).entries:
-            fonte = entrada.get("source", {})
-            publicado = entrada.get("published_parsed")
-            itens.append(
-                _ItemBruto(
-                    titulo=entrada.get("title", ""),
-                    url=entrada.get("link", ""),
-                    url_fonte=fonte.get("href", entrada.get("link", "")),
-                    fonte=fonte.get("title", ""),
-                    data=date(*publicado[:3]) if publicado else None,
-                    texto=entrada.get("summary", ""),
-                )
-            )
-        return itens
+        feed = feedparser.parse(corpo)
+        if feed.get("bozo"):
+            motivo = type(feed.get("bozo_exception")).__name__
+            erros.append(f"google_news_rss: feed malformado ({motivo}); itens legíveis mantidos")
+        itens = [_item_rss(entrada) for entrada in feed.entries]
+        _registrar_malformados(erros, "google_news_rss", itens.count(None))
+        return [item for item in itens if item is not None]
 
-    def _coletar(
-        self, termo: str, inicio: date, fim: date
-    ) -> tuple[str, list[_ItemBruto], list[str]]:
-        erros: list[str] = []
+    def _descrever_erro(self, provedor: str, erro: Exception) -> str:
+        texto = " ".join(f"{provedor}: {type(erro).__name__}: {erro}".split())
         if self._tavily_api_key:
-            try:
-                itens = self._tavily(termo, inicio, fim)
-                if itens:
-                    return "tavily", itens, erros
-            except httpx.HTTPError as erro:
-                erros.append(f"tavily: {erro}")
-        try:
-            return "google_news_rss", self._rss(termo, inicio, fim), erros
-        except httpx.HTTPError as erro:
-            erros.append(f"google_news_rss: {erro}")
-        return "nenhum", [], erros
+            texto = texto.replace(self._tavily_api_key, "***")
+        return texto[:LIMITE_MENSAGEM_ERRO]
 
-    def buscar(self, termo: str, janela: Janela, inicio: date, fim: date) -> ResultadoBusca:
-        provedor, itens, erros = self._coletar(termo, inicio, fim)
+    def _filtrar(
+        self,
+        itens: list[_ItemBruto],
+        janela: Janela,
+        inicio: date,
+        fim: date,
+        provedor: str,
+        erros: list[str],
+    ) -> tuple[list[Noticia], int]:
         noticias: list[Noticia] = []
-        descartadas = 0
+        descartadas = sem_conteudo = 0
         for item in itens:
             if item.data is not None and not inicio <= item.data <= fim:
+                continue
+            if not url_segura(item.url) or any(
+                tem_injecao(campo) for campo in (item.titulo, item.texto, item.fonte)
+            ):
+                descartadas += 1
                 continue
             titulo = sanitizar_texto_externo(item.titulo, limite=200)
             trecho = sanitizar_texto_externo(item.texto)
             if titulo is None or trecho is None:
-                descartadas += 1
+                sem_conteudo += 1
                 continue
             noticias.append(
                 Noticia(
                     titulo=titulo,
-                    fonte=limpar_texto(item.fonte, limite=80),
+                    fonte=sanitizar_texto_externo(item.fonte, limite=80) or "",
                     url=item.url,
                     data=item.data,
                     trecho=trecho,
@@ -165,6 +234,35 @@ class BuscadorNoticias:
                     janela=janela,
                 )
             )
+        if sem_conteudo:
+            erros.append(f"{provedor}: {sem_conteudo} item(ns) sem título ou trecho ignorado(s)")
+        return noticias, descartadas
+
+    def buscar(self, termo: str, janela: Janela, inicio: date, fim: date) -> ResultadoBusca:
+        coletores: list[tuple[Provedor, Callable[..., list[_ItemBruto]]]] = []
+        if self._tavily_api_key:
+            coletores.append(("tavily", self._tavily))
+        coletores.append(("google_news_rss", self._rss))
+
+        erros: list[str] = []
+        provedor: Provedor = "nenhum"
+        noticias: list[Noticia] = []
+        descartadas = 0
+        for nome, coletar in coletores:
+            try:
+                itens = coletar(termo, inicio, fim, erros)
+            except (httpx.HTTPError, ValueError) as erro:
+                erros.append(self._descrever_erro(nome, erro))
+                continue
+            provedor = nome
+            noticias, descartadas_aqui = self._filtrar(itens, janela, inicio, fim, nome, erros)
+            descartadas += descartadas_aqui
+            if noticias:
+                break
+            erros.append(
+                f"{nome}: nenhuma notícia aproveitável após os filtros de janela e injeção"
+            )
+
         noticias.sort(key=lambda n: not n.confiavel)
         return ResultadoBusca(
             termo=termo,
