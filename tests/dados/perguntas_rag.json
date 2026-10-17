@@ -1,0 +1,18 @@
+[
+  {"pergunta": "Qual campo guarda a data dos primeiros sintomas do caso?", "campo": "DT_SIN_PRI"},
+  {"pergunta": "Em que unidade da federação o caso foi notificado?", "campo": "SG_UF_NOT"},
+  {"pergunta": "Como é registrado o sexo do paciente?", "campo": "CS_SEXO"},
+  {"pergunta": "Onde fica a idade do paciente informada na notificação?", "campo": "NU_IDADE_N"},
+  {"pergunta": "A idade está em dias, meses ou anos?", "campo": "TP_IDADE"},
+  {"pergunta": "Qual campo registra a cor ou raça do paciente?", "campo": "CS_RACA"},
+  {"pergunta": "O paciente foi internado?", "campo": "HOSPITAL"},
+  {"pergunta": "Qual a data da internação por SRAG?", "campo": "DT_INTERNA"},
+  {"pergunta": "O paciente ficou internado em UTI?", "campo": "UTI"},
+  {"pergunta": "Em que data o paciente entrou na UTI?", "campo": "DT_ENTUTI"},
+  {"pergunta": "Qual campo informa se usou suporte ventilatório?", "campo": "SUPORT_VEN"},
+  {"pergunta": "O caso evoluiu para cura ou óbito?", "campo": "EVOLUCAO"},
+  {"pergunta": "Em que data ocorreu a alta ou o óbito?", "campo": "DT_EVOLUCA"},
+  {"pergunta": "Qual a classificação final do caso?", "campo": "CLASSI_FIN"},
+  {"pergunta": "O paciente recebeu a vacina contra gripe na última campanha?", "campo": "VACINA"},
+  {"pergunta": "O que significa o campo VACINA_COV?", "campo": "VACINA_COV"}
+]

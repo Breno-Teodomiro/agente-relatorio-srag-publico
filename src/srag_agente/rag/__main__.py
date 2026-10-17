@@ -7,7 +7,7 @@ from srag_agente.rag.indexar import campos_da_raw, indexar_dicionario
 
 if __name__ == "__main__":
     cfg = Config()
-    with conectar(cfg, "etl") as conn:
+    with conectar(cfg, "etl", autocommit=True) as conn:
         total = indexar_dicionario(
             conn,
             cfg.arquivo_dicionario,
