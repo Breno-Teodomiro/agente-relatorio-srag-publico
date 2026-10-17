@@ -1,5 +1,6 @@
 """Nós do grafo do agente. Cada nó registra na auditoria o que decidiu e por quê."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Literal
@@ -10,21 +11,31 @@ from langchain_core.runnables import Runnable
 from srag_agente.agente.cobertura import faltantes
 from srag_agente.agente.contexto import montar_contexto
 from srag_agente.agente.estado import EstadoAgente
-from srag_agente.agente.llm import ErroRedacao, Redator, uso_tokens
+from srag_agente.agente.llm import ErroRedacao, Redator, pergunta_como_dado, uso_tokens
 from srag_agente.agente.prompts import carregar_prompt
 from srag_agente.auditoria.registro import Auditoria
 from srag_agente.ferramentas.registro import ArgumentosInvalidos, Ferramenta, executar
 from srag_agente.guardrails.entrada import Classificador, verificar_entrada
-from srag_agente.guardrails.limites import Limites, chamadas_restantes, motivo_de_parada
+from srag_agente.guardrails.limites import Limites, motivo_de_parada
 from srag_agente.guardrails.padroes import mascarar_pii
 from srag_agente.guardrails.saida import verificar_saida
+from srag_agente.metricas.repositorio import DadosIndisponiveis
 from srag_agente.modelos import numerar_noticias
 
 AVISO_COBERTURA = "Evidências incompletas"
+ERRO_JSON_INVALIDO = (
+    "Argumentos inválidos: o JSON da chamada não pôde ser lido. Reenvie a chamada com JSON válido."
+)
+ERRO_DESCONHECIDA = "Ferramenta desconhecida: use só as ferramentas disponíveis."
 
 
 def _ms(inicio: float) -> int:
     return int((perf_counter() - inicio) * 1000)
+
+
+def _texto(valor: object) -> str | None:
+    """Campo vindo do LLM só entra na auditoria como texto (motivo=12345 não derruba o nó)."""
+    return valor if isinstance(valor, str) else None
 
 
 @dataclass
@@ -35,6 +46,7 @@ class Dependencias:
     ferramentas: dict[str, Ferramenta]
     auditoria: Auditoria
     limites: Limites
+    relogio: Callable[[], float] = perf_counter  # injetável para testar o teto de segundos
 
 
 def _tarefa(estado: EstadoAgente) -> str:
@@ -44,19 +56,39 @@ def _tarefa(estado: EstadoAgente) -> str:
         "Reúna todas as evidências obrigatórias.",
     ]
     if pergunta := estado.get("pergunta_extra"):
-        linhas.append(
-            f"Pergunta complementar do usuário:\n<pergunta_usuario>{pergunta}</pergunta_usuario>"
-        )
+        # mesmo tratamento do redator: tags da pergunta saem, ela não fecha o bloco antes da hora
+        linhas.append(f"Pergunta complementar do usuário:\n{pergunta_como_dado(pergunta)}")
     return "\n".join(linhas)
 
 
 class NosAgente:
+    """Os nós de UMA execução: o relógio do teto de segundos começa na construção.
+
+    `construir_grafo` cria um NosAgente a cada `executar_agente`, então cada execução tem o
+    seu início.
+    """
+
     def __init__(self, deps: Dependencias) -> None:
         self.d = deps
+        self._inicio = deps.relogio()
 
     @staticmethod
     def _tokens(estado: EstadoAgente) -> int:
         return estado["tokens_entrada"] + estado["tokens_saida"]
+
+    def _parada(self, estado: EstadoAgente, chamadas_no_lote: int = 0) -> str | None:
+        """Motivo para parar (chamadas, tokens ou segundos), ou None. Único ponto de conferência.
+
+        É conferido entre passos: nas rotas, na cobertura e antes de cada chamada de um lote de
+        ferramentas. NÃO interrompe uma chamada já em andamento (LLM, banco ou busca travados):
+        quem segura essas são os timeouts dos próprios clientes (ex.: `llm_timeout_s`).
+        """
+        return motivo_de_parada(
+            self.d.limites,
+            estado["chamadas_ferramenta"] + chamadas_no_lote,
+            self._tokens(estado),
+            max(0.0, self.d.relogio() - self._inicio),
+        )
 
     # ---- 1. guardrail de entrada -------------------------------------------------------------
     def guardrail_entrada(self, estado: EstadoAgente) -> dict:
@@ -103,7 +135,10 @@ class NosAgente:
                     {"ferramenta": c["name"], "motivo": c["args"].get("motivo")}
                     for c in resposta.tool_calls
                 ],
-                "texto": str(resposta.content)[:500],
+                # argumentos de chamada inválida são texto cru do LLM: só o nome é registrado
+                "chamadas_invalidas": [c.get("name") for c in resposta.invalid_tool_calls],
+                # sem corte aqui: a auditoria mascara o dado pessoal e só DEPOIS limita o tamanho
+                "texto": str(resposta.content),
             },
             duracao_ms=_ms(inicio),
             tokens_entrada=tokens_entrada,
@@ -119,84 +154,122 @@ class NosAgente:
         self, estado: EstadoAgente
     ) -> Literal["ferramentas", "verificar_cobertura"]:
         ultima = estado["messages"][-1]
-        pediu_ferramentas = isinstance(ultima, AIMessage) and bool(ultima.tool_calls)
-        dentro_do_limite = (
-            motivo_de_parada(self.d.limites, estado["chamadas_ferramenta"], self._tokens(estado))
-            is None
+        # chamada com JSON malformado cai em invalid_tool_calls, mas vai no payload seguinte
+        # como tool_call: também precisa de resposta, senão a API recusa a próxima volta
+        pediu_ferramentas = isinstance(ultima, AIMessage) and bool(
+            ultima.tool_calls or ultima.invalid_tool_calls
         )
-        return "ferramentas" if pediu_ferramentas and dentro_do_limite else "verificar_cobertura"
+        if pediu_ferramentas and self._parada(estado) is None:
+            return "ferramentas"
+        return "verificar_cobertura"
 
     # ---- 3. ferramentas ----------------------------------------------------------------------
-    def _registrar_falha(self, causa: Exception, **campos) -> None:
+    def _registrar_falha(self, causa: Exception | None, **campos) -> None:
         """Grava o erro da ferramenta; se a própria auditoria falhar, a causa original não some."""
         try:
             self.d.auditoria.registrar("ferramentas", "ferramenta", **campos)
         except Exception as falha_auditoria:
             raise falha_auditoria from causa
 
+    def _executar_chamada(self, chamada: dict) -> tuple[str, bool, object]:
+        """Executa uma chamada válida. Devolve (texto para o LLM, erro?, evidência ou None).
+
+        O que vai ao LLM é só o que é nosso: mensagem de ArgumentosInvalidos (já limpa) e de
+        DadosIndisponiveis. Exceção inesperada (ex.: psycopg com host, porta e usuário) vai ao
+        LLM só pelo tipo; o texto completo fica na auditoria, que mascara o dado pessoal.
+        """
+        nome, argumentos = chamada["name"], chamada["args"]
+        ferramenta = self.d.ferramentas.get(nome)
+        inicio = perf_counter()
+        causa: Exception | None = None
+        campos: dict = {}
+        try:
+            if ferramenta is None:
+                causa, erro = LookupError("ferramenta desconhecida"), ERRO_DESCONHECIDA
+                para_llm = erro
+            else:
+                evidencia = executar(ferramenta, argumentos)
+        except ArgumentosInvalidos as exc:
+            # a mensagem já vem limpa; argumentos e motivo crus NÃO vão para a auditoria
+            causa, texto = exc, str(exc)
+            erro = para_llm = texto[:1].upper() + texto[1:]
+            campos = {"ferramenta": nome}
+        except DadosIndisponiveis as exc:  # mensagem nossa: segue inteira ao orquestrador
+            causa = exc
+            erro = para_llm = f"Erro ao executar {nome}: {type(exc).__name__}: {exc}"
+            # os argumentos passaram na validação (campos e tipos do esquema)
+            motivo = _texto(argumentos.get("motivo"))
+            campos = {"ferramenta": nome, "argumentos": argumentos, "motivo": motivo}
+        except Exception as exc:  # qualquer falha vira resposta para o orquestrador decidir
+            causa = exc
+            para_llm = f"Erro ao executar {nome}: {type(exc).__name__}."
+            erro = f"Erro ao executar {nome}: {type(exc).__name__}: {exc}"
+            campos = {"ferramenta": nome, "motivo": _texto(argumentos.get("motivo"))}
+        if causa is not None:
+            self._registrar_falha(causa, duracao_ms=_ms(inicio), erro=erro, **campos)
+            return para_llm, True, None
+        self.d.auditoria.registrar(
+            "ferramentas",
+            "ferramenta",
+            ferramenta=nome,
+            argumentos=evidencia.argumentos,
+            motivo=evidencia.argumentos["motivo"],
+            resultado=evidencia.dados,
+            duracao_ms=_ms(inicio),
+        )
+        return evidencia.para_llm(), False, evidencia
+
+    def _chamada_invalida(self, chamada: dict) -> tuple[str, bool, object]:
+        """JSON malformado: responde com erro fixo. Os argumentos (texto cru) não são gravados."""
+        nome = chamada.get("name")
+        conhecida = nome if nome in self.d.ferramentas else None
+        self._registrar_falha(None, ferramenta=conhecida, erro=ERRO_JSON_INVALIDO)
+        return ERRO_JSON_INVALIDO, True, None
+
     def ferramentas(self, estado: EstadoAgente) -> dict:
-        restantes = chamadas_restantes(self.d.limites, estado["chamadas_ferramenta"])
+        """Responde TODA chamada do lote (válida, inválida ou não executada) com um ToolMessage.
+
+        A API exige uma resposta por tool_call_id antes da próxima mensagem. Chamada inválida
+        conta no limite de chamadas. Antes de cada chamada confere o teto (chamadas, tokens e
+        segundos); o que passar do teto recebe "Não executada".
+        """
+        ultima = estado["messages"][-1]
+        lote = [(c, self._executar_chamada) for c in ultima.tool_calls]
+        lote += [(c, self._chamada_invalida) for c in ultima.invalid_tool_calls]
         mensagens, evidencias, executadas = [], [], 0
-        for chamada in estado["messages"][-1].tool_calls:
-            nome, argumentos = chamada["name"], chamada["args"]
-            ferramenta = self.d.ferramentas.get(nome)
-            if executadas >= restantes:
-                aviso = "Não executada: limite de chamadas de ferramenta atingido."
+        for chamada, tratar in lote:
+            if parada := self._parada(estado, executadas):
+                aviso = f"Não executada: {parada}."
+                nome = chamada.get("name")
                 self.d.auditoria.registrar(
                     "ferramentas",
                     "decisao",
-                    ferramenta=nome if ferramenta else None,
-                    motivo=argumentos.get("motivo"),
-                    erro=aviso,
+                    ferramenta=nome if nome in self.d.ferramentas else None,
+                    erro=aviso,  # o motivo do LLM não é gravado aqui: pode nem ser texto
                 )
                 mensagens.append(ToolMessage(aviso, tool_call_id=chamada["id"], status="error"))
                 continue
             executadas += 1
-            inicio = perf_counter()
-            causa: Exception | None = None
-            campos: dict = {}
-            try:
-                if ferramenta is None:
-                    causa = LookupError("ferramenta desconhecida")
-                    erro = "Ferramenta desconhecida: use só as ferramentas disponíveis."
-                else:
-                    evidencia = executar(ferramenta, argumentos)
-            except ArgumentosInvalidos as exc:
-                # a mensagem já vem limpa; argumentos e motivo crus NÃO vão para a auditoria
-                causa, texto = exc, str(exc)
-                erro = texto[:1].upper() + texto[1:]
-                campos = {"ferramenta": nome}
-            except Exception as exc:  # qualquer falha vira resposta para o orquestrador decidir
-                causa = exc
-                erro = f"Erro ao executar {nome}: {type(exc).__name__}: {exc}"
-                campos = {
-                    "ferramenta": nome,
-                    "argumentos": argumentos,
-                    "motivo": argumentos.get("motivo"),
-                }
-            if causa is not None:
-                self._registrar_falha(causa, duracao_ms=_ms(inicio), erro=erro, **campos)
-                mensagens.append(ToolMessage(erro, tool_call_id=chamada["id"], status="error"))
-                continue
-            evidencias.append(evidencia)
-            self.d.auditoria.registrar(
-                "ferramentas",
-                "ferramenta",
-                ferramenta=nome,
-                argumentos=evidencia.argumentos,
-                motivo=evidencia.argumentos["motivo"],
-                resultado=evidencia.dados,
-                duracao_ms=_ms(inicio),
+            texto, falhou, evidencia = tratar(chamada)
+            if evidencia is not None:
+                evidencias.append(evidencia)
+            mensagens.append(
+                ToolMessage(
+                    texto, tool_call_id=chamada["id"], status="error" if falhou else "success"
+                )
             )
-            mensagens.append(ToolMessage(evidencia.para_llm(), tool_call_id=chamada["id"]))
         return {"messages": mensagens, "evidencias": evidencias, "chamadas_ferramenta": executadas}
+
+    def rota_ferramentas(
+        self, estado: EstadoAgente
+    ) -> Literal["orquestrador", "verificar_cobertura"]:
+        """Com um teto atingido, não paga outra volta ao orquestrador: vai direto à cobertura."""
+        return "orquestrador" if self._parada(estado) is None else "verificar_cobertura"
 
     # ---- 4. cobertura ------------------------------------------------------------------------
     def verificar_cobertura(self, estado: EstadoAgente) -> dict:
         falta = faltantes(estado["evidencias"], estado["uf"])
-        parada = motivo_de_parada(
-            self.d.limites, estado["chamadas_ferramenta"], self._tokens(estado)
-        )
+        parada = self._parada(estado)
         voltas = estado["voltas_cobertura"]
         if not falta:
             decisao, atualizacao = "evidencias_completas", {"rota_cobertura": "redator"}
@@ -232,6 +305,17 @@ class NosAgente:
 
     # ---- 5. redator --------------------------------------------------------------------------
     def redator(self, estado: EstadoAgente) -> dict:
+        """Redige o texto; roda mesmo depois de um teto (sai o relatório parcial).
+
+        Saída fora do formato (ErroRedacao) vira uma violação de texto FIXO (só o tipo do erro):
+        a saída crua pode repetir o que o modelo escreveu e a violação chega ao relatório. O
+        detalhe fica na auditoria, mascarado.
+
+        Limitação conhecida: se a ÚLTIMA tentativa der ErroRedacao, o texto reprovado da
+        tentativa anterior é descartado (texto None → revisão humana sem texto). Mantê-lo
+        exigiria reconferi-lo no guardrail de saída, e o mascaramento já aplicado pode mudar as
+        violações dele; ficou de fora para não complicar o fluxo.
+        """
         tentativa = estado["tentativas_redacao"] + 1
         contexto = montar_contexto(
             estado["evidencias"],
@@ -250,12 +334,15 @@ class NosAgente:
                 "llm",
                 resultado={"tentativa": tentativa},
                 duracao_ms=_ms(inicio),
-                erro=str(exc)[:500],
+                erro=str(exc),  # sem corte: a auditoria mascara e só depois limita o tamanho
             )
             return {
                 "texto": None,
                 "tentativas_redacao": tentativa,
-                "violacoes": [f"saida_invalida: {str(exc)[:200]}"],
+                "violacoes": [
+                    "saida_invalida: o redator devolveu texto fora do formato estruturado "
+                    f"({type(exc).__name__})."
+                ],
             }
         self.d.auditoria.registrar(
             "redator",

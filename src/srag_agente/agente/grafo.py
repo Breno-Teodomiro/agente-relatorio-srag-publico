@@ -29,7 +29,11 @@ def construir_grafo(deps: Dependencias):
         nos.rota_orquestrador,
         {"ferramentas": "ferramentas", "verificar_cobertura": "verificar_cobertura"},
     )
-    grafo.add_edge("ferramentas", "orquestrador")
+    grafo.add_conditional_edges(
+        "ferramentas",
+        nos.rota_ferramentas,
+        {"orquestrador": "orquestrador", "verificar_cobertura": "verificar_cobertura"},
+    )
     grafo.add_conditional_edges(
         "verificar_cobertura",
         nos.rota_cobertura,

@@ -96,7 +96,7 @@ def estimar_custo(tokens_entrada: int, tokens_saida: int, cfg: Config) -> float:
     ) / 1_000_000
 
 
-def _pergunta_como_dado(pergunta: str) -> str:
+def pergunta_como_dado(pergunta: str) -> str:
     """Pergunta do usuário entre marcas, sem tags próprias que fechem o bloco antes da hora."""
     return f"<pergunta_usuario>{limpar_texto(pergunta, LIMITE_PERGUNTA)}</pergunta_usuario>"
 
@@ -124,7 +124,7 @@ def mensagem_do_redator(contexto: ContextoRedacao) -> str:
         )
         partes.append(dicionario.para_llm())
     if contexto.pergunta_extra:
-        partes.append(_pergunta_como_dado(contexto.pergunta_extra))
+        partes.append(pergunta_como_dado(contexto.pergunta_extra))
     return "\n".join(partes)
 
 
@@ -149,7 +149,7 @@ def criar_classificador(estruturado: Runnable) -> Classificador:
         saida = estruturado.invoke(
             [
                 SystemMessage(carregar_prompt("classificador")),
-                HumanMessage(_pergunta_como_dado(pergunta)),
+                HumanMessage(pergunta_como_dado(pergunta)),
             ]
         )
         return _extrair(saida)
