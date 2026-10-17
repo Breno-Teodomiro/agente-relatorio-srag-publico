@@ -8,7 +8,7 @@ from psycopg.errors import QueryCanceled
 from psycopg.rows import dict_row
 
 
-class DadosIndisponiveis(LookupError):
+class DadosIndisponiveis(LookupError):  # noqa: N818 (nome fixado pelo plano; não é "erro" de programa)
     """Não há dados para o recorte pedido (ex.: UF sem casos na base)."""
 
 

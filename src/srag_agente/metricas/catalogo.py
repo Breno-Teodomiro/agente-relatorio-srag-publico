@@ -42,7 +42,8 @@ CATALOGO: dict[str, DefinicaoMetrica] = {
     "uti": DefinicaoMetrica(
         "uti",
         "Taxa de internação em UTI",
-        "Casos internados em UTI divididos pelos casos com essa informação preenchida (sim ou não).",
+        "Casos internados em UTI divididos pelos casos com essa informação preenchida "
+        "(sim ou não).",
         "Não é a taxa de ocupação de leitos: a base não traz a capacidade de UTI. A ocupação real "
         "exigiria cruzar com o cadastro de leitos do CNES.",
     ),
