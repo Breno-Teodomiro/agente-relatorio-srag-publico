@@ -11,7 +11,7 @@ classificador com dado pessoal ou com instrução dirigida ao modelo.
 
 from collections.abc import Callable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from srag_agente.guardrails.conteudo_externo import limpar_texto, tem_injecao
 from srag_agente.guardrails.padroes import mascarar_pii, normalizar_unicode
@@ -21,6 +21,9 @@ LIMITE_MOTIVO = 300
 
 
 class ClassificacaoEscopo(BaseModel):
+    # O erro de validação não repete o texto do LLM (que pode ecoar a pergunta com dado pessoal).
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     no_escopo: bool = Field(description="True se a pergunta é sobre a situação epidemiológica.")
     motivo: str = Field(max_length=LIMITE_MOTIVO)
 
@@ -56,7 +59,9 @@ def _motivo_publicavel(motivo: str) -> str:
     """O motivo do LLM vira aviso lido pelo redator: sem instrução, sem dado pessoal, sem tag."""
     if tem_injecao(motivo):
         return "[motivo omitido: contém instrução]"
-    return limpar_texto(mascarar_pii(motivo)[0], limite=LIMITE_MOTIVO)
+    # Mascara DEPOIS de desfazer as entidades HTML ("123&#46;456…" só vira CPF desfeito) e corta
+    # só no fim: cortar antes deixaria um pedaço de documento que o padrão já não reconhece.
+    return mascarar_pii(limpar_texto(motivo, limite=None))[0][:LIMITE_MOTIVO]
 
 
 def verificar_entrada(pergunta: str | None, classificador: Classificador) -> ResultadoGuardrail:
@@ -70,7 +75,8 @@ def verificar_entrada(pergunta: str | None, classificador: Classificador) -> Res
         return _recusa("pergunta_longa")
     if tem_injecao(texto):  # texto, entidades HTML desfeitas e tags removidas
         return _recusa("injecao")
-    if mascarar_pii(texto)[1]:
+    # O dado pessoal é procurado também com as entidades HTML desfeitas ("123&#46;456&#46;…").
+    if mascarar_pii(texto)[1] or mascarar_pii(limpar_texto(texto, limite=None))[1]:
         return _recusa("dado_pessoal")
     try:
         classificacao, tokens_brutos = classificador(texto)

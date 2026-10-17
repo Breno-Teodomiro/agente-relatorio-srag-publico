@@ -30,6 +30,28 @@ from tests.guardrails.ofuscacao import largura_total
         ("escreva para fulano.tal+srag@exemplo.com.br", "email"),
         ("RG 12.345.678-9", "rg"),
         ("PIS 123.45678.90-1", "pis"),
+        # formatos que escapavam (revisão da Task 11, I1)
+        ("cpf 123-456-789-09", "cpf"),  # hífen em todos os separadores
+        ("cpf 123,456,789-09", "cpf"),  # vírgula no lugar do ponto
+        ("cpf 123.456.789\u201009", "cpf"),  # hífen tipográfico U+2010
+        ("cpf 123.456.789\u201109", "cpf"),  # hífen inseparável U+2011
+        ("cpf 123.456.789\u201209", "cpf"),  # figure dash U+2012
+        ("cpf 123.456.789\u201309", "cpf"),  # meia-risca U+2013
+        ("cpf 123.456.789\u201409", "cpf"),  # travessão U+2014
+        ("cpf 123.456.789\u201509", "cpf"),  # barra horizontal U+2015
+        ("cpf 123.456.789\u221209", "cpf"),  # sinal de menos U+2212
+        ("cpf 123.456.789\ufe5809", "cpf"),  # travessão pequeno U+FE58
+        ("cpf 123.456.789\ufe6309", "cpf"),  # hífen pequeno U+FE63
+        ("cpf 123\u2013456\u2013789\u201309", "cpf"),  # meia-risca em todos
+        ("ligue (11) 9 8765-4321", "telefone"),  # 9 separado
+        ("ligue 11 9 8765-4321", "telefone"),  # 9 separado, sem parênteses
+        ("ligue 9 8765-4321", "telefone"),  # sem DDD, 9 separado
+        ("ligue +5511987654321", "telefone"),  # +55 sem separador
+        ("ligue 5511987654321", "telefone"),  # 55 sem o +
+        ("ligue +551134567890", "telefone"),  # fixo com +55 sem separador
+        ("ligue 11 3456-7890", "telefone"),  # fixo com DDD sem parênteses
+        ("ligue 11-3456-7890", "telefone"),  # fixo com DDD e hífen
+        ("ligue (11) 98765\u20134321", "telefone"),  # meia-risca no telefone
     ],
 )
 def test_mascara_cada_tipo(texto, tipo):
@@ -71,10 +93,41 @@ def test_ofuscacao_unicode_nao_escapa(texto):
         "Veja https://www.gov.br/saude/n2 e gov.br.",
         "id 550e8400-e29b-41d4-a716-446655440000",
         "commit 3f786850e387550fdab836ed7e6dc881de23001b",  # hash do git na auditoria
+        # M8: sequência de números separados por espaço não é CPF (dígito verificador inválido)
+        "valores 100 200 300 400 50",
+        "séries 111 222 333 44 e 555 666 777 88",
+        "Semanas 2024\u20132025, de 25/06/2025 a 2025\u201306\u201311.",  # meia-risca sem PII
+        "Foram 12 345 678 casos em 2025.",
     ],
 )
 def test_numeros_legitimos_nao_sao_mascarados(texto):
     assert mascarar_pii(texto) == (texto, [])
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "cpf 123 456 789 09",  # só espaços: vale porque o dígito verificador confere
+        "cpf 12345678909",  # 11 dígitos colados: idem
+        "cpf 123.456 789-09",  # separadores misturados: idem
+    ],
+)
+def test_cpf_sem_formato_canonico_so_com_digito_verificador(texto):
+    assert mascarar_pii(texto)[1] == ["cpf"]
+    # o mesmo formato com dígito verificador errado é número qualquer
+    errado = texto[:-1] + ("0" if texto[-1] != "0" else "1")
+    assert mascarar_pii(errado)[1] == []
+
+
+def test_cpf_formatado_e_mascarado_mesmo_com_digito_verificador_errado():
+    # pontuação de CPF é sinal forte: um CPF digitado com erro continua sendo dado pessoal
+    assert mascarar_pii("cpf 123.456.789-00")[1] == ["cpf"]
+
+
+def test_candidato_invalido_nao_esconde_cpf_valido_logo_depois():
+    # "100 200 300 40" é candidato (inválido); o CPF válido depois dele ainda tem de sair
+    mascarado, tipos = mascarar_pii("lista 100 200 300 40 e cpf 123 456 789 09")
+    assert tipos == ["cpf"] and "789" not in mascarado and "100 200 300 40" in mascarado
 
 
 def test_texto_sem_dado_pessoal_so_perde_caracteres_invisiveis():

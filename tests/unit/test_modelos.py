@@ -6,7 +6,12 @@ import pytest
 from pydantic import ValidationError
 
 from srag_agente.ferramentas.registro import Evidencia
-from srag_agente.modelos import ComentarioMetrica, TextoRelatorio, numerar_noticias
+from srag_agente.modelos import (
+    ComentarioMetrica,
+    NoticiaCitavel,
+    TextoRelatorio,
+    numerar_noticias,
+)
 from tests.fakes import evidencias_completas, texto_neutro, texto_valido
 
 
@@ -79,6 +84,54 @@ def test_comentario_repetido_para_a_mesma_metrica_e_recusado():
     ]
     with pytest.raises(ValidationError, match="repetid"):
         TextoRelatorio(**{**texto_neutro().model_dump(), "comentarios_metricas": comentarios})
+
+
+_CPF = "123.456.789-09"
+
+
+def _sem_input(construir):
+    """O erro de validação vai para log e auditoria: não pode repetir o texto do LLM."""
+    with pytest.raises(ValidationError) as erro:
+        construir()
+    mensagem = str(erro.value)
+    assert "input_value" not in mensagem and _CPF not in mensagem, mensagem
+
+
+@pytest.mark.parametrize(
+    "construir",
+    [
+        lambda: ComentarioMetrica(metrica="uti", comentario=f"CPF {_CPF} " * 50),  # longo demais
+        lambda: ComentarioMetrica(comentario=f"CPF {_CPF}"),  # campo faltando
+        lambda: ComentarioMetrica(metrica=f"CPF {_CPF}", comentario="x"),  # literal inválido
+    ],
+)
+def test_comentario_invalido_nao_repete_o_input(construir):
+    _sem_input(construir)
+
+
+@pytest.mark.parametrize(
+    "substituir",
+    [
+        {"resumo_executivo": f"CPF {_CPF} " * 100},  # longo demais
+        {"resumo_executivo": None},  # tipo errado
+    ],
+)
+def test_texto_relatorio_invalido_nao_repete_o_input(substituir):
+    campos = {**texto_neutro().model_dump(), "limitacoes": f"CPF {_CPF}", **substituir}
+    _sem_input(lambda: TextoRelatorio(**campos))
+
+
+def test_texto_relatorio_com_campo_faltando_nao_repete_o_input():
+    campos = {**texto_neutro().model_dump(), "limitacoes": f"CPF {_CPF}"}
+    del campos["cenario_atual"]
+    _sem_input(lambda: TextoRelatorio(**campos))
+
+
+def test_noticia_invalida_nao_repete_o_input():
+    base = {"id": 1, "titulo": f"CPF {_CPF}", "fonte": "f", "url": "https://a.br/1", "data": None,
+            "janela": "periodo_dos_dados", "confiavel": True, "trecho": "x"}  # fmt: skip
+    _sem_input(lambda: NoticiaCitavel(**{**base, "janela": f"CPF {_CPF}"}))
+    _sem_input(lambda: NoticiaCitavel(**{k: v for k, v in base.items() if k != "fonte"}))
 
 
 def test_com_secoes_aceita_texto_que_cresceu_com_a_mascara():

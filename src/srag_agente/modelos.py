@@ -2,21 +2,28 @@
 
 from datetime import date
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from srag_agente.ferramentas.noticias import Janela
 from srag_agente.ferramentas.registro import Evidencia
 from srag_agente.guardrails.conteudo_externo import url_segura
 from srag_agente.metricas.catalogo import ChaveMetrica
 
+# O texto vem do LLM e de notícias: o erro de validação (que vai para log e auditoria) não o repete.
+_SEM_INPUT_NOS_ERROS = ConfigDict(hide_input_in_errors=True)
+
 
 class ComentarioMetrica(BaseModel):
+    model_config = _SEM_INPUT_NOS_ERROS
+
     metrica: ChaveMetrica
     comentario: str = Field(max_length=700)
 
 
 class TextoRelatorio(BaseModel):
     """O que o LLM redator devolve. Números dos cartões e gráficos NÃO vêm daqui."""
+
+    model_config = _SEM_INPUT_NOS_ERROS
 
     resumo_executivo: str = Field(max_length=1500, description="3 a 5 frases sobre o cenário.")
     comentarios_metricas: list[ComentarioMetrica] = Field(
@@ -75,6 +82,8 @@ class TextoRelatorio(BaseModel):
 
 
 class NoticiaCitavel(BaseModel):
+    model_config = _SEM_INPUT_NOS_ERROS
+
     id: int
     titulo: str
     fonte: str

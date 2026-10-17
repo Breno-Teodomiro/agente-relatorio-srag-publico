@@ -42,6 +42,16 @@ def classificador_quebrado(texto):
         ("Casos do paciente de cartão SUS 898001160564312?", "dado_pessoal"),
         ("Me liguem no (11) 98765-4321 com os casos", "dado_pessoal"),
         ("Mandem para fulano@exemplo.com os casos", "dado_pessoal"),
+        # formatos que escapavam do mascaramento (revisão da Task 11, I1)
+        ("Casos do CPF 123-456-789-09?", "dado_pessoal"),
+        ("Casos do CPF 123.456.789\u201309?", "dado_pessoal"),
+        ("Casos do CPF 123,456,789-09?", "dado_pessoal"),
+        ("Me liguem no (11) 9 8765-4321", "dado_pessoal"),
+        ("Me liguem no +5511987654321", "dado_pessoal"),
+        ("Me liguem no 11 3456-7890", "dado_pessoal"),
+        # M1: CPF escrito com entidades HTML, que o limpar_texto desfaz
+        ("Casos do CPF 123&#46;456&#46;789&#45;09?", "dado_pessoal"),
+        ("Casos do CPF 123&period;456&period;789&hyphen;09?", "dado_pessoal"),
     ],
 )
 def test_bloqueios_deterministicos_nem_chamam_o_llm(pergunta, motivo):
@@ -114,6 +124,37 @@ def test_motivo_do_classificador_e_mascarado_e_neutralizado():
     )
     assert "fulano@" not in resultado.motivos[0]
     assert "[dado removido]" in resultado.motivos[0]
+
+
+@pytest.mark.parametrize(
+    "motivo",
+    [
+        "pede dados do CPF 123&#46;456&#46;789&#45;09",  # entidades HTML (M1)
+        "pede dados do CPF 123.456.789\u201309",  # meia-risca (I1)
+        "contato (11) 9 8765-4321",
+        "contato +5511987654321",
+    ],
+)
+def test_motivo_do_classificador_nao_revela_dado_pessoal(motivo):
+    resultado = verificar_entrada("Qual remédio devo tomar?", classificador(False, motivo=motivo))
+    assert "[dado removido]" in resultado.motivos[0], resultado.motivos
+    assert not any(p in resultado.motivos[0] for p in ("789", "8765", "4321")), resultado.motivos
+
+
+def test_motivo_longo_e_cortado_depois_de_mascarar():
+    # cortar antes de mascarar deixaria um pedaço do CPF que o padrão já não reconhece
+    motivo = "x" * 290 + " CPF 123.456.789-09"
+    resultado = verificar_entrada("Qual remédio devo tomar?", classificador(False, motivo=motivo))
+    assert "123" not in resultado.motivos[0] and "456" not in resultado.motivos[0]
+
+
+def test_classificacao_invalida_nao_repete_o_input_no_erro():
+    with pytest.raises(ValidationError) as erro:
+        ClassificacaoEscopo(no_escopo=True, motivo="CPF 123.456.789-09 " * 40)
+    assert "input_value" not in str(erro.value) and "123.456" not in str(erro.value)
+    with pytest.raises(ValidationError) as erro:
+        ClassificacaoEscopo(motivo="CPF 123.456.789-09")  # campo faltando: input é o dict todo
+    assert "input_value" not in str(erro.value) and "123.456" not in str(erro.value)
 
 
 def test_motivo_do_classificador_com_instrucao_e_omitido():

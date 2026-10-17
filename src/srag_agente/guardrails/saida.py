@@ -11,8 +11,11 @@ Barra (violação → nova redação → revisão humana):
   campo de fração (``valor``, ``percentual``…), contagem só com contagem: 84 casos não viram 84%;
 - variação com o sentido trocado ("caíram 20%" quando a variação foi de +20%);
 - número de notícia fora da frase que cita a notícia ([n]);
-- contagem de 1 a 4 (a supressão nunca as exibe) e afirmação "<5" sem célula "<5" nas evidências;
-  "<5" e "oculto" vindos dos dados são rótulos, não números, e nada é posto no lugar deles;
+- contagem de 1 a 4 de casos, óbitos etc. (a supressão nunca as exibe) e afirmação "<5" sem
+  célula "<5" nas evidências; "<5" e "oculto" vindos dos dados são rótulos, não números, e nada é
+  posto no lugar deles. Quando há "<5" ou "oculto" nas evidências, também a contagem por extenso
+  ("três casos", "dezessete óbitos");
+- proporção "N em cada M" que, como percentual inteiro, não confere com as evidências;
 - ano e data que não aparecem nas evidências;
 - citação inexistente, notícia de uma janela usada em seção da outra, notícia com data fora da
   busca que a trouxe; link que não é exatamente uma das URLs devolvidas (com ou sem esquema);
@@ -21,10 +24,18 @@ Barra (violação → nova redação → revisão humana):
 Avisa (não barra): citação de notícia sem data, porque a busca aceita item sem data em qualquer
 janela.
 
+Não são números a conferir: ordinais ("1º semestre", "2ª onda"), as janelas da metodologia só
+quando seguidas da unidade (7, 12, 14 e 30 dias/semanas/meses; 1 e 2 semanas), "4 métricas",
+"2 gráficos", "27 UFs", "por 100 mil habitantes", semana epidemiológica de 1 a 53 e os rótulos
+de vírus (COVID-19, SARS-CoV-2, H1N1). Contagem pequena (1 a 4) sem substantivo de contagem
+("as 3 fontes") é conferida como qualquer número, não como valor suprimido.
+
 Limitações declaradas: confere que o número EXISTE nas evidências, não a que ele se refere ("80
-óbitos" passaria escrito como "80 internações em UTI"); número por extenso ("vinte por cento",
-"metade") não é extraído; domínio sem esquema nem ``www`` só é reconhecido nas terminações da
-lista ``_TLDS``; a lista de termos clínicos não cobre paráfrase.
+óbitos" passaria escrito como "80 internações em UTI"); número por extenso só é procurado junto de
+substantivo de contagem e só quando há supressão nas evidências ("vinte por cento", "metade",
+"dezenas de casos", "meia dúzia", "três em RR" e qualquer extenso sem supressão nos dados passam);
+domínio sem esquema nem ``www`` só é reconhecido nas terminações da lista ``_TLDS``; a lista de
+termos clínicos não cobre paráfrase.
 """
 
 import math
@@ -35,12 +46,15 @@ from datetime import date
 from pydantic import BaseModel
 
 from srag_agente.ferramentas.registro import Evidencia
-from srag_agente.guardrails.padroes import contem_injecao, mascarar_pii, normalizar_unicode
-from srag_agente.metricas.supressao import LIMIAR_SUPRESSAO, ROTULO_SUPRIMIDO
+from srag_agente.guardrails.padroes import (
+    TRACOS,
+    contem_injecao,
+    mascarar_pii,
+    normalizar_unicode,
+)
+from srag_agente.metricas.supressao import LIMIAR_SUPRESSAO, ROTULO_OCULTO, ROTULO_SUPRIMIDO
 from srag_agente.modelos import NoticiaCitavel, TextoRelatorio
 
-# Números que descrevem as janelas da metodologia (7, 14 e 30 dias; 12 meses).
-CONSTANTES_PERMITIDAS = frozenset({7.0, 12.0, 14.0, 30.0})
 LIMITE_VIOLACOES = 50
 _LIMITE_TRECHO = 80
 _EPSILON = 1e-9
@@ -50,10 +64,9 @@ _MESES = {
     "julho": 7, "agosto": 8, "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12,
 }  # fmt: skip
 _MES = "(" + "|".join(_MESES) + ")"
-# Traços tipográficos (U+2010 a U+2013) e o sinal de menos (U+2212) viram "-"; as aspas
+# Traços tipográficos e o sinal de menos viram "-" (a mesma tabela do mascaramento); as aspas
 # angulares simples (U+2039/U+203A, usadas na neutralização de tags) voltam a ser "<" e ">".
-_TRACOS = {**dict.fromkeys((0x2010, 0x2011, 0x2012, 0x2013, 0x2212), "-"), 0x2039: "<",
-           0x203A: ">"}  # fmt: skip
+_TRACOS = {**TRACOS, 0x2039: "<", 0x203A: ">"}
 
 # ---- padrões de texto --------------------------------------------------------------------------
 _PARA_URL = r"[^\s<>\"'\]\)]"
@@ -78,16 +91,57 @@ _DATA_ISO = re.compile(r"\b(\d{4})-(\d{2})(?:-(\d{2}))?\b")
 _DATA_BARRA = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})\b")
 _MES_ANO_BARRA = re.compile(r"\b(\d{1,2})/(\d{4})\b")
 _DIA_MES_BARRA = re.compile(r"\b(\d{1,2})/(\d{1,2})\b")
-_ROTULOS = re.compile(r"\b[a-z]+-\d+\b|\bcovid\s?19\b|\bh\d+n\d+\b", re.IGNORECASE)
-_REGRA_SUPRESSAO = re.compile(r"\b1\s*(?:a|-|até)\s*4\b(?!\s*anos?)", re.IGNORECASE)
+# Número seguido de percentual ou de milhar é número, nunca rótulo: "1 a 4%" e "menos de 5 mil".
+_NAO_E_ROTULO = r"(?![.,]\d)(?!\s*(?:%|por\s+cento\b|mil\b|milh|bilh))"
+# Só prefixos conhecidos: "subiu-50%" ou "alta-90%" não são rótulo e o número tem de ser conferido.
+_ROTULOS = re.compile(
+    r"\bCoV-\d+\b|(?<![\w.,])(?-i:SE)-\d{1,2}\b|\bcovid[\s-]?19\b|\bh\d+n\d+\b", re.IGNORECASE
+)
+_REGRA_SUPRESSAO = re.compile(rf"\b1\s*(?:a|-|até)\s*4\b(?!\s*anos?){_NAO_E_ROTULO}",
+                              re.IGNORECASE)  # fmt: skip
 _ROTULO_MENOS_DE_5 = re.compile(
-    r"(?:<|\bmenos\s+de|\binferior\s+a|\babaixo\s+de)\s*5(?!\d)(?![.,]\d)", re.IGNORECASE
+    rf"(?:<|\bmenos\s+de|\binferior\s+a|\babaixo\s+de)\s*5(?!\d){_NAO_E_ROTULO}", re.IGNORECASE
+)
+_NUM_SOLTO = r"(?<![\w.,])"
+# Números que descrevem o próprio relatório ou a metodologia, e não um dado: só com a unidade.
+_CONTEXTOS_FIXOS = re.compile(
+    rf"{_NUM_SOLTO}(?:7|12|14|30)\s+(?:dias|semanas|meses)\b"
+    rf"|{_NUM_SOLTO}[12]\s+semanas?\b"
+    rf"|{_NUM_SOLTO}4\s+(?:m[ée]tricas|indicadores)\b"
+    rf"|{_NUM_SOLTO}2\s+gr[áa]ficos\b"
+    rf"|{_NUM_SOLTO}27\s+(?:UFs?\b|unidades\s+(?:da\s+federa[çc][ãa]o|federativas)\b)"
+    r"|\bpor\s+(?:cada\s+)?(?:100|cem)\s+mil(?:\s+habitantes)?\b"
+    r"|\bpor\s+100\.000(?:\s+habitantes)?\b"
+    r"|(?:\bsemana\s+epidemiol[óo]gica|(?<![\w-])(?-i:SE))\s+(?:[1-9]|[1-4]\d|5[0-3])(?!\w|[.,]\d)"
+    r"(?!\s*%)",
+    re.IGNORECASE,
+)
+_PROPORCAO = re.compile(
+    rf"{_NUM_SOLTO}(\d{{1,3}})\s+(?:em|a|de)\s+cada\s+(\d{{1,4}})(?![\w.,]?\d)", re.IGNORECASE
+)
+_SUBSTANTIVO_CONTAGEM = (
+    r"(?:casos?|[óo]bitos?|mortes?|mortos?|interna[çc](?:[ãa]o|[õo]es)|internad[oa]s?"
+    r"|hospitaliza[çc](?:[ãa]o|[õo]es)|hospitalizad[oa]s?|pacientes?|notifica[çc](?:[ãa]o|[õo]es)"
+    r"|pessoas?|registros?|v[íi]timas?|crian[çc]as?|idos[oa]s?|gestantes?|doentes?"
+    r"|infectad[oa]s?|vacinad[oa]s?)"
+)
+# Depois do número: substantivo de contagem, com no máximo uma palavra no meio ("2 novos casos").
+_SEGUE_CONTAGEM = re.compile(rf"\s+(?:[\w-]+\s+)?{_SUBSTANTIVO_CONTAGEM}\b", re.IGNORECASE)
+_EXTENSO_PEQUENO = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "três": 3, "tres": 3, "quatro": 4}
+_EXTENSO = re.compile(
+    r"\b(um|uma|dois|duas|tr[êe]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze"
+    r"|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta"
+    r"|cinquenta|sessenta|setenta|oitenta|noventa|cem)"
+    rf"\s+(?:[\w-]+\s+)?{_SUBSTANTIVO_CONTAGEM}\b",
+    re.IGNORECASE,
 )
 _IDADE = re.compile(
     r"(?<![\w.,])(\d{1,3})(?:\s*(?:a|e|-|até)\s*(\d{1,3}))?\s*(?:anos?\b|\+)", re.IGNORECASE
 )
+# O grupo atômico impede o recuo de "12º" para "1"; ordinal ("1º", "2ª", "3°"; o NFKC faz de
+# "º" um "o") não é número citado.
 _NUMERO = re.compile(
-    r"(?<![\w,])(?<!\d\.)(?P<sinal>[-+])?(?P<num>\d+(?:[.,]\d+)*)"
+    r"(?<![\w,])(?<!\d\.)(?P<sinal>[-+])?(?P<num>(?>\d+(?:[.,]\d+)*))(?![oaº°ª](?![^\W\d_]))"
     r"(?P<sufixo>\s*(?:%|por\s+cento\b)|\s+(?:mil|milh[õo]es|milh[ãa]o|bilh[õo]es|bilh[ãa]o)\b)?",
     re.IGNORECASE,
 )
@@ -118,7 +172,14 @@ _CLINICO = re.compile(
     rf"(?:uso|tratamento|administra\w*|tomar|{_REMEDIO})"
     r"|\b(?:deve|devem|deve-se|precisa|precisam)\s+(?:tomar|usar|utilizar|iniciar|receber)\s+"
     rf"(?:o\s+|a\s+|um\s+|uma\s+)?(?:tratamento|{_REMEDIO})"
-    r"|\btrat(?:e|em|ar)\s+com\b",
+    r"|\btrat(?:e|em|ar)\s+com\b"
+    # voz passiva: "o uso de antivirais é recomendado", "tratamento com X é indicado"
+    rf"|\b(?:tratamento|{_REMEDIO})\b[^.!?\n]{{0,60}}?\b(?:é|são|foi|foram|seja|sejam|está|estão"
+    r"|devem?\s+ser|podem?\s+ser)\s+(?:\w+\s+)?(?:recomendad|indicad|aconselhad|preconizad"
+    r"|sugerid|orientad|prescrit)[oa]s?\b"
+    # infinitivo como ordem: "procurar a unidade e iniciar oseltamivir"
+    r"|\b(?:iniciar|tomar|usar|utilizar|administrar|aplicar)\s+"
+    rf"(?:o\s+|a\s+|os\s+|as\s+|um\s+|uma\s+|\d+\s+)?{_REMEDIO}",
     re.IGNORECASE,
 )
 _HTML = re.compile(
@@ -139,6 +200,7 @@ class NumeroCitado:
     inicio: int = 0  # posição no texto normalizado
     sinal: int = 0  # -1 ou +1 quando o texto escreve o sinal ("-20%")
     multiplicador: int = 1
+    fim: int = 0  # posição logo depois do número (e do sufixo) no texto normalizado
 
 
 class ResultadoSaida(BaseModel):
@@ -152,11 +214,12 @@ class ResultadoSaida(BaseModel):
 class _Permitidos:
     fracoes: set[float] = field(default_factory=set)  # percentuais (fração vezes 100), sem sinal
     variacoes: set[float] = field(default_factory=set)  # percentuais COM sinal
-    contagens: set[float] = field(default_factory=lambda: set(CONSTANTES_PERMITIDAS))
+    contagens: set[float] = field(default_factory=set)
     anos: set[int] = field(default_factory=set)
     datas: set[date] = field(default_factory=set)
     meses: set[tuple[int, int]] = field(default_factory=set)
-    tem_rotulo_suprimido: bool = False
+    tem_rotulo_suprimido: bool = False  # há célula "<5"
+    tem_supressao: bool = False  # há célula "<5" ou "oculto"
     categorias: set[str] = field(default_factory=set)  # "18-39", "60+", "<1"
     limites_idade: set[int] = field(default_factory=set)
     percentuais_noticia: dict[int, set[float]] = field(default_factory=dict)
@@ -219,6 +282,7 @@ def _tokens(texto: str) -> list[tuple[NumeroCitado, bool]]:
                     inicio=achado.start(),
                     sinal=sinal,
                     multiplicador=multiplicador,
+                    fim=achado.end(),
                 ),
                 ano,
             ))  # fmt: skip
@@ -250,7 +314,7 @@ def _datas_do_texto(texto: str) -> tuple[str, list[tuple[str, int | None, int, i
 def _limpar_para_numeros(texto: str) -> str:
     for padrao in (_URL_ESQUEMA, _WWW, _DOMINIO, _CITACAO, _ROTULOS, _ROTULO_MENOS_DE_5):
         texto = _apagar_padrao(texto, padrao)
-    return _datas_do_texto(texto)[0]
+    return _apagar_padrao(_datas_do_texto(texto)[0], _CONTEXTOS_FIXOS)
 
 
 def extrair_numeros(texto: str) -> list[NumeroCitado]:
@@ -285,7 +349,9 @@ def _coletar(valor: object, chave: str, eh_variacao: bool, p: _Permitidos) -> No
             _coletar(v, chave, eh_variacao, p)
     elif isinstance(valor, str):
         if valor == ROTULO_SUPRIMIDO:
-            p.tem_rotulo_suprimido = True
+            p.tem_rotulo_suprimido = p.tem_supressao = True
+        elif valor == ROTULO_OCULTO:
+            p.tem_supressao = True
         elif chave == "categoria" and any(c.isdigit() for c in valor):
             p.categorias.add(_normalizar(valor))
             p.limites_idade.update(int(n) for n in re.findall(r"\d+", valor))
@@ -444,7 +510,10 @@ class _Secao:
         for achado in _ROTULO_MENOS_DE_5.finditer(frase):
             if not p.tem_rotulo_suprimido:
                 self._nao_conferido(achado.group(0).strip(), None)
+        if p.tem_supressao:
+            self._por_extenso(frase)
         texto = _limpar_para_numeros(_apagar_rotulos_dos_dados(frase, p))
+        texto = self._proporcoes(texto, p.fracoes | perc_citadas)
         for numero, ano in _tokens(texto):
             if ano:
                 if int(numero.valor) not in p.anos:
@@ -452,11 +521,37 @@ class _Secao:
             elif numero.percentual:
                 self._percentual(numero, texto[: numero.inicio], perc_citadas)
             elif (0 < numero.valor < LIMIAR_SUPRESSAO and numero.valor.is_integer()
-                  and numero.multiplicador == 1):  # fmt: skip
-                self.violacoes.append(f"valor_suprimido: '{numero.bruto}' em {self.nome} "
-                                      "(contagens de 1 a 4 nunca são exibidas)")  # fmt: skip
+                  and numero.multiplicador == 1
+                  and _SEGUE_CONTAGEM.match(texto, numero.fim)):  # fmt: skip
+                self._suprimido(numero.bruto)
             elif not _perto(numero, p.contagens | cont_citadas):
                 self._nao_conferido(numero.bruto, numero)
+
+    def _suprimido(self, bruto: str) -> None:
+        self.violacoes.append(f"valor_suprimido: '{bruto}' em {self.nome} "
+                              "(contagens de 1 a 4 nunca são exibidas)")  # fmt: skip
+
+    def _por_extenso(self, frase: str) -> None:
+        """Com "<5" ou "oculto" nos dados, "três casos" completaria o que a supressão escondeu."""
+        for achado in _EXTENSO.finditer(frase):
+            if achado.group(1).lower() in _EXTENSO_PEQUENO:
+                self._suprimido(achado.group(0))
+            else:
+                self.violacoes.append(f"numero_nao_conferido: '{achado.group(0)}' em {self.nome} "
+                                      "(número por extenso não é conferido)")  # fmt: skip
+
+    def _proporcoes(self, texto: str, fracoes: set[float]) -> str:
+        """Proporção ("1 em cada 10") vale como o percentual inteiro que ela é: 10,0% → "1 em cada
+        10" e 75,0% → "3 em cada 4" passam; 32,2% → "1 em cada 3" (33,3%) não, como "33%" não
+        passa. Devolve o texto sem as proporções."""
+        for achado in list(_PROPORCAO.finditer(texto)):
+            parte, todo = int(achado.group(1)), int(achado.group(2))
+            percentual = 100 * parte / todo if 0 < parte < todo else None
+            if percentual is None or not any(abs(percentual - f) <= 0.5 + _EPSILON
+                                             for f in fracoes):  # fmt: skip
+                self._nao_conferido(achado.group(0), None)
+            texto = _apagar(texto, achado.start(), achado.end())
+        return texto
 
     def _percentual(self, numero: NumeroCitado, antes: str, das_citadas: set[float]) -> None:
         sentido = numero.sinal or _sentido_do_texto(antes)
@@ -569,7 +664,8 @@ def verificar_saida(texto: TextoRelatorio, evidencias: list[Evidencia],
     avisos: list[str] = []
     for nome, conteudo in mascaradas.items():
         violacoes += _conferir_secao(nome, _normalizar(conteudo), por_id, permitidos, avisos)
-    violacoes = list(dict.fromkeys(violacoes))
+    # Segunda barreira: a mensagem repete trechos do texto; nenhum dado pessoal sai por ela.
+    violacoes = list(dict.fromkeys(mascarar_pii(v)[0] for v in violacoes))
     if len(violacoes) > LIMITE_VIOLACOES:
         excedentes = len(violacoes) - LIMITE_VIOLACOES
         violacoes = [*violacoes[:LIMITE_VIOLACOES], f"violacoes_truncadas: mais {excedentes}"]
@@ -577,5 +673,5 @@ def verificar_saida(texto: TextoRelatorio, evidencias: list[Evidencia],
         texto=texto.com_secoes(mascaradas),
         violacoes=violacoes,
         dados_pessoais_mascarados=pii,
-        avisos=list(dict.fromkeys(avisos)),
+        avisos=list(dict.fromkeys(mascarar_pii(a)[0] for a in avisos)),
     )

@@ -61,7 +61,8 @@ def _neutralizar(texto: str) -> str:
     return _ESPACOS.sub(" ", texto.translate(_SINAIS_DE_TAG)).strip()
 
 
-def limpar_texto(texto: str, limite: int = LIMITE_TRECHO) -> str:
+def limpar_texto(texto: str, limite: int | None = LIMITE_TRECHO) -> str:
+    """Texto limpo, cortado em ``limite`` caracteres (``None``: sem corte)."""
     desfeito = normalizar_unicode(_desescapar(texto or ""))
     return _neutralizar(_TAG.sub(" ", desfeito))[:limite]
 
