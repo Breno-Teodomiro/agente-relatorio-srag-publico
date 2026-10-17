@@ -1,0 +1,95 @@
+# Relatório de SRAG — {{ "Brasil" if d.uf == "BR" else d.uf }}
+
+Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · gerado em {{ d.data_execucao|data_br }} · situação: **{{ rotulo_status }}**
+
+{% if d.status == "revisao_humana" %}
+> **Revisão humana necessária.** O texto gerado não passou na conferência automática:
+{% for v in d.violacoes %}
+> - {{ v }}
+{% endfor %}
+
+{% endif %}
+{% for aviso_execucao in d.avisos %}
+> {{ aviso_execucao }}
+
+{% endfor %}
+{% if d.texto %}
+## Resumo
+
+{{ d.texto.resumo_executivo }}
+
+{% endif %}
+## Métricas
+
+| Métrica | Valor | Base | Período |
+|---|---:|---|---|
+{% for m in d.metricas %}
+| {{ m.nome }} | {{ m.valor|variacao if m.chave == "aumento_casos" else m.valor|pct }} | {{ m.numerador|inteiro }} de {{ m.denominador|inteiro }} | {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }} |
+{% endfor %}
+
+{% for m in d.metricas %}
+- **{{ m.nome }}.** {{ comentarios.get(m.chave, "") }} *Limitação: {{ m.limitacao }}*
+{% endfor %}
+
+## Evolução dos casos
+
+{% if "diaria_30d" in d.series %}
+![Casos diários de SRAG nos últimos 30 dias](graficos/diaria_30d.png)
+
+*{{ d.series["diaria_30d"].nota }}*
+
+{% endif %}
+{% if "mensal_12m" in d.series %}
+![Casos mensais de SRAG nos últimos 12 meses](graficos/mensal_12m.png)
+
+*{{ d.series["mensal_12m"].nota }}*
+
+{% endif %}
+{% for dist in d.distribuicoes %}
+## Perfil dos casos — por {{ "agente causador" if dist.dimensao == "classificacao" else "faixa etária" }}
+
+| Categoria | Casos | % |
+|---|---:|---:|
+{% for c in dist.categorias %}
+| {{ c.categoria|categoria }} | {{ c.casos|inteiro }} | {{ c.percentual|pct }} |
+{% endfor %}
+
+*Total: {{ dist.total|inteiro }}. {{ dist.nota }}*
+
+{% endfor %}
+
+{% if d.texto %}
+## Contexto do período dos dados
+
+{{ d.texto.contexto_periodo_dados }}
+
+## Cenário atual (notícias recentes)
+
+{{ d.texto.cenario_atual }}
+
+{% if d.texto.resposta_pergunta_extra %}
+## Pergunta complementar
+
+> {{ d.pergunta_extra }}
+
+{{ d.texto.resposta_pergunta_extra }}
+
+{% endif %}
+## Limitações
+
+{{ d.texto.limitacoes }}
+
+{% endif %}
+## Referências
+
+{% for n in d.noticias %}
+{{ n.id }}. [{{ n.titulo|md }}]({{ n.url|url_segura }}) — {{ n.fonte|md }}{% if n.data %}, {{ n.data|data_br }}{% endif %} ({{ "período dos dados" if n.janela == "periodo_dos_dados" else "cenário atual" }})
+{% else %}
+Nenhuma notícia foi encontrada nas buscas desta execução.
+{% endfor %}
+
+---
+
+Modelo {{ d.provedor }} / {{ d.modelo }} · {{ d.tokens_entrada|inteiro }} + {{ d.tokens_saida|inteiro }} tokens · custo estimado US$ {{ "%.4f"|format(d.custo_usd) }} · código {{ d.versao_codigo }} · trilha completa em `auditoria.jsonl`.
+
+*{{ aviso }}*

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="pt-BR" data-tema="escuro">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{{ politica }}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório SRAG — {{ "Brasil" if d.uf == "BR" else d.uf }}</title>
+<style>
+:root{--fundo:#1f2228;--cartao:#2a2e36;--texto:#d6d9de;--suave:#9aa0a8;--borda:#3a3f48;
+--acento:#6fa8dc;--alerta:#e8b07c;--perigo:#ec9a9a}
+[data-tema="claro"]{--fundo:#f6f7f9;--cartao:#ffffff;--texto:#2b2f36;--suave:#5f6670;
+--borda:#e3e6ea;--acento:#2f6db5;--alerta:#a8590f;--perigo:#b42318}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--texto);
+font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.6rem;margin:0 0 4px}
+h2{font-size:1.15rem;margin:32px 0 12px;border-bottom:1px solid var(--borda);padding-bottom:6px}
+.topo{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.meta,.pequeno{color:var(--suave);font-size:.88rem}
+.faixa{border-left:4px solid var(--alerta);background:var(--cartao);padding:10px 14px;
+margin:12px 0;border-radius:6px}
+.faixa.perigo{border-color:var(--perigo)}
+.cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.cartao,details,figure{background:var(--cartao);border:1px solid var(--borda);border-radius:10px}
+.cartao{padding:14px}
+.valor{font-size:1.9rem;font-weight:650;color:var(--acento)}
+figure{margin:12px 0;padding:8px;overflow-x:auto}
+figure svg{max-width:100%;height:auto}
+[data-tema="escuro"] .graf-claro,[data-tema="claro"] .graf-escuro{display:none}
+.tabela{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{border-bottom:1px solid var(--borda);padding:6px 8px;text-align:left;vertical-align:top}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+details{padding:10px 14px}
+a{color:var(--acento)}
+button{background:var(--cartao);color:var(--texto);border:1px solid var(--borda);
+border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
+footer{margin-top:40px;color:var(--suave);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+<header class="topo">
+  <div>
+    <h1>Relatório de SRAG — {{ "Brasil" if d.uf == "BR" else d.uf }}</h1>
+    <div class="meta">Dados até <strong>{{ d.data_referencia|data_br }}</strong> (Open DATASUS,
+      SIVEP-Gripe) · gerado em {{ d.data_execucao|data_br }} · situação:
+      <strong>{{ rotulo_status }}</strong> · execução {{ (d.id_execucao|string)[:8] }}</div>
+  </div>
+  <button type="button" id="tema">Alternar tema claro/escuro</button>
+</header>
+
+{% if d.status == "revisao_humana" %}
+<div class="faixa perigo"><strong>Revisão humana necessária.</strong> O texto gerado não passou na
+conferência automática:
+  <ul>{% for v in d.violacoes %}<li>{{ v }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% for aviso_execucao in d.avisos %}
+<div class="faixa">{{ aviso_execucao }}</div>
+{% endfor %}
+
+{% if d.texto %}
+<h2>Resumo</h2>
+<p>{{ d.texto.resumo_executivo|citacoes }}</p>
+{% endif %}
+
+<h2>Métricas</h2>
+<div class="cartoes">
+{% for m in d.metricas %}
+  <section class="cartao">
+    <div class="pequeno">{{ m.nome }}</div>
+    <div class="valor">{{ m.valor|variacao if m.chave == "aumento_casos" else m.valor|pct }}</div>
+    <div class="pequeno">
+    {% if m.chave == "aumento_casos" %}
+      {{ m.numerador|inteiro }} casos contra {{ m.denominador|inteiro }} na semana anterior
+    {% else %}
+      {{ m.numerador|inteiro }} de {{ m.denominador|inteiro }}
+    {% endif %}
+      · {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }}</div>
+    {% if m.chave == "vacinacao" and m.complemento.get("vacina_gripe") is not none %}
+    <div class="pequeno">Vacina contra gripe: {{ m.complemento.vacina_gripe|pct }}</div>
+    {% endif %}
+    {% if comentarios.get(m.chave) %}<p>{{ comentarios[m.chave]|citacoes }}</p>{% endif %}
+    <details>
+      <summary class="pequeno">Como é calculada</summary>
+      <p class="pequeno">{{ m.definicao }}</p>
+      <p class="pequeno"><strong>Limitação:</strong> {{ m.limitacao }}</p>
+      <p class="pequeno">Fora do cálculo: {{ m.excluidos|inteiro }} registros.</p>
+    </details>
+  </section>
+{% endfor %}
+</div>
+
+<h2>Evolução dos casos</h2>
+{% for tipo in ("diaria_30d", "mensal_12m") %}
+{% if graficos.get(tipo) %}
+<figure>
+  <div class="graf-escuro">{{ graficos[tipo]["escuro"] }}</div>
+  <div class="graf-claro">{{ graficos[tipo]["claro"] }}</div>
+  <figcaption class="pequeno">{{ d.series[tipo].nota }}</figcaption>
+</figure>
+{% endif %}
+{% endfor %}
+
+{% if d.distribuicoes %}
+<h2>Perfil dos casos</h2>
+{% for dist in d.distribuicoes %}
+<div class="tabela"><table>
+  <caption class="pequeno" style="text-align:left">Por {{ "agente causador" if
+    dist.dimensao == "classificacao" else "faixa etária" }} · total {{ dist.total|inteiro }}
+    <br>{{ dist.nota }}</caption>
+  <thead><tr><th>Categoria</th><th>Casos</th><th>%</th></tr></thead>
+  <tbody>
+  {% for c in dist.categorias %}
+    <tr><td>{{ c.categoria|categoria }}</td><td class="num">{{ c.casos|inteiro }}</td>
+      <td class="num">{{ c.percentual|pct }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endfor %}
+{% endif %}
+
+{% if d.texto %}
+<h2>Contexto do período dos dados</h2>
+<p>{{ d.texto.contexto_periodo_dados|citacoes }}</p>
+<h2>Cenário atual (notícias recentes)</h2>
+<p>{{ d.texto.cenario_atual|citacoes }}</p>
+{% if d.texto.resposta_pergunta_extra %}
+<h2>Pergunta complementar</h2>
+<p class="pequeno">{{ d.pergunta_extra }}</p>
+<p>{{ d.texto.resposta_pergunta_extra|citacoes }}</p>
+{% endif %}
+<h2>Limitações</h2>
+<p>{{ d.texto.limitacoes|citacoes }}</p>
+{% endif %}
+
+<h2>Referências</h2>
+{% if d.noticias %}
+<ol>
+{% for n in d.noticias %}
+  <li id="ref-{{ n.id }}" value="{{ n.id }}">{{ n.titulo }} — {{ n.fonte }}{% if n.data %},
+    {{ n.data|data_br }}{% endif %} ·
+    <a href="{{ n.url|url_segura }}" rel="noopener noreferrer" target="_blank">abrir</a>
+    <span class="pequeno">· {{ "período dos dados" if n.janela == "periodo_dos_dados" else
+      "cenário atual" }}{% if n.confiavel %} · fonte reconhecida{% endif %}</span></li>
+{% endfor %}
+</ol>
+{% else %}
+<p>Nenhuma notícia foi encontrada nas buscas desta execução.</p>
+{% endif %}
+
+<h2>Como este relatório foi gerado</h2>
+<details open>
+  <summary>Governança e auditoria desta execução</summary>
+  <p class="pequeno">Modelo: {{ d.provedor }} / {{ d.modelo }} · tokens:
+    {{ d.tokens_entrada|inteiro }} de entrada e {{ d.tokens_saida|inteiro }} de saída · custo
+    estimado: US$ {{ "%.4f"|format(d.custo_usd) }} · código {{ d.versao_codigo }} · prompts
+    {{ d.hash_prompts }}</p>
+  <p class="pequeno">Os números dos cartões, tabelas e gráficos vêm de SQL na camada gold. O texto
+    foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais).
+    A trilha completa está em <code>auditoria.jsonl</code> e na tabela
+    <code>auditoria.eventos</code>.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>#</th><th>Etapa</th><th>Tipo</th><th>Ferramenta</th>
+      <th>Motivo / resultado</th><th>ms</th></tr></thead>
+    <tbody>
+    {% for e in d.eventos %}
+      <tr><td class="num">{{ e.sequencia }}</td><td>{{ e.no }}</td><td>{{ e.tipo }}</td>
+        <td>{{ e.ferramenta or "" }}</td>
+        <td>{{ e.motivo or "" }}
+        {% if e.tipo == "guardrail" and e.resultado and e.resultado.aprovado is defined %}
+          {{ "aprovado" if e.resultado.aprovado else "reprovado" }}
+        {% endif %}
+        {% if e.erro %} <strong>erro:</strong> {{ e.erro|truncate(160) }}{% endif %}</td>
+        <td class="num">{{ e.duracao_ms if e.duracao_ms is not none else "" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</details>
+
+<footer>{{ aviso }}</footer>
+</main>
+<script>{{ script_tema }}</script>
+</body>
+</html>
