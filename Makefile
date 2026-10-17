@@ -13,6 +13,9 @@ parar:
 carga:
 	uv run python -m srag_agente.dados
 
+indexar:
+	uv run python -m srag_agente.rag
+
 testes:
 	EXIGIR_BANCO=1 uv run pytest --cov=srag_agente --cov-report=term-missing
 
