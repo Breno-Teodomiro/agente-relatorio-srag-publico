@@ -1,7 +1,14 @@
-import pytest
-from psycopg.errors import QueryCanceled
+from pathlib import Path
 
-from srag_agente.metricas.repositorio import TENTATIVAS, DadosIndisponiveis, RepositorioGold
+import pytest
+from psycopg.errors import QueryCanceled, UndefinedTable
+
+from srag_agente.metricas.repositorio import (
+    TEMPO_MAXIMO,
+    TENTATIVAS,
+    DadosIndisponiveis,
+    RepositorioGold,
+)
 
 
 class ConexaoFalsa:
@@ -50,3 +57,15 @@ def test_exige_autocommit():
 
     with pytest.raises(ValueError):
         RepositorioGold(SemAutocommit())
+
+
+def test_erro_que_nao_e_cancelamento_nao_repete():
+    repo, chamadas = repositorio_com([UndefinedTable(), [{"uf": "BR"}]])
+    with pytest.raises(UndefinedTable):
+        repo.indicadores("BR")
+    assert len(chamadas) == 1
+
+
+def test_tempo_maximo_do_repositorio_e_o_do_papel_no_banco():
+    estrutura = Path("src/srag_agente/dados/sql/00_estrutura.sql").read_text(encoding="utf-8")
+    assert f"ALTER ROLE srag_agente SET statement_timeout = '{TEMPO_MAXIMO}'" in estrutura

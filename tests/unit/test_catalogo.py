@@ -82,9 +82,48 @@ def test_complemento_pequeno_tambem_e_suprimido():
     pequenos = {**INDICADORES, "vacina_gripe_sim": 3}
     r = calcular_metrica("vacinacao", FonteFalsa(pequenos, JANELAS))
     assert r.complemento["vacina_gripe_numerador"] == "<5"
+    assert r.complemento["vacina_gripe_denominador"] == 780
     assert r.complemento["vacina_gripe"] is None
 
 
 def test_denominador_zero_da_valor_nulo():
     vazio = {**INDICADORES, "uti_sim": 0, "uti_informada": 0}
     assert calcular_metrica("uti", FonteFalsa(vazio, JANELAS)).valor is None
+
+
+def test_excluidos_pequeno_e_mascarado_sem_derrubar_a_metrica():
+    # total 50, com desfecho 47, óbitos 10: 3 excluídos não podem sair em claro (spec §5 item 2).
+    fonte = {**INDICADORES, "total_casos": 50, "com_desfecho": 47, "obitos": 10}
+    r = calcular_metrica("mortalidade", FonteFalsa(fonte, JANELAS))
+    assert r.excluidos == "<5"
+    assert r.suprimido is False and r.valor == pytest.approx(10 / 47)
+
+
+def test_excluidos_pequeno_em_aumento_de_casos_tambem_e_mascarado():
+    r = calcular_metrica(
+        "aumento_casos", FonteFalsa(INDICADORES, {**JANELAS, "casos_em_consolidacao": 2})
+    )
+    assert r.excluidos == "<5"
+
+
+def test_excluidos_zero_ou_grande_passam():
+    assert calcular_metrica("mortalidade", FonteFalsa(INDICADORES, JANELAS)).excluidos == 200
+    zero = {**INDICADORES, "total_casos": 800}
+    assert calcular_metrica("mortalidade", FonteFalsa(zero, JANELAS)).excluidos == 0
+
+
+def test_complemento_por_diferenca_pequeno_suprime_a_metrica():
+    # 800 com desfecho, 798 óbitos: os 2 que não são óbito apareceriam por diferença.
+    fonte = {**INDICADORES, "obitos": 798}
+    r = calcular_metrica("mortalidade", FonteFalsa(fonte, JANELAS))
+    assert r.suprimido is True and r.valor is None
+    assert r.numerador == "<5"
+    assert r.denominador == 800 and r.complemento == {}
+
+
+def test_complemento_da_gripe_por_diferenca_pequeno_e_suprimido():
+    fonte = {**INDICADORES, "vacina_gripe_sim": 778, "vacina_gripe_informada": 780}
+    r = calcular_metrica("vacinacao", FonteFalsa(fonte, JANELAS))
+    assert r.complemento["vacina_gripe"] is None
+    assert r.complemento["vacina_gripe_numerador"] == "<5"
+    assert r.complemento["vacina_gripe_denominador"] == 780

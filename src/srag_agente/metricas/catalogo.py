@@ -10,7 +10,7 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, Field
 
 from srag_agente.metricas.repositorio import Referencia
-from srag_agente.metricas.supressao import precisa_suprimir, suprimir
+from srag_agente.metricas.supressao import ROTULO_SUPRIMIDO, precisa_suprimir, suprimir
 
 ChaveMetrica = Literal["aumento_casos", "mortalidade", "uti", "vacinacao"]
 
@@ -93,12 +93,26 @@ def _variacao(atual: int, anterior: int) -> float | None:
     return atual / anterior - 1 if anterior else None
 
 
-def _suprimir_complemento(complemento: dict) -> dict:
-    """Se alguma contagem do complemento for pequena, mascara as contagens e anula as taxas."""
+def _suprimir_complemento(complemento: dict, diferencas: dict[str, int] | None = None) -> dict:
+    """Se alguma contagem do complemento for pequena, mascara as contagens e anula as taxas.
+
+    `diferencas` mapeia uma contagem à sua diferença para o total: se a diferença é pequena, a
+    contagem some (senão a diferença apareceria por subtração), e as taxas também.
+    """
+    diferencas = diferencas or {}
     contagens = [v for v in complemento.values() if isinstance(v, int)]
-    if not precisa_suprimir(*contagens):
+    if not precisa_suprimir(*contagens, *diferencas.values()):
         return complemento
-    return {chave: suprimir(v) if isinstance(v, int) else None for chave, v in complemento.items()}
+    return {
+        chave: (
+            ROTULO_SUPRIMIDO
+            if chave in diferencas and precisa_suprimir(diferencas[chave])
+            else suprimir(v)
+        )
+        if isinstance(v, int)
+        else None
+        for chave, v in complemento.items()
+    }
 
 
 def _partes(chave: ChaveMetrica, fonte: FonteIndicadores, uf: str) -> dict:
@@ -133,7 +147,11 @@ def _partes(chave: ChaveMetrica, fonte: FonteIndicadores, uf: str) -> dict:
                 ),
                 "vacina_gripe_numerador": indicadores["vacina_gripe_sim"],
                 "vacina_gripe_denominador": indicadores["vacina_gripe_informada"],
-            }
+            },
+            {
+                "vacina_gripe_numerador": indicadores["vacina_gripe_informada"]
+                - indicadores["vacina_gripe_sim"]
+            },
         )
     return {
         "numerador": numerador,
@@ -151,15 +169,21 @@ def calcular_metrica(
 ) -> ResultadoMetrica:
     definicao = CATALOGO[chave]
     partes = _partes(chave, fonte, uf)
-    suprimido = precisa_suprimir(partes["numerador"], partes["denominador"])
+    # Nas razões, denominador - numerador (quem ficou de fora do numerador) também revelaria uma
+    # contagem pequena por diferença.
+    diferenca = partes["denominador"] - partes["numerador"] if chave in _RAZOES else 0
+    suprimido = precisa_suprimir(partes["numerador"], partes["denominador"], diferenca)
     if suprimido:
         partes |= {
             "valor": None,
-            "numerador": suprimir(partes["numerador"]),
+            "numerador": (
+                ROTULO_SUPRIMIDO if precisa_suprimir(diferenca) else suprimir(partes["numerador"])
+            ),
             "denominador": suprimir(partes["denominador"]),
-            "excluidos": suprimir(partes["excluidos"]),
             "complemento": {},
         }
+    # Excluídos é agregado como os outros (spec §5 item 2): mascarado mesmo com a métrica à vista.
+    partes["excluidos"] = suprimir(partes["excluidos"])
     return ResultadoMetrica(
         chave=chave,
         nome=definicao.nome,

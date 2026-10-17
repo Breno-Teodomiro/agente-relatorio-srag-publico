@@ -24,7 +24,8 @@ class Referencia:
 # reafirma as suas dentro da própria transação. Os dois comandos abaixo são fixos; nada de fora
 # chega a eles.
 _SQL_SOMENTE_LEITURA = "SET TRANSACTION READ ONLY"
-_SQL_TEMPO_MAXIMO = "SET LOCAL statement_timeout = '5s'"
+TEMPO_MAXIMO = "5s"  # o mesmo valor de `ALTER ROLE srag_agente` em 00_estrutura.sql (teste confere)
+_SQL_TEMPO_MAXIMO = f"SET LOCAL statement_timeout = '{TEMPO_MAXIMO}'"
 TENTATIVAS = 3  # a transformação segura a gold por alguns segundos; o cancelamento é transitório
 
 
