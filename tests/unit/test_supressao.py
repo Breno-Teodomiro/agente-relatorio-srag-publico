@@ -5,6 +5,7 @@ from srag_agente.metricas.supressao import (
     precisa_suprimir,
     suprimir,
     suprimir_celulas,
+    suprimir_com_janelas,
 )
 
 
@@ -156,3 +157,86 @@ def test_propriedade_nenhuma_suprimida_fica_determinada_por_intervalo():
             continue
         assert _suprimidas_determinadas(contagens, saida) == 0, contagens
     assert exaustas < 5000
+
+
+# Sub-janelas com soma publicada (semana do aumento, dias em consolidação, mês): o total não é a
+# única soma exata. Com a soma de uma sub-janela, soma - exibidas dentro dela devolveria uma
+# célula escondida sozinha ali, mesmo que o "oculto" global esteja fora. A supressão complementar
+# precisa fechar dentro de cada bloco (conjunto de posições que estão nas mesmas janelas).
+
+
+def _blocos(n, janelas):
+    """Implementação independente da do módulo: agrupa por assinatura de pertença às janelas."""
+    grupos = {}
+    for i in range(n):
+        grupos.setdefault(tuple(i in j for j in janelas), []).append(i)
+    return list(grupos.values())
+
+
+def _determinadas_por_bloco(contagens, saida, janelas):
+    """Quantos "<5" ficam com um só valor possível para quem conhece a soma de cada bloco.
+
+    Saber a soma de cada bloco é mais do que se publica (só as somas das janelas): proteger
+    contra esse leitor protege contra o leitor real. Devolve também se algum bloco esgotou
+    (sobrou "<5" determinado sem nenhuma célula >= 5 exibida para esconder).
+    """
+    determinadas, esgotou = 0, False
+    for bloco in _blocos(len(contagens), janelas):
+        sub_c = [contagens[i] for i in bloco]
+        sub_s = [saida[i] for i in bloco]
+        n = _suprimidas_determinadas(sub_c, sub_s)
+        if n and not any(isinstance(s, int) and s >= 5 for s in sub_s):
+            esgotou = True
+            continue
+        determinadas += n
+    return determinadas, esgotou
+
+
+def test_sem_janelas_e_igual_a_supressao_da_resposta_inteira():
+    for contagens in ([60, 20, 3], [3, 50], [None, 3, 8, 20], [], [10, 20, 0]):
+        assert suprimir_com_janelas(contagens, []) == suprimir_celulas(contagens)
+
+
+def test_complemento_fica_dentro_da_janela_do_suprimido():
+    # Sem janela, o oculto seria o 1º 10 (posição 0); com a soma da janela {2, 3} publicada,
+    # soma - 10 devolveria o 3. O complemento tem de estar na mesma janela.
+    assert suprimir_celulas([10, 10, 3, 10]) == [ROTULO_OCULTO, 10, "<5", 10]
+    assert suprimir_com_janelas([10, 10, 3, 10], [{2, 3}]) == [10, 10, "<5", ROTULO_OCULTO]
+
+
+def test_janela_sem_suprimido_nao_perde_celula():
+    assert suprimir_com_janelas([20, 20, 20, 20], [{0, 1}]) == [20, 20, 20, 20]
+
+
+def test_janelas_que_se_cruzam_formam_blocos_menores():
+    # {0..3} e {2..5}: blocos {0,1}, {2,3}, {4,5}. O 3 está em {2,3}: complemento ali.
+    saida = suprimir_com_janelas([9, 9, 3, 8, 7, 7], [{0, 1, 2, 3}, {2, 3, 4, 5}])
+    assert saida == [9, 9, "<5", ROTULO_OCULTO, 7, 7]
+
+
+def test_bloco_sem_celula_grande_nao_pede_complemento_de_fora():
+    # Esconder célula de outro bloco não protege nada: a soma do bloco já é conhecida.
+    assert suprimir_com_janelas([2, 3, 50, 60], [{0, 1}]) == ["<5", "<5", 50, 60]
+
+
+def test_propriedade_nenhum_bloco_deixa_suprimido_determinado():
+    rnd = random.Random(20261017)
+    esgotados = 0
+    for _ in range(5000):
+        n = rnd.randint(1, 30)
+        contagens = [
+            rnd.choice([0, rnd.randint(1, 4), rnd.randint(5, 12), rnd.randint(5, 60)])
+            for _ in range(n)
+        ]
+        janelas = []
+        for _ in range(rnd.randint(0, 4)):
+            inicio = rnd.randrange(n)
+            janelas.append(set(range(inicio, rnd.randint(inicio, n - 1) + 1)))
+        saida = suprimir_com_janelas(contagens, janelas)
+        assert [suprimir(c) == s for c, s in zip(contagens, saida, strict=True) if c < 5] == [
+            True for c in contagens if c < 5
+        ]
+        determinadas, esgotou = _determinadas_por_bloco(contagens, saida, janelas)
+        esgotados += esgotou
+        assert determinadas == 0, (contagens, janelas)
+    assert esgotados < 5000

@@ -1,5 +1,7 @@
 """Supressão de células pequenas: contagens de 1 a 4 não são exibidas (risco de reidentificação)."""
 
+from collections.abc import Collection, Iterable
+
 LIMIAR_SUPRESSAO = 5
 ROTULO_SUPRIMIDO = "<5"
 ROTULO_OCULTO = "oculto"
@@ -62,4 +64,36 @@ def suprimir_celulas(contagens: list[int | None]) -> list[int | str | None]:
         saida[i] = ROTULO_OCULTO
         if not _algum_suprimido_determinado(contagens, saida):
             break
+    return saida
+
+
+def suprimir_com_janelas(
+    contagens: list[int | None], janelas: Iterable[Collection[int]]
+) -> list[int | str | None]:
+    """`suprimir_celulas` quando, além do total, a soma exata de sub-janelas também é publicada.
+
+    Cada janela é um conjunto de posições cuja soma sai exata em outro lugar (ex.: a semana do
+    aumento de casos). Com ela, soma - exibidas da janela isolaria uma célula escondida que o
+    complemento global deixou sozinha ali. As posições são agrupadas em blocos (mesmas janelas,
+    mesma assinatura) e a supressão complementar roda em cada bloco, com o complemento sempre
+    dentro do bloco do "<5".
+
+    Por que basta: toda soma publicada é soma de blocos inteiros. Quem soubesse a soma de cada
+    bloco saberia mais do que se publica; se nenhum "<5" fica determinado para esse leitor, não
+    fica para o real. Os blocos são independentes (a regra do oculto vale dentro do bloco).
+
+    Limite: num bloco sem célula >= 5 exibida (só zeros e "<5"), não há o que esconder; se a soma
+    do bloco fixar um "<5" (ex.: um "<5" entre zeros, ou dois "<5" somando 8), quem protege é o
+    agregado da janela, que precisaria sair mascarado onde é publicado.
+    """
+    conjuntos = [set(janela) for janela in janelas]
+    blocos: dict[tuple[bool, ...], list[int]] = {}
+    for posicao in range(len(contagens)):
+        assinatura = tuple(posicao in janela for janela in conjuntos)
+        blocos.setdefault(assinatura, []).append(posicao)
+    saida: list[int | str | None] = [None] * len(contagens)
+    for posicoes in blocos.values():
+        suprimidas = suprimir_celulas([contagens[i] for i in posicoes])
+        for posicao, valor in zip(posicoes, suprimidas, strict=True):
+            saida[posicao] = valor
     return saida
