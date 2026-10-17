@@ -156,7 +156,7 @@ conferência automática:
   <summary>Governança e auditoria desta execução</summary>
   <p class="pequeno">Modelo: {{ d.provedor }} / {{ d.modelo }} · tokens:
     {{ d.tokens_entrada|inteiro }} de entrada e {{ d.tokens_saida|inteiro }} de saída · custo
-    estimado: US$ {{ "%.4f"|format(d.custo_usd) }} · código {{ d.versao_codigo }} · prompts
+    estimado: US$ {{ d.custo_usd|usd }} · código {{ d.versao_codigo }} · prompts
     {{ d.hash_prompts }}</p>
   <p class="pequeno">Os números dos cartões, tabelas e gráficos vêm de SQL na camada gold. O texto
     foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais).

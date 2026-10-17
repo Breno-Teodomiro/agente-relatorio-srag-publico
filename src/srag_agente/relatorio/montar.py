@@ -6,7 +6,6 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from urllib.parse import urlparse
 from uuid import UUID
 
 from jinja2 import Environment, PackageLoader, select_autoescape
@@ -14,10 +13,12 @@ from markupsafe import Markup, escape
 
 from srag_agente.auditoria.registro import Auditoria
 from srag_agente.ferramentas.registro import Evidencia
+from srag_agente.guardrails.conteudo_externo import url_segura
 from srag_agente.metricas.catalogo import CATALOGO
 from srag_agente.modelos import NoticiaCitavel, TextoRelatorio, numerar_noticias
-from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br, pct, variacao
+from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br, pct, usd, variacao
 from srag_agente.relatorio.graficos import grafico_diario, grafico_mensal
+from srag_agente.relatorio.markdown import md_texto, md_url
 
 AVISO_FIXO = (
     "Prova de conceito. Não substitui avaliação clínica nem boletim epidemiológico oficial."
@@ -154,12 +155,8 @@ def _citacoes(texto: str | None) -> Markup:
 
 
 def _url_segura(url: str) -> str:
-    return url if urlparse(url).scheme in {"http", "https"} else "#"
-
-
-def _md(texto: str | None) -> str:
-    """Texto de fora dentro de linha/link do Markdown: sem colchete, parêntese, crase nem tag."""
-    return re.sub(r"([\\`*_{}\[\]()<>#|!])", r"\\\1", " ".join((texto or "").split()))
+    """Link que não é http(s) com host vira "#": o template nunca emite javascript:/data:."""
+    return url if url_segura(url) else "#"
 
 
 def _ambiente() -> Environment:
@@ -175,9 +172,11 @@ def _ambiente() -> Environment:
         inteiro=inteiro,
         data_br=data_br,
         mes_br=mes_br,
+        usd=usd,
         citacoes=_citacoes,
         url_segura=_url_segura,
-        md=_md,
+        md=md_texto,
+        md_url=md_url,
         categoria=lambda c: NOMES_CATEGORIAS.get(c, c),
     )
     return ambiente

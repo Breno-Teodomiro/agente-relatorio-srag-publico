@@ -19,6 +19,10 @@ def variacao(fracao: float | None) -> str:
     return sinal + pct(abs(fracao))
 
 
+def usd(valor: float, casas: int = 4) -> str:
+    return f"{valor:.{casas}f}".replace(".", ",")
+
+
 def inteiro(valor: int | str | None) -> str:
     if valor is None:
         return "—"

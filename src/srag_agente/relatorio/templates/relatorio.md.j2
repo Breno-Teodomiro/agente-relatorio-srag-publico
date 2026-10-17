@@ -5,18 +5,18 @@ Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · ge
 {% if d.status == "revisao_humana" %}
 > **Revisão humana necessária.** O texto gerado não passou na conferência automática:
 {% for v in d.violacoes %}
-> - {{ v }}
+> - {{ v|md }}
 {% endfor %}
 
 {% endif %}
 {% for aviso_execucao in d.avisos %}
-> {{ aviso_execucao }}
+> {{ aviso_execucao|md }}
 
 {% endfor %}
 {% if d.texto %}
 ## Resumo
 
-{{ d.texto.resumo_executivo }}
+{{ d.texto.resumo_executivo|md }}
 
 {% endif %}
 ## Métricas
@@ -28,7 +28,7 @@ Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · ge
 {% endfor %}
 
 {% for m in d.metricas %}
-- **{{ m.nome }}.** {{ comentarios.get(m.chave, "") }} *Limitação: {{ m.limitacao }}*
+- **{{ m.nome }}.** {{ comentarios.get(m.chave, "")|md }} *Limitação: {{ m.limitacao }}*
 {% endfor %}
 
 ## Evolução dos casos
@@ -61,35 +61,35 @@ Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · ge
 {% if d.texto %}
 ## Contexto do período dos dados
 
-{{ d.texto.contexto_periodo_dados }}
+{{ d.texto.contexto_periodo_dados|md }}
 
 ## Cenário atual (notícias recentes)
 
-{{ d.texto.cenario_atual }}
+{{ d.texto.cenario_atual|md }}
 
 {% if d.texto.resposta_pergunta_extra %}
 ## Pergunta complementar
 
-> {{ d.pergunta_extra }}
+> {{ d.pergunta_extra|md }}
 
-{{ d.texto.resposta_pergunta_extra }}
+{{ d.texto.resposta_pergunta_extra|md }}
 
 {% endif %}
 ## Limitações
 
-{{ d.texto.limitacoes }}
+{{ d.texto.limitacoes|md }}
 
 {% endif %}
 ## Referências
 
 {% for n in d.noticias %}
-{{ n.id }}. [{{ n.titulo|md }}]({{ n.url|url_segura }}) — {{ n.fonte|md }}{% if n.data %}, {{ n.data|data_br }}{% endif %} ({{ "período dos dados" if n.janela == "periodo_dos_dados" else "cenário atual" }})
+{{ n.id }}. [{{ n.titulo|md }}]({{ n.url|url_segura|md_url }}) — {{ n.fonte|md }}{% if n.data %}, {{ n.data|data_br }}{% endif %} ({{ "período dos dados" if n.janela == "periodo_dos_dados" else "cenário atual" }})
 {% else %}
 Nenhuma notícia foi encontrada nas buscas desta execução.
 {% endfor %}
 
 ---
 
-Modelo {{ d.provedor }} / {{ d.modelo }} · {{ d.tokens_entrada|inteiro }} + {{ d.tokens_saida|inteiro }} tokens · custo estimado US$ {{ "%.4f"|format(d.custo_usd) }} · código {{ d.versao_codigo }} · trilha completa em `auditoria.jsonl`.
+Modelo {{ d.provedor }} / {{ d.modelo }} · {{ d.tokens_entrada|inteiro }} + {{ d.tokens_saida|inteiro }} tokens · custo estimado US$ {{ d.custo_usd|usd }} · código {{ d.versao_codigo }} · trilha completa em `auditoria.jsonl`.
 
 *{{ aviso }}*

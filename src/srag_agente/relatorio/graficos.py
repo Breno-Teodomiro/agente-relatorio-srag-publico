@@ -1,12 +1,14 @@
 """Os dois gráficos obrigatórios: SVG (HTML, temas escuro e claro) e PNG (Markdown/README)."""
 
 import io
+import re
 from typing import Literal
 
 import matplotlib
 
 matplotlib.use("Agg")  # antes do pyplot: sem janela, só arquivo
 import matplotlib.pyplot as plt
+from markupsafe import escape
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
@@ -17,6 +19,7 @@ Tema = Literal["escuro", "claro"]
 Formato = Literal["svg", "png"]
 
 plt.rcParams["svg.fonttype"] = "none"  # texto continua texto no SVG (menor e acessível)
+plt.rcParams["svg.hashsalt"] = "srag-agente"  # ids de clip/hatch estáveis: mesmo dado, mesmo SVG
 
 TEMAS: dict[str, dict[str, str]] = {
     "escuro": {
@@ -115,11 +118,32 @@ def _legenda(eixo, itens: list, cores: dict[str, str]) -> None:
     )
 
 
-def _exportar(figura, formato: Formato) -> bytes:
+def _prefixar_ids(svg: str, prefixo: str) -> str:
+    """Os 4 SVGs vão na mesma página: ids repetidos (figure_1, patch_1…) quebram url(#id)."""
+    ids = set(re.findall(r'\bid="([^"]+)"', svg))
+    return re.sub(
+        r'(\bid="|url\(#|href="#)([^"\)]+)',
+        lambda m: m.group(1) + (f"{prefixo}-{m.group(2)}" if m.group(2) in ids else m.group(2)),
+        svg,
+    )
+
+
+def _exportar(figura, formato: Formato, prefixo: str, descricao: str) -> bytes:
+    titulo = figura.axes[0].get_title(loc="left")
     buffer = io.BytesIO()
-    figura.savefig(buffer, format=formato, bbox_inches="tight", facecolor=figura.get_facecolor())
+    figura.savefig(
+        buffer,
+        format=formato,
+        bbox_inches="tight",
+        facecolor=figura.get_facecolor(),
+        metadata={"Date": None} if formato == "svg" else None,  # sem carimbo de data no SVG
+    )
     plt.close(figura)
-    return buffer.getvalue()
+    if formato == "png":
+        return buffer.getvalue()
+    svg = _prefixar_ids(buffer.getvalue().decode("utf-8"), prefixo)
+    rotulo = f'role="img" aria-label="{escape(f"{titulo}. {descricao}")}"'
+    return svg.replace("<svg ", f"<svg {rotulo} ", 1).encode("utf-8")
 
 
 def grafico_diario(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
@@ -156,7 +180,7 @@ def grafico_diario(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
         ],
         cores,
     )
-    return _exportar(figura, formato)
+    return _exportar(figura, formato, f"diario-{tema}", "Barras de casos por dia.")
 
 
 def grafico_mensal(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
@@ -182,7 +206,13 @@ def grafico_mensal(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
     for indice, ponto in enumerate(pontos):
         if ponto["fora_da_base"]:
             eixo.text(
-                indice, 0, "sem\ndados", ha="center", va="bottom", fontsize=7, color=cores["nota"]
+                indice,
+                0,
+                "fora do\nperíodo\nda base",
+                ha="center",
+                va="bottom",
+                fontsize=7,
+                color=cores["nota"],
             )
         elif ponto["casos"] in MARCAS:
             eixo.text(
@@ -207,4 +237,4 @@ def grafico_mensal(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
         ],
         cores,
     )
-    return _exportar(figura, formato)
+    return _exportar(figura, formato, f"mensal-{tema}", "Barras de casos por mês.")
