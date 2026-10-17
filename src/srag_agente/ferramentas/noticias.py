@@ -251,7 +251,15 @@ class BuscadorNoticias:
         for nome, coletar in coletores:
             try:
                 itens = coletar(termo, inicio, fim, erros)
-            except (httpx.HTTPError, ValueError) as erro:
+            # StreamError e InvalidURL não herdam de HTTPError; RecursionError vem do json.loads
+            # de um corpo aninhado demais. Qualquer um deles tem de deixar o RSS ser tentado.
+            except (
+                httpx.HTTPError,
+                httpx.StreamError,
+                httpx.InvalidURL,
+                ValueError,
+                RecursionError,
+            ) as erro:
                 erros.append(self._descrever_erro(nome, erro))
                 continue
             provedor = nome

@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from srag_agente.ferramentas.dicionario import TrechoDicionario
+from srag_agente.ferramentas.noticias import ResultadoBusca
 from srag_agente.ferramentas.registro import (
     LIMITE_TRECHO_DICIONARIO,
     ArgsMetricas,
@@ -296,3 +297,28 @@ def test_pergunta_do_dicionario_e_neutralizada_no_cabecalho():
     enviado = ev.para_llm()
     assert "<system>" not in enviado and "</noticia_externa>" not in enviado
     assert "Nenhum trecho" in enviado
+
+
+@pytest.mark.parametrize(
+    ("ferramenta", "argumentos", "falso"),
+    [
+        (
+            "buscar_noticias",
+            {"termo": "SRAG", "janela": "cenario_atual", "motivo": MOTIVO},
+            {"buscador": type("B", (), {"buscar": lambda *a: ResultadoBusca(termo=1)})()},
+        ),
+        (
+            "consultar_dicionario",
+            {"pergunta": "o que é UTI", "motivo": MOTIVO},
+            {"dicionario": type("D", (), {"buscar": lambda *a: [{"lixo": "SEGREDO"}]})()},
+        ),
+    ],
+)
+def test_falha_ao_montar_resultado_de_outra_ferramenta_tem_mensagem_generica(
+    ferramenta, argumentos, falso
+):
+    with pytest.raises(DadosIndisponiveis) as erro:
+        executar(ferramentas_falsas(**falso)[ferramenta], argumentos)
+    texto = str(erro.value)
+    assert "sintomas" not in texto and "gold" not in texto and "SEGREDO" not in texto
+    assert ferramenta in texto

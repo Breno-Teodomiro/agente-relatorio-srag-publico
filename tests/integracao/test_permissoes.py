@@ -114,13 +114,13 @@ def test_consulta_longa_do_agente_e_cancelada_em_5s(conn_agente):
 # --- Auditor ---------------------------------------------------------------------------------
 
 
-def test_auditor_grava_e_le_a_auditoria(conn_auditor, tabelas_de_teste):
-    (id_evento,) = conn_auditor.execute(
-        "INSERT INTO auditoria._teste_permissao (evento) VALUES ('inicio') RETURNING id"
-    ).fetchone()
-    assert conn_auditor.execute(
-        "SELECT evento FROM auditoria._teste_permissao WHERE id = %s", (id_evento,)
-    ).fetchone() == ("inicio",)
+def test_tabela_nova_na_auditoria_nasce_sem_privilegio_para_o_auditor(
+    conn_auditor, tabelas_de_teste
+):
+    """Gravar e ler a auditoria vale só para as tabelas concedidas por coluna em 04_auditoria.sql
+    (testes abaixo); um INSERT por tabela inteira vindo do default seria permissão a mais."""
+    with pytest.raises(errors.InsufficientPrivilege):
+        conn_auditor.execute("INSERT INTO auditoria._teste_permissao (evento) VALUES ('x')")
 
 
 @pytest.mark.parametrize(

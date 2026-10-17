@@ -303,6 +303,10 @@ def executar(ferramenta: Ferramenta, argumentos: dict) -> Evidencia:
     try:
         resultado = ferramenta.executar(validados)
     except ValidationError:
+        if ferramenta.nome != "consultar_metricas":
+            raise DadosIndisponiveis(
+                f"{ferramenta.nome} devolveu um resultado fora do formato: não pôde ser montado"
+            ) from None
         uf = getattr(validados, "uf", None)
         onde = f"a UF {uf} tem casos, mas " if uf else ""
         raise DadosIndisponiveis(

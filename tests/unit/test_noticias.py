@@ -215,6 +215,28 @@ def test_resposta_invalida_do_tavily_cai_para_o_rss(resposta):
     assert any(e.startswith("tavily:") for e in r.erros)
 
 
+def _levanta(erro):
+    def tavily(request):
+        raise erro
+
+    return tavily
+
+
+@pytest.mark.parametrize(
+    "tavily",
+    [
+        _status(200, content=b"[" * 1_000_000),  # json.loads estoura a recursão
+        _levanta(httpx.StreamClosed()),  # StreamError não herda de HTTPError
+        _levanta(httpx.InvalidURL("url inválida")),
+    ],
+    ids=["json-aninhado-demais", "stream-fechado", "url-invalida"],
+)
+def test_falha_inesperada_do_tavily_ainda_tenta_o_rss(tavily):
+    r = _buscar(_cliente(tavily=tavily))
+    assert r.provedor == "google_news_rss" and len(r.noticias) == 1
+    assert any(e.startswith("tavily:") for e in r.erros)
+
+
 def test_tavily_200_vazio_cai_para_o_rss():
     r = _buscar(_cliente(tavily=_json({"results": []})))
     assert r.provedor == "google_news_rss" and len(r.noticias) == 1
