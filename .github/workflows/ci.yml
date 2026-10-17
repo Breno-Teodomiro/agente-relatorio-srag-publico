@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    services:
+      banco:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: admin-ci
+          POSTGRES_DB: srag
+        ports: ["5435:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 10
+    env:
+      # Senhas descartáveis do banco efêmero do job; nenhuma chave de API é necessária (testes usam dublês).
+      PG_SENHA_ADMIN: admin-ci
+      PG_SENHA_ETL: etl-ci
+      PG_SENHA_AGENTE: agente-ci
+      PG_SENHA_AUDITOR: auditor-ci
+      EXIGIR_BANCO: "1"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: astral-sh/setup-uv@v5.4.2
+      - run: uv sync --all-extras --frozen
+      - run: uv run ruff check . && uv run ruff format --check .
+      - run: uv run pytest --cov=srag_agente --cov-report=term-missing
+
+  segredos:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
