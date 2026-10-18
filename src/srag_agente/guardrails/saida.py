@@ -15,7 +15,13 @@ Barra (violação → nova redação → revisão humana):
   célula "<5" nas evidências; "<5" e "oculto" vindos dos dados são rótulos, não números, e nada é
   posto no lugar deles. Quando há "<5" ou "oculto" nas evidências, também a contagem por extenso
   ("três casos", "dezessete óbitos");
-- proporção "N em cada M" que, como percentual inteiro, não confere com as evidências;
+- proporção "N em cada M" e fração em palavras sobre contagem ("um terço dos casos", "metade dos
+  internados") que, como percentual inteiro, não conferem com as evidências; variação em palavras
+  ("dobraram", "triplicou", "caiu pela metade") que não confere com uma variação das evidências;
+- número por extenso: percentual ("vinte e oito por cento") e contagem ("cinquenta casos") sempre
+  barram, porque não há casa decimal a conferir; de 2 a 4 ("três casos") é valor suprimido;
+- número derivado (diferença, soma, razão, "pontos") só passa se coincidir com um número das
+  evidências: a tolerância é só a de arredondamento na casa exibida;
 - ano e data que não aparecem nas evidências;
 - citação inexistente, notícia de uma janela usada em seção da outra, notícia com data fora da
   busca que a trouxe; link que não é exatamente uma das URLs devolvidas (com ou sem esquema);
@@ -31,11 +37,12 @@ de vírus (COVID-19, SARS-CoV-2, H1N1). Contagem pequena (1 a 4) sem substantivo
 ("as 3 fontes") é conferida como qualquer número, não como valor suprimido.
 
 Limitações declaradas: confere que o número EXISTE nas evidências, não a que ele se refere ("80
-óbitos" passaria escrito como "80 internações em UTI"); número por extenso só é procurado junto de
-substantivo de contagem e só quando há supressão nas evidências ("vinte por cento", "metade",
-"dezenas de casos", "meia dúzia", "três em RR" e qualquer extenso sem supressão nos dados passam);
-domínio sem esquema nem ``www`` só é reconhecido nas terminações da lista ``_TLDS``; a lista de
-termos clínicos não cobre paráfrase.
+óbitos" passaria escrito como "80 internações em UTI"; o 28,6% do apoio de 30 dias passaria
+descrito como "nos últimos 30 dias", que é outra janela); contagem por extenso só é procurada
+junto de substantivo de contagem ("três em RR", "dezenas de casos" e "meia dúzia" passam), e
+"um caso" só conta quando há supressão nos dados; fração em palavras só junto de "do/da/dos/das" +
+contagem; domínio sem esquema nem ``www`` só é reconhecido nas terminações da lista ``_TLDS``; a
+lista de termos clínicos não cobre paráfrase.
 """
 
 import math
@@ -53,7 +60,7 @@ from srag_agente.guardrails.padroes import (
     normalizar_unicode,
 )
 from srag_agente.metricas.supressao import LIMIAR_SUPRESSAO, ROTULO_OCULTO, ROTULO_SUPRIMIDO
-from srag_agente.modelos import NoticiaCitavel, TextoRelatorio
+from srag_agente.modelos import CITACAO, NoticiaCitavel, TextoRelatorio
 
 LIMITE_VIOLACOES = 50
 _LIMITE_TRECHO = 80
@@ -82,7 +89,6 @@ _DOMINIO = re.compile(
     re.IGNORECASE,
 )
 _PONTUACAO_FINAL = ".,;:!?"
-_CITACAO = re.compile(r"\[\s*(\d+(?:\s*[,;]\s*\d+)*)\s*\]")
 _DATA_EXTENSO = re.compile(
     rf"\b(\d{{1,2}})(?:o|°)?\s+de\s+{_MES}(?:\s+de\s+(\d{{4}}))?\b", re.IGNORECASE
 )
@@ -128,13 +134,38 @@ _SUBSTANTIVO_CONTAGEM = (
 # Depois do número: substantivo de contagem, com no máximo uma palavra no meio ("2 novos casos").
 _SEGUE_CONTAGEM = re.compile(rf"\s+(?:[\w-]+\s+)?{_SUBSTANTIVO_CONTAGEM}\b", re.IGNORECASE)
 _EXTENSO_PEQUENO = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "três": 3, "tres": 3, "quatro": 4}
-_EXTENSO = re.compile(
-    r"\b(um|uma|dois|duas|tr[êe]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze"
+_PALAVRA_NUMERO = (
+    r"(?:um|uma|dois|duas|tr[êe]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze"
     r"|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta"
-    r"|cinquenta|sessenta|setenta|oitenta|noventa|cem)"
-    rf"\s+(?:[\w-]+\s+)?{_SUBSTANTIVO_CONTAGEM}\b",
+    r"|cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzent[oa]s|trezent[oa]s"
+    r"|quatrocent[oa]s|quinhent[oa]s|seiscent[oa]s|setecent[oa]s|oitocent[oa]s|novecent[oa]s"
+    r"|mil)"
+)
+# "51 mil casos" é algarismo com milhar (conferido como número), não "mil" por extenso.
+_NUMERO_EXTENSO = rf"(?<!\d)(?<!\d\s){_PALAVRA_NUMERO}(?:\s+e\s+{_PALAVRA_NUMERO}|\s+mil\b)*"
+_EXTENSO = re.compile(
+    rf"\b(?P<num>{_NUMERO_EXTENSO})\s+(?:[\w-]+\s+)?{_SUBSTANTIVO_CONTAGEM}\b", re.IGNORECASE
+)
+# Percentual por extenso ("vinte e oito por cento") não tem casa decimal a conferir: sempre barra.
+_EXTENSO_PERCENTUAL = re.compile(rf"\b{_NUMERO_EXTENSO}\s*(?:por\s+cento\b|%)", re.IGNORECASE)
+# Fração em palavras sobre uma contagem ("um terço dos casos") vale como o percentual que ela é,
+# conferida como a proporção "1 em cada 3"; "metade do período" (sem contagem) não é dado.
+_DENOMINADORES = {"terç": 3, "terc": 3, "quart": 4, "quint": 5, "décim": 10, "decim": 10}
+_FRACAO_PALAVRA = re.compile(
+    r"\b(?:(?P<metade>metade)|(?P<n>um|uma|dois|duas|tr[êe]s|quatro)\s+"
+    r"(?P<d>ter[çc]|quart|quint|d[ée]cim)os?)"
+    rf"\s+d[oa]s?\s+(?:[\w-]+\s+){{0,2}}?{_SUBSTANTIVO_CONTAGEM}\b",
     re.IGNORECASE,
 )
+# Variação em palavras: "dobraram" é +100%, "triplicou" +200%, "caiu pela metade" -50%.
+_MULTIPLICADOR = re.compile(
+    r"\b(?:(?P<dobro>dobr(?:ou|aram|ar|ando|am|a)|duplic(?:ou|aram|ar|ando)|(?:o|ao)\s+dobro)"
+    r"|(?P<triplo>triplic(?:ou|aram|ar|ando)|(?:o|ao)\s+triplo)"
+    r"|(?P<quadruplo>quadruplic(?:ou|aram|ar|ando)|(?:o|ao)\s+qu[áa]druplo)"
+    r"|(?P<metade>pela\s+metade))\b",
+    re.IGNORECASE,
+)
+_VARIACAO_MULTIPLICADOR = {"dobro": 100.0, "triplo": 200.0, "quadruplo": 300.0, "metade": -50.0}
 _IDADE = re.compile(
     r"(?<![\w.,])(\d{1,3})(?:\s*(?:a|e|-|até)\s*(\d{1,3}))?\s*(?:anos?\b|\+)", re.IGNORECASE
 )
@@ -312,7 +343,7 @@ def _datas_do_texto(texto: str) -> tuple[str, list[tuple[str, int | None, int, i
 
 
 def _limpar_para_numeros(texto: str) -> str:
-    for padrao in (_URL_ESQUEMA, _WWW, _DOMINIO, _CITACAO, _ROTULOS, _ROTULO_MENOS_DE_5):
+    for padrao in (_URL_ESQUEMA, _WWW, _DOMINIO, CITACAO, _ROTULOS, _ROTULO_MENOS_DE_5):
         texto = _apagar_padrao(texto, padrao)
     return _apagar_padrao(_datas_do_texto(texto)[0], _CONTEXTOS_FIXOS)
 
@@ -510,8 +541,8 @@ class _Secao:
         for achado in _ROTULO_MENOS_DE_5.finditer(frase):
             if not p.tem_rotulo_suprimido:
                 self._nao_conferido(achado.group(0).strip(), None)
-        if p.tem_supressao:
-            self._por_extenso(frase)
+        self._por_extenso(frase)
+        self._em_palavras(frase, p.fracoes | perc_citadas)
         texto = _limpar_para_numeros(_apagar_rotulos_dos_dados(frase, p))
         texto = self._proporcoes(texto, p.fracoes | perc_citadas)
         for numero, ano in _tokens(texto):
@@ -531,14 +562,45 @@ class _Secao:
         self.violacoes.append(f"valor_suprimido: '{bruto}' em {self.nome} "
                               "(contagens de 1 a 4 nunca são exibidas)")  # fmt: skip
 
+    def _extenso_nao_conferido(self, bruto: str) -> None:
+        self.violacoes.append(f"numero_nao_conferido: '{bruto}' em {self.nome} (número por "
+                              "extenso não é conferido: escreva com algarismos)")  # fmt: skip
+
     def _por_extenso(self, frase: str) -> None:
-        """Com "<5" ou "oculto" nos dados, "três casos" completaria o que a supressão escondeu."""
+        """Número por extenso não tem casa decimal a conferir: percentual e contagem barram.
+
+        Contagem de 2 a 4 ("três casos") é valor que a supressão nunca exibe; "um caso" só conta
+        quando há "<5" ou "oculto" nos dados (sem isso, "um" é artigo).
+        """
+        percentuais = [(a.start(), a.end()) for a in _EXTENSO_PERCENTUAL.finditer(frase)]
+        for inicio, fim in percentuais:
+            self._extenso_nao_conferido(frase[inicio:fim])
         for achado in _EXTENSO.finditer(frase):
-            if achado.group(1).lower() in _EXTENSO_PEQUENO:
+            if any(i < achado.end() and achado.start() < f for i, f in percentuais):
+                continue  # "cinquenta por cento dos casos" já foi barrado como percentual
+            valor = _EXTENSO_PEQUENO.get(achado.group("num").lower())
+            if valor is None:
+                self._extenso_nao_conferido(achado.group(0))
+            elif valor > 1 or self.p.tem_supressao:
                 self._suprimido(achado.group(0))
+
+    def _em_palavras(self, frase: str, fracoes: set[float]) -> None:
+        """Fração ("um terço dos casos") e variação ("dobraram") em palavras são números: valem
+        só se conferem como percentual inteiro, igual a "1 em cada 3" e a "+100%"."""
+        for achado in _FRACAO_PALAVRA.finditer(frase):
+            if achado.group("metade"):
+                percentual = 50.0
             else:
-                self.violacoes.append(f"numero_nao_conferido: '{achado.group(0)}' em {self.nome} "
-                                      "(número por extenso não é conferido)")  # fmt: skip
+                parte = _EXTENSO_PEQUENO[achado.group("n").lower()]
+                todo = _DENOMINADORES[achado.group("d").lower()]
+                percentual = 100 * parte / todo if parte < todo else None
+            if percentual is None or not any(abs(percentual - f) <= 0.5 + _EPSILON
+                                             for f in fracoes):  # fmt: skip
+                self._nao_conferido(achado.group(0), None)
+        for achado in _MULTIPLICADOR.finditer(frase):
+            variacao = _VARIACAO_MULTIPLICADOR[achado.lastgroup]
+            if not any(abs(variacao - v) <= 0.5 + _EPSILON for v in self.p.variacoes):
+                self._nao_conferido(achado.group(0), None)
 
     def _proporcoes(self, texto: str, fracoes: set[float]) -> str:
         """Proporção ("1 em cada 10") vale como o percentual inteiro que ela é: 10,0% → "1 em cada
@@ -642,7 +704,7 @@ def _conferir_secao(nome: str, texto: str, noticias: dict[int, NoticiaCitavel],
     ids_secao: list[int] = []
     for frase in _FRASE.split(texto):
         sem_links, citadas_por_link = secao.links(frase)
-        citadas = {int(i) for grupo in _CITACAO.findall(sem_links)
+        citadas = {int(i) for grupo in CITACAO.findall(sem_links)
                    for i in re.split(r"\s*[,;]\s*", grupo)}  # fmt: skip
         ids_secao += sorted(citadas) + sorted(citadas_por_link)
         secao.datas(sem_links)

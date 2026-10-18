@@ -82,6 +82,11 @@ conferência automática:
       {{ m.numerador|inteiro }} de {{ m.denominador|inteiro }}
     {% endif %}
       · {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }}</div>
+    {% if m.chave == "aumento_casos" and "casos_30d_atual" in (m.complemento or {}) %}
+    {% set c = m.complemento %}
+    <div class="pequeno">{{ "30 dias consolidados: " ~ c.casos_30d_atual|inteiro ~ " contra "
+      ~ c.casos_30d_anterior|inteiro ~ " nos 30 anteriores (" ~ c.variacao_30d|variacao ~ ")" }}</div>
+    {% endif %}
     {% if m.chave == "vacinacao" and m.complemento.get("vacina_gripe") is not none %}
     <div class="pequeno">Vacina contra gripe: {{ m.complemento.vacina_gripe|pct }}</div>
     {% endif %}
@@ -150,6 +155,9 @@ conferência automática:
       "cenário atual" }}{% if n.confiavel %} · fonte reconhecida{% endif %}</span></li>
 {% endfor %}
 </ol>
+{% elif d.noticias_encontradas %}
+<p>Nenhuma das {{ d.noticias_encontradas }} notícias encontradas nas buscas foi citada no texto
+  (estão na trilha de auditoria).</p>
 {% else %}
 <p>Nenhuma notícia foi encontrada nas buscas desta execução.</p>
 {% endif %}

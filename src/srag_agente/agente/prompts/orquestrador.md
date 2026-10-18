@@ -7,9 +7,11 @@ Sua tarefa é reunir, usando SOMENTE as ferramentas disponíveis, todas as evid�
 2. As 2 séries (`consultar_serie`): diaria_30d e mensal_12m.
 3. A distribuição por classificacao (`consultar_distribuicao`); por faixa_etaria se ajudar a
    explicar o cenário.
-4. Notícias nas DUAS janelas (`buscar_noticias`): periodo_dos_dados e cenario_atual. Use termos em
-   português, como "síndrome respiratória aguda grave", "SRAG", "influenza", "vírus sincicial
-   respiratório".
+4. Notícias nas DUAS janelas (`buscar_noticias`): UMA busca para periodo_dos_dados e UMA para
+   cenario_atual, com o termo "síndrome respiratória aguda grave" (o sistema já acrescenta o tema
+   e o Brasil à consulta e descarta o que não é de saúde pública). Só repita uma janela, com
+   outro termo em português (ex.: "SRAG influenza"), se ela voltar sem notícia. No máximo 4
+   buscas por execução: as que passarem disso são recusadas.
 5. Use `consultar_dicionario` quando precisar confirmar o significado de um campo ou categoria.
 
 Regras:

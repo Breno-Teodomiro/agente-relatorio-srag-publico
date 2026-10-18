@@ -322,3 +322,35 @@ def test_falha_ao_montar_resultado_de_outra_ferramenta_tem_mensagem_generica(
     texto = str(erro.value)
     assert "sintomas" not in texto and "gold" not in texto and "SEGREDO" not in texto
     assert ferramenta in texto
+
+
+class _BuscadorComLixo(BuscadorFalso):
+    """Buscador que não filtra relevância: a ferramenta tem de filtrar por conta própria."""
+
+    def buscar(self, termo, janela, inicio, fim):
+        from tests.fakes import NOTICIAS
+
+        resultado = super().buscar(termo, janela, inicio, fim)
+        boa = NOTICIAS[janela]
+        lixo = [
+            boa.model_copy(update={
+                "titulo": "Samara Asset Group (XETR:SRAG) Launches Up To €30M Buyback",
+                "url": "https://www.tradingview.com/news/x", "trecho": "Share buyback."}),
+            boa.model_copy(update={"url": "https://www.instagram.com/reel/abc"}),
+        ]  # fmt: skip
+        resultado.noticias = [*lixo, boa]
+        return resultado
+
+
+def test_noticia_irrelevante_nunca_chega_ao_llm_nem_ao_redator():
+    from srag_agente.modelos import numerar_noticias
+
+    ferramentas = ferramentas_falsas(buscador=_BuscadorComLixo())
+    ev = executar(
+        ferramentas["buscar_noticias"],
+        {"termo": "SRAG", "janela": "cenario_atual", "motivo": MOTIVO},
+    )
+    assert [n["url"] for n in ev.dados["noticias"]] == ["https://www.gov.br/saude/n2"]
+    assert ev.dados["descartadas_por_irrelevancia"] == 2
+    assert "Samara" not in ev.para_llm() and "instagram" not in ev.para_llm()
+    assert [n.url for n in numerar_noticias([ev])] == ["https://www.gov.br/saude/n2"]

@@ -50,3 +50,17 @@ def test_contagem_negativa_e_erro_de_programacao(chamadas, tokens, segundos):
 def test_limite_impossivel_e_recusado(campo, valor):
     with pytest.raises(ValueError):
         Limites(**{campo: valor})
+
+
+def test_teto_por_ferramenta_de_buscar_noticias():
+    from srag_agente.guardrails.limites import motivo_de_recusa
+
+    limites = Limites()
+    assert limites.max_buscas_noticias == 4  # duas janelas, com folga para um segundo termo
+    assert motivo_de_recusa(limites, "buscar_noticias", 3) is None
+    motivo = motivo_de_recusa(limites, "buscar_noticias", 4)
+    assert "limite de 4 chamadas de buscar_noticias" in motivo
+    assert "janela" in motivo  # diz ao LLM o que fazer: uma busca por janela basta
+    assert motivo_de_recusa(limites, "consultar_metricas", 99) is None  # sem teto próprio
+    with pytest.raises(ValueError):
+        Limites(max_buscas_noticias=0)

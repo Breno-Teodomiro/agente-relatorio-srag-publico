@@ -1,5 +1,6 @@
 """Modelos compartilhados por agente, guardrails e relatório."""
 
+import re
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -11,6 +12,9 @@ from srag_agente.metricas.catalogo import ChaveMetrica
 
 # O texto vem do LLM e de notícias: o erro de validação (que vai para log e auditoria) não o repete.
 _SEM_INPUT_NOS_ERROS = ConfigDict(hide_input_in_errors=True)
+# Citação de notícia: "[2]", "[1, 3]", "[1; 2]", "[ 4 ]". O guardrail de saída confere estas e o
+# relatório renumera estas: a mesma expressão nos dois lados.
+CITACAO = re.compile(r"\[\s*(\d+(?:\s*[,;]\s*\d+)*)\s*\]")
 
 
 class ComentarioMetrica(BaseModel):

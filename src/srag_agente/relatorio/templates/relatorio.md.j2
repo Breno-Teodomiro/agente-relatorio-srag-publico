@@ -29,7 +29,10 @@ Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · ge
 | Métrica | Valor | Base | Período |
 |---|---:|---|---|
 {% for m in d.metricas %}
-| {{ m.nome }} | {{ m.valor|variacao if m.chave == "aumento_casos" else m.valor|pct }} | {{ (m.numerador|inteiro ~ " casos contra " ~ m.denominador|inteiro ~ " na semana anterior") if m.chave == "aumento_casos" else (m.numerador|inteiro ~ " de " ~ m.denominador|inteiro) }} | {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }} |
+{% set c = m.complemento or {} %}
+{% set apoio = ("; 30 dias consolidados: " ~ c.casos_30d_atual|inteiro ~ " contra " ~ c.casos_30d_anterior|inteiro ~ " nos 30 anteriores (" ~ c.variacao_30d|variacao ~ ")") if "casos_30d_atual" in c else "" %}
+{% set gripe = ("; gripe: " ~ c.vacina_gripe|pct ~ " (" ~ c.vacina_gripe_numerador|inteiro ~ " de " ~ c.vacina_gripe_denominador|inteiro ~ ")") if "vacina_gripe" in c else "" %}
+| {{ m.nome }} | {{ m.valor|variacao if m.chave == "aumento_casos" else m.valor|pct }} | {{ (m.numerador|inteiro ~ " casos contra " ~ m.denominador|inteiro ~ " na semana anterior" ~ apoio) if m.chave == "aumento_casos" else (m.numerador|inteiro ~ " de " ~ m.denominador|inteiro ~ gripe) }} | {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }} |
 {% endfor %}
 
 {% for m in d.metricas %}
@@ -90,7 +93,11 @@ Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · ge
 {% for n in d.noticias %}
 {{ n.id }}. [{{ n.titulo|md }}]({{ n.url|url_segura|md_url }}) — {{ n.fonte|md }}{% if n.data %}, {{ n.data|data_br }}{% endif %} ({{ "período dos dados" if n.janela == "periodo_dos_dados" else "cenário atual" }})
 {% else %}
+{% if d.noticias_encontradas %}
+Nenhuma das {{ d.noticias_encontradas }} notícias encontradas nas buscas foi citada no texto (estão na trilha de auditoria).
+{% else %}
 Nenhuma notícia foi encontrada nas buscas desta execução.
+{% endif %}
 {% endfor %}
 
 ---

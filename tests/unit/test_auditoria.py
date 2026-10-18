@@ -293,3 +293,25 @@ def test_versao_sem_status_ainda_guarda_o_commit(monkeypatch):
 def test_versao_real_do_repositorio(monkeypatch):
     monkeypatch.delenv("SRAG_VERSAO_CODIGO", raising=False)
     assert versao.versao_codigo() != ""
+
+
+def test_resultado_truncado_preserva_os_campos_curtos_de_primeiro_nivel():
+    # o evento do orquestrador de 18/10: o `modelo` sumia dentro do resumo truncado
+    planejadas = [{"ferramenta": "buscar_noticias", "motivo": "m" * 90}] * 30
+    evento = _auditoria().registrar("orquestrador", "llm", resultado={
+        "modelo": "openai/gpt-4.1-mini", "ferramentas_planejadas": planejadas,
+        "chamadas_invalidas": [], "texto": "x" * 5_000, "tentativa": 1, "ok": True,
+        "resumo_truncado": "forjado",
+    })  # fmt: skip
+    resultado = evento["resultado"]
+    assert resultado["modelo"] == "openai/gpt-4.1-mini"
+    assert resultado["tentativa"] == 1 and resultado["ok"] is True
+    assert "texto" not in resultado and "ferramentas_planejadas" not in resultado  # longos
+    assert len(resultado["resumo_truncado"]) == LIMITE_RESULTADO  # o de verdade, não o forjado
+    assert resultado["tamanho_original"] > LIMITE_RESULTADO
+
+
+def test_campo_curto_preservado_tambem_e_mascarado():
+    evento = _auditoria().registrar("n", "llm", resultado={
+        "modelo": "CPF 123.456.789-09", "texto": "x" * 5_000})  # fmt: skip
+    assert "123.456" not in evento["resultado"]["modelo"]

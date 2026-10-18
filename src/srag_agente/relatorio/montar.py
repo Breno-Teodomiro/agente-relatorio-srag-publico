@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -15,7 +16,7 @@ from srag_agente.auditoria.registro import Auditoria
 from srag_agente.ferramentas.registro import Evidencia
 from srag_agente.guardrails.conteudo_externo import url_segura
 from srag_agente.metricas.catalogo import CATALOGO
-from srag_agente.modelos import NoticiaCitavel, TextoRelatorio, numerar_noticias
+from srag_agente.modelos import CITACAO, NoticiaCitavel, TextoRelatorio, numerar_noticias
 from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br, pct, usd, variacao
 from srag_agente.relatorio.graficos import grafico_diario, grafico_mensal
 from srag_agente.relatorio.markdown import md_texto, md_url
@@ -44,6 +45,24 @@ NOMES_CATEGORIAS = {
     "ignorado": "Ignorado",
 }
 GRAFICOS = (("diaria_30d", grafico_diario), ("mensal_12m", grafico_mensal))
+# Ordem de leitura do relatório: as citações são renumeradas na ordem em que o leitor as encontra.
+ORDEM_SECOES = (
+    "resumo_executivo",
+    *(f"comentario_{chave}" for chave in CATALOGO),
+    "contexto_periodo_dados",
+    "cenario_atual",
+    "resposta_pergunta_extra",
+    "limitacoes",
+)
+# O guardrail confere as citações no texto normalizado (NFKC): "[4]" de largura total
+# (U+FF3B, U+FF3D) foi conferida como [4].
+# Os caracteres que o NFKC transforma em colchete ou separador voltam à forma ASCII antes da
+# renumeração, senão a citação seguiria com o número antigo e apontaria para outra notícia.
+_SINAIS_CITACAO = {
+    c: unicodedata.normalize("NFKC", chr(c))
+    for c in (0x037E, 0xFE10, 0xFE14, 0xFE47, 0xFE48, 0xFE50, 0xFE54, 0xFF0C, 0xFF1B, 0xFF3B,
+              0xFF3D)
+}  # fmt: skip
 
 # O único script da página (alternador de tema). A política de conteúdo (CSP) autoriza só o hash
 # dele: texto que escape do escape e vire <script> não executa, e nada carrega de fora.
@@ -87,6 +106,7 @@ class DadosRelatorio:
     versao_codigo: str
     hash_prompts: str
     pergunta_extra: str | None = None
+    noticias_encontradas: int = 0  # todas as das buscas; `noticias` são só as citadas no texto
 
 
 @dataclass(frozen=True)
@@ -127,6 +147,8 @@ def montar_dados(
     data_referencia = next(
         (date.fromisoformat(s["data_referencia"]) for s in series.values()), None
     )
+    encontradas = numerar_noticias(evidencias)
+    texto, citadas = citar_referencias(texto, encontradas)
     return DadosRelatorio(
         id_execucao=id_execucao,
         status=status,
@@ -136,7 +158,8 @@ def montar_dados(
         metricas=[por_chave[chave] for chave in CATALOGO if chave in por_chave],
         series=series,
         distribuicoes=dados("consultar_distribuicao"),
-        noticias=numerar_noticias(evidencias),
+        noticias=citadas,
+        noticias_encontradas=len(encontradas),
         texto=texto,
         avisos=list(avisos),
         violacoes=list(violacoes),
@@ -150,6 +173,36 @@ def montar_dados(
         hash_prompts=auditoria.execucao.get("hash_prompts", ""),
         pergunta_extra=pergunta_extra,
     )
+
+
+def citar_referencias(
+    texto: TextoRelatorio | None, noticias: list[NoticiaCitavel]
+) -> tuple[TextoRelatorio | None, list[NoticiaCitavel]]:
+    """Só as notícias citadas no texto aprovado viram referência, numeradas 1, 2, 3… na ordem de
+    leitura; as citações [n] do texto são trocadas pelo número novo.
+
+    Sem texto (revisão humana) nada é citado. Citação de notícia que não existe (o guardrail de
+    saída já a barra) vira "[?]": com o número antigo, poderia coincidir com uma referência nova.
+    """
+    if texto is None:
+        return None, []
+    por_id = {n.id: n for n in noticias}
+    secoes = {nome: conteudo.translate(_SINAIS_CITACAO)
+              for nome, conteudo in texto.secoes().items()}  # fmt: skip
+    novo: dict[int, int] = {}
+    for nome in sorted(secoes, key=ORDEM_SECOES.index):
+        for grupo in CITACAO.findall(secoes[nome]):
+            for antigo in map(int, re.findall(r"\d+", grupo)):
+                if antigo in por_id:
+                    novo.setdefault(antigo, len(novo) + 1)
+
+    def renumerar(citacao: re.Match[str]) -> str:
+        return re.sub(r"\d+", lambda d: str(novo.get(int(d.group()), "?")), citacao.group(0))
+
+    renumeradas = {nome: CITACAO.sub(renumerar, conteudo) for nome, conteudo in secoes.items()}
+    citadas = [por_id[antigo].model_copy(update={"id": id_novo})
+               for antigo, id_novo in novo.items()]  # fmt: skip
+    return texto.com_secoes(renumeradas), citadas
 
 
 def _citacoes(texto: str | None) -> Markup:

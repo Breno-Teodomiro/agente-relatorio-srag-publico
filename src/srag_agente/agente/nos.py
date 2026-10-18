@@ -24,7 +24,7 @@ from srag_agente.agente.prompts import carregar_prompt
 from srag_agente.auditoria.registro import Auditoria
 from srag_agente.ferramentas.registro import ArgumentosInvalidos, Ferramenta, executar
 from srag_agente.guardrails.entrada import Classificador, verificar_entrada
-from srag_agente.guardrails.limites import Limites, motivo_de_parada
+from srag_agente.guardrails.limites import Limites, motivo_de_parada, motivo_de_recusa
 from srag_agente.guardrails.padroes import mascarar_pii
 from srag_agente.guardrails.saida import verificar_saida
 from srag_agente.metricas.repositorio import DadosIndisponiveis
@@ -244,25 +244,36 @@ class NosAgente:
 
         A API exige uma resposta por tool_call_id antes da próxima mensagem. Chamada inválida
         conta no limite de chamadas. Antes de cada chamada confere o teto (chamadas, tokens e
-        segundos); o que passar do teto recebe "Não executada".
+        segundos); o que passar do teto recebe "Não executada". Ferramenta com teto próprio
+        (`buscar_noticias`) acima dele também recebe "Não executada", com o motivo; essa recusa
+        conta no teto geral, como a chamada inválida, para um laço de recusas não ser infinito.
         """
         ultima = estado["messages"][-1]
         lote = [(c, self._executar_chamada) for c in ultima.tool_calls]
         lote += [(c, self._chamada_invalida) for c in ultima.invalid_tool_calls]
         mensagens, evidencias, executadas = [], [], 0
+        por_ferramenta: dict[str, int] = {}
+        anteriores = estado.get("chamadas_por_ferramenta") or {}
         for chamada, tratar in lote:
-            if parada := self._parada(estado, executadas):
-                aviso = f"Não executada: {parada}."
-                nome = chamada.get("name")
+            nome = chamada.get("name")
+            conhecida = nome if nome in self.d.ferramentas else None
+            feitas = anteriores.get(conhecida, 0) + por_ferramenta.get(conhecida, 0)
+            parada = self._parada(estado, executadas)
+            recusa = None if parada else motivo_de_recusa(self.d.limites, conhecida, feitas)
+            if parada or recusa:
+                aviso = f"Não executada: {parada or recusa}."
                 self.d.auditoria.registrar(
                     "ferramentas",
                     "decisao",
-                    ferramenta=nome if nome in self.d.ferramentas else None,
+                    ferramenta=conhecida,
                     erro=aviso,  # o motivo do LLM não é gravado aqui: pode nem ser texto
                 )
                 mensagens.append(ToolMessage(aviso, tool_call_id=chamada["id"], status="error"))
+                executadas += 1 if recusa else 0
                 continue
             executadas += 1
+            if conhecida:
+                por_ferramenta[conhecida] = por_ferramenta.get(conhecida, 0) + 1
             texto, falhou, evidencia = tratar(chamada)
             if evidencia is not None:
                 evidencias.append(evidencia)
@@ -271,7 +282,8 @@ class NosAgente:
                     texto, tool_call_id=chamada["id"], status="error" if falhou else "success"
                 )
             )
-        return {"messages": mensagens, "evidencias": evidencias, "chamadas_ferramenta": executadas}
+        return {"messages": mensagens, "evidencias": evidencias, "chamadas_ferramenta": executadas,
+                "chamadas_por_ferramenta": por_ferramenta}  # fmt: skip
 
     def rota_ferramentas(
         self, estado: EstadoAgente

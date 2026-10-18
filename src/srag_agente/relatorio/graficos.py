@@ -1,19 +1,40 @@
 """Os dois gráficos obrigatórios: SVG (HTML, temas escuro e claro) e PNG (Markdown/README)."""
 
+import importlib.util
 import io
+import os
 import re
+from pathlib import Path
 from typing import Literal
 
-import matplotlib
-
-matplotlib.use("Agg")  # antes do pyplot: sem janela, só arquivo
-import matplotlib.pyplot as plt
 from markupsafe import escape
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
 
 from srag_agente.metricas.supressao import ROTULO_OCULTO, ROTULO_SUPRIMIDO
 from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br
+
+
+def _rc_do_pacote() -> str | None:
+    """O matplotlibrc padrão que vem com o matplotlib, achado sem importá-lo."""
+    especificacao = importlib.util.find_spec("matplotlib")
+    pastas = especificacao.submodule_search_locations if especificacao else None
+    if not pastas:
+        return None
+    rc = Path(next(iter(pastas))) / "mpl-data" / "matplotlibrc"
+    return str(rc) if rc.is_file() else None
+
+
+# ANTES de importar o matplotlib: ele lê o matplotlibrc do usuário no import (um backend inválido
+# ali avisava a cada execução, e cores ou fontes de lá mudariam os gráficos). Com MATPLOTLIBRC no
+# rc do próprio pacote, o do usuário não é lido; o backend é sempre Agg (sem janela, só arquivo).
+if (_rc := _rc_do_pacote()) is not None:
+    os.environ["MATPLOTLIBRC"] = _rc
+
+import matplotlib  # noqa: E402
+
+matplotlib.use("Agg")  # antes do pyplot; vale mesmo se outro módulo importou o matplotlib antes
+import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
+from matplotlib.patches import Patch  # noqa: E402
 
 Tema = Literal["escuro", "claro"]
 Formato = Literal["svg", "png"]

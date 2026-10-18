@@ -11,6 +11,9 @@ class Limites:
     max_voltas_cobertura: int = 2
     max_tentativas_redacao: int = 2  # 1ª redação + 1 nova tentativa (spec §6)
     max_segundos: float = 300.0
+    # Teto próprio de `buscar_noticias` (spec §3.3: duas janelas; a folga cobre um segundo termo).
+    # A primeira execução real pediu 8 buscas e estourou o teto geral de chamadas.
+    max_buscas_noticias: int = 4
 
     def __post_init__(self) -> None:
         for campo in fields(self):
@@ -41,3 +44,21 @@ def motivo_de_parada(
     if segundos >= limites.max_segundos:
         return f"limite de {limites.max_segundos:g} segundos de execução atingido"
     return None
+
+
+# Ferramenta com teto próprio → campo de `Limites` que o guarda.
+TETOS_POR_FERRAMENTA = {"buscar_noticias": "max_buscas_noticias"}
+
+
+def motivo_de_recusa(limites: Limites, ferramenta: str | None, feitas: int) -> str | None:
+    """Motivo para recusar mais uma chamada de `ferramenta`, que já teve `feitas`, ou None."""
+    campo = TETOS_POR_FERRAMENTA.get(ferramenta or "")
+    if campo is None:
+        return None
+    teto = getattr(limites, campo)
+    if feitas < teto:
+        return None
+    return (
+        f"limite de {teto} chamadas de {ferramenta} atingido; uma busca por janela basta: use as "
+        "notícias já recebidas e siga com as outras ferramentas"
+    )

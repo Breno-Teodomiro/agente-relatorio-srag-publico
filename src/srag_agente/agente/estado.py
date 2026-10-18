@@ -11,6 +11,10 @@ from srag_agente.ferramentas.registro import Evidencia
 from srag_agente.modelos import TextoRelatorio
 
 
+def _somar_contagens(atual: dict[str, int], novas: dict[str, int]) -> dict[str, int]:
+    return {nome: atual.get(nome, 0) + novas.get(nome, 0) for nome in atual | novas}
+
+
 class EstadoAgente(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     uf: str
@@ -18,6 +22,7 @@ class EstadoAgente(TypedDict):
     data_execucao: date
     evidencias: Annotated[list[Evidencia], operator.add]
     chamadas_ferramenta: Annotated[int, operator.add]
+    chamadas_por_ferramenta: Annotated[dict[str, int], _somar_contagens]  # para os tetos próprios
     tokens_entrada: Annotated[int, operator.add]
     tokens_saida: Annotated[int, operator.add]
     voltas_cobertura: int
@@ -38,6 +43,7 @@ def estado_inicial(uf: str, pergunta_extra: str | None, data_execucao: date) -> 
         data_execucao=data_execucao,
         evidencias=[],
         chamadas_ferramenta=0,
+        chamadas_por_ferramenta={},
         tokens_entrada=0,
         tokens_saida=0,
         voltas_cobertura=0,

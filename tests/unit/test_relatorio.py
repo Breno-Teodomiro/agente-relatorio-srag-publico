@@ -579,3 +579,165 @@ def test_anexo_mostra_o_modelo_que_respondeu_no_markdown(tmp_path, evidencias, g
     linha = next(x for x in markdown.splitlines() if x.startswith("| 1 | orquestrador"))
     assert "modelo: reserva\\|&lt;b&gt;x&lt;/b&gt;" in linha
     assert len(re.findall(r"(?<!\\)(?:\\\\)*\|", linha)) == 7
+
+
+# ---- referências: só as notícias citadas, renumeradas (D2) -------------------------------------
+def _com_mais_noticias(evidencias):
+    """Quatro notícias numeradas 1..4: [1] e [3] e [4] do período, [2] do cenário atual."""
+    periodo = next(e for e in evidencias if e.ferramenta == "buscar_noticias"
+                   and e.dados["janela"] == "periodo_dos_dados")  # fmt: skip
+    extra = deepcopy(periodo)
+    modelo = extra.dados["noticias"][0]
+    extra.dados["noticias"] = [
+        {**modelo, "titulo": f"Boletim {n} de SRAG", "url": f"https://www.gov.br/saude/b{n}"}
+        for n in (3, 4)
+    ]
+    return [*evidencias, extra]
+
+
+def _refs_md(markdown):
+    return [linha for linha in markdown.splitlines() if re.match(r"\d+\. \[", linha)]
+
+
+def test_referencias_listam_so_as_citadas_renumeradas_na_ordem_de_leitura(
+    tmp_path, evidencias, graficos_falsos
+):
+    texto = texto_valido(
+        resumo_executivo="Alta nas internações [3].",
+        contexto_periodo_dados="Boletins do período [1][3]; e também [ 4 ].",
+        cenario_atual="Nenhuma notícia atual foi citada.",
+    )
+    arquivos = _montar(tmp_path, _com_mais_noticias(evidencias), texto=texto)
+    markdown = arquivos.markdown.read_text(encoding="utf-8")
+    refs = _refs_md(markdown)
+    assert [r.split("](")[0] for r in refs] == [
+        "1. [Boletim 3 de SRAG", "2. [Fiocruz aponta alta de SRAG por influenza",
+        "3. [Boletim 4 de SRAG",
+    ]  # fmt: skip
+    assert "Ministério divulga boletim" not in markdown  # [2] não foi citada: fica fora
+    assert "Alta nas internações [1]." in markdown
+    assert "Boletins do período \\[2\\][1]; e também \\[ 3 \\]." in markdown
+    html = arquivos.html.read_text(encoding="utf-8")
+    assert re.findall(r'<li id="ref-(\d+)" value="(\d+)">([^—]+?) —', html) == [
+        ("1", "1", "Boletim 3 de SRAG"), ("2", "2", "Fiocruz aponta alta de SRAG por influenza"),
+        ("3", "3", "Boletim 4 de SRAG"),
+    ]  # fmt: skip
+    assert 'Alta nas internações <a href="#ref-1">[1]</a>' in html
+
+
+def test_citacao_agrupada_e_de_largura_total_tambem_e_renumerada(
+    tmp_path, evidencias, graficos_falsos
+):
+    texto = texto_valido(
+        resumo_executivo="Ver [4, 1].",
+        contexto_periodo_dados="Ver \uff3b4\uff3d e [1; 4].",
+        cenario_atual="Sem notícia atual.",
+    )
+    dados = montar_dados(**{**_campos(evidencias), "evidencias": _com_mais_noticias(evidencias),
+                            "texto": texto})  # fmt: skip
+    assert dados.texto.resumo_executivo == "Ver [1, 2]."
+    assert dados.texto.contexto_periodo_dados == "Ver [1] e [2; 1]."
+    assert [(n.id, n.url) for n in dados.noticias] == [
+        (1, "https://www.gov.br/saude/b4"), (2, "https://portal.fiocruz.br/n1"),
+    ]  # fmt: skip
+
+
+def test_sem_texto_aprovado_nenhuma_referencia_e_listada(tmp_path, evidencias, graficos_falsos):
+    arquivos = _montar(tmp_path, evidencias, texto=None, status="revisao_humana",
+                       violacoes=["numero_nao_conferido: '9%' em resumo_executivo"])  # fmt: skip
+    for saida in (arquivos.markdown, arquivos.html):
+        conteudo = saida.read_text(encoding="utf-8")
+        assert "Nenhuma das 2 notícias encontradas nas buscas foi citada no texto" in conteudo
+        assert "Fiocruz aponta alta" not in conteudo
+
+
+def test_sem_noticia_nas_buscas_a_mensagem_continua_a_mesma(tmp_path, evidencias, graficos_falsos):
+    sem = [e for e in evidencias if e.ferramenta != "buscar_noticias"]
+    texto = texto_valido(contexto_periodo_dados="Sem notícias.", cenario_atual="Sem notícias.")
+    markdown = _montar(tmp_path, sem, texto=texto).markdown.read_text(encoding="utf-8")
+    assert "Nenhuma notícia foi encontrada nas buscas desta execução." in markdown
+
+
+def _campos(evidencias):
+    auditoria = Auditoria()
+    auditoria.iniciar_execucao(provedor="p", modelo="m", parametros={}, versao_codigo="abc",
+                               hash_prompts="h")  # fmt: skip
+    return dict(
+        evidencias=evidencias, id_execucao=auditoria.id_execucao, status="ok", uf="BR",
+        data_execucao=HOJE, texto=texto_valido(), avisos=[], violacoes=[], auditoria=auditoria,
+        provedor="p", modelo="m", tokens_entrada=1, tokens_saida=1, custo_usd=0.0,
+    )  # fmt: skip
+
+
+# ---- todo número do texto aparece no relatório (D1: o 28,6% não estava em tabela nenhuma) -----
+def test_apoio_de_30_dias_e_vacina_da_gripe_aparecem_nos_dois_formatos(
+    tmp_path, evidencias, graficos_falsos
+):
+    arquivos = _montar(tmp_path, evidencias)
+    markdown = arquivos.markdown.read_text(encoding="utf-8")
+    linha = next(x for x in markdown.splitlines() if x.startswith("| Taxa de aumento"))
+    assert "30 dias consolidados: 300 contra 250 nos 30 anteriores (+20,0%)" in linha
+    vacina = next(x for x in markdown.splitlines() if x.startswith("| Taxa de vacinação"))
+    assert "gripe: 32,1% (250 de 780)" in vacina
+    html = arquivos.html.read_text(encoding="utf-8")
+    assert "30 dias consolidados: 300 contra 250 nos 30 anteriores (+20,0%)" in html
+
+
+def test_apoio_de_30_dias_suprimido_sai_como_rotulo(tmp_path, evidencias, graficos_falsos):
+    for e in evidencias:
+        if e.dados.get("chave") == "aumento_casos":
+            e.dados["complemento"] = {"casos_30d_atual": "<5", "casos_30d_anterior": 7,
+                                      "variacao_30d": None}  # fmt: skip
+    markdown = _montar(tmp_path, evidencias).markdown.read_text(encoding="utf-8")
+    assert "30 dias consolidados: <5 contra 7 nos 30 anteriores (—)" in markdown.replace(
+        "&lt;", "<"
+    )
+
+
+def test_graficos_nao_dependem_do_matplotlibrc_do_usuario(tmp_path):
+    """18/10/2026: um matplotlibrc do usuário com backend inválido avisava a cada execução."""
+    import os
+    import subprocess
+    import sys
+
+    configuracao = tmp_path / "config"
+    configuracao.mkdir()
+    (configuracao / "matplotlibrc").write_text(
+        "backend: module://matplotlib_inline.backend_inline\naxes.facecolor: red\n"
+    )
+    ambiente = {k: v for k, v in os.environ.items() if k not in ("MATPLOTLIBRC", "MPLBACKEND")}
+    ambiente["MPLCONFIGDIR"] = str(configuracao)
+    codigo = (
+        "import srag_agente.relatorio.graficos, matplotlib; "
+        "print(matplotlib.get_backend(), matplotlib.rcParams['axes.facecolor'])"
+    )
+    feito = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True,
+                           env=ambiente, cwd=tmp_path, timeout=120, check=True)  # fmt: skip
+    assert "Bad value" not in feito.stderr and "matplotlibrc" not in feito.stderr, feito.stderr
+    backend, fundo = feito.stdout.split()
+    assert (backend.lower(), fundo) == ("agg", "white")  # o rc do usuário não muda o gráfico
+
+
+def test_ordem_de_leitura_poe_os_comentarios_antes_do_contexto(evidencias):
+    comentarios = [*texto_valido().comentarios_metricas[1:],
+                   {"metrica": "aumento_casos", "comentario": "Alta citada [4]."}]  # fmt: skip
+    texto = texto_valido(
+        resumo_executivo="Sem citação.",
+        comentarios_metricas=comentarios,
+        contexto_periodo_dados="Boletim [1].",
+        cenario_atual="Sem citação.",
+    )
+    dados = montar_dados(**{**_campos(evidencias), "evidencias": _com_mais_noticias(evidencias),
+                            "texto": texto})  # fmt: skip
+    assert [(n.id, n.url) for n in dados.noticias] == [
+        (1, "https://www.gov.br/saude/b4"), (2, "https://portal.fiocruz.br/n1"),
+    ]  # fmt: skip
+    assert dados.texto.contexto_periodo_dados == "Boletim [2]."
+
+
+def test_citacao_de_noticia_inexistente_nao_herda_numero_de_outra(evidencias):
+    texto = texto_valido(resumo_executivo="Ver [9] e [1].", cenario_atual="Sem citação.",
+                         contexto_periodo_dados="Sem citação.")  # fmt: skip
+    dados = montar_dados(**{**_campos(evidencias), "texto": texto})
+    assert dados.texto.resumo_executivo == "Ver [?] e [1]."
+    assert [n.id for n in dados.noticias] == [1]

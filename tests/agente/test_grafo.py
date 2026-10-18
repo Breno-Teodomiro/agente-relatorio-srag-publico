@@ -737,3 +737,42 @@ def test_resposta_sem_nome_do_modelo_nao_quebra_e_registra_none():
     assert _rodar(deps)["status"] == "ok"
     eventos_llm = [e for e in deps.auditoria.eventos if e["tipo"] == "llm"]
     assert eventos_llm and all(e["resultado"]["modelo"] is None for e in eventos_llm)
+
+
+def test_buscar_noticias_tem_teto_proprio_e_o_llm_recebe_o_motivo():
+    # 18/10/2026: o orquestrador pediu 8 buscas e estourou o teto geral de chamadas
+    extras = [("buscar_noticias", {"termo": f"SRAG {i}", "janela": "cenario_atual"})
+              for i in range(4)]  # fmt: skip
+    buscador = BuscadorFalso()
+    deps = _deps(
+        _orquestrador(CHAMADAS_COMPLETAS + extras,
+                      [("buscar_noticias", {"termo": "SRAG", "janela": "cenario_atual"})],
+                      "EVIDENCIAS_COMPLETAS"),
+        limites=Limites(max_chamadas_ferramenta=30),
+    )  # fmt: skip
+    deps.ferramentas = ferramentas_falsas(buscador=buscador)
+    estado = _rodar(deps)
+    assert len(buscador.chamadas) == 4  # 2 das completas + 2 extras; as outras 3 recusadas
+    recusas = [m.content for m in estado["messages"]
+               if isinstance(m, ToolMessage) and m.status == "error"]  # fmt: skip
+    assert len(recusas) == 3
+    assert all("limite de 4 chamadas de buscar_noticias" in r for r in recusas)
+    eventos = [e for e in deps.auditoria.eventos
+               if e["tipo"] == "decisao" and e["ferramenta"] == "buscar_noticias"]  # fmt: skip
+    assert len(eventos) == 3 and all("buscar_noticias" in e["erro"] for e in eventos)
+    # recusada conta no teto geral, como a chamada inválida: laço de recusas não é infinito
+    assert estado["chamadas_ferramenta"] == 9 + 4 + 1
+    assert estado["status"] == "ok"
+
+
+def test_teto_de_buscar_noticias_soma_os_turnos():
+    buscas = [("buscar_noticias", {"termo": "SRAG", "janela": j})
+              for j in ("periodo_dos_dados", "cenario_atual")]  # fmt: skip
+    buscador = BuscadorFalso()
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS[:7] + buscas, buscas, buscas[:1],
+                               "EVIDENCIAS_COMPLETAS"),
+                 limites=Limites(max_chamadas_ferramenta=30))  # fmt: skip
+    deps.ferramentas = ferramentas_falsas(buscador=buscador)
+    estado = _rodar(deps)
+    assert len(buscador.chamadas) == 4  # 2 + 2; a do 3º turno é recusada
+    assert estado["chamadas_por_ferramenta"]["buscar_noticias"] == 4

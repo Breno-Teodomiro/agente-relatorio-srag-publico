@@ -33,6 +33,7 @@ TipoEvento = Literal["llm", "ferramenta", "guardrail", "decisao"]
 StatusFinal = Literal["ok", "parcial", "revisao_humana", "erro"]
 STATUS_FINAIS: frozenset[str] = frozenset(get_args(StatusFinal))
 LIMITE_RESULTADO = 2000
+LIMITE_CAMPO_PRESERVADO = 120  # campo curto que sobrevive, como chave própria, ao resumo truncado
 
 
 def _agora() -> str:
@@ -72,17 +73,32 @@ def sem_pii(valor: Any) -> Any:
     return mascarar_pii(valor if isinstance(valor, str) else str(valor))[0]
 
 
+def _curto(valor: Any) -> bool:
+    if valor is None or isinstance(valor, bool | int | float):
+        return True
+    return isinstance(valor, str) and len(valor) <= LIMITE_CAMPO_PRESERVADO
+
+
 def resumir(valor: Any) -> Any:
     """Mantém o valor se for pequeno; senão guarda um resumo truncado (sem perder o tamanho).
 
-    O dado pessoal é mascarado ANTES do corte: um CPF na fronteira não sobra pela metade.
+    O dado pessoal é mascarado ANTES do corte: um CPF na fronteira não sobra pela metade. Num
+    dicionário truncado, os campos curtos de primeiro nível (número, booleano, texto de até
+    ``LIMITE_CAMPO_PRESERVADO`` caracteres: o ``modelo`` do orquestrador, a ``janela`` da busca)
+    continuam como chave própria, ao lado do resumo: o anexo do relatório os lê de lá.
     """
     if valor is None:
         return None
-    texto = _para_json(sem_pii(json.loads(_para_json(valor))))
+    limpo = sem_pii(json.loads(_para_json(valor)))
+    texto = _para_json(limpo)
     if len(texto) <= LIMITE_RESULTADO:
         return json.loads(texto)
-    return {"resumo_truncado": texto[:LIMITE_RESULTADO], "tamanho_original": len(texto)}
+    preservados = (
+        {chave: v for chave, v in limpo.items() if _curto(v)} if isinstance(limpo, dict) else {}
+    )
+    # o resumo vem por último: um campo do valor com o mesmo nome não o substitui
+    return {**preservados, "resumo_truncado": texto[:LIMITE_RESULTADO],
+            "tamanho_original": len(texto)}  # fmt: skip
 
 
 def descrever_erro(erro: BaseException) -> str:

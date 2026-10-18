@@ -9,7 +9,7 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from srag_agente.ferramentas.dicionario import TrechoDicionario
-from srag_agente.ferramentas.noticias import Janela, ResultadoBusca
+from srag_agente.ferramentas.noticias import Janela, ResultadoBusca, noticia_relevante
 from srag_agente.guardrails.conteudo_externo import formatar_para_llm, limpar_texto, tem_injecao
 from srag_agente.metricas.catalogo import ChaveMetrica, calcular_metrica
 from srag_agente.metricas.repositorio import DadosIndisponiveis
@@ -257,9 +257,18 @@ def criar_ferramentas(
     def noticias(args: ArgsNoticias) -> ResultadoBusca:
         periodo = args.janela == "periodo_dos_dados"
         fim = repo.referencia().data_referencia if periodo else hoje()
-        return buscador.buscar(
+        resultado = buscador.buscar(
             args.termo, args.janela, fim - timedelta(days=JANELA_NOTICIAS_DIAS), fim
         )
+        # Segunda barreira, valendo para qualquer buscador: notícia fora do tema não chega ao
+        # orquestrador, ao redator nem às referências (o BuscadorNoticias já filtra antes).
+        relevantes = [n for n in resultado.noticias
+                      if noticia_relevante(n.titulo, n.trecho, n.url)]  # fmt: skip
+        return resultado.model_copy(update={
+            "noticias": relevantes,
+            "descartadas_por_irrelevancia": resultado.descartadas_por_irrelevancia
+            + len(resultado.noticias) - len(relevantes),
+        })  # fmt: skip
 
     executores: dict[str, Callable] = {
         "consultar_metricas": metricas,

@@ -1,11 +1,20 @@
 """Busca de notícias em tempo real: Tavily (principal) com Google News RSS de reserva.
 
-A reserva é decidida DEPOIS dos filtros de janela e de injeção: um Tavily que responde mas não
-deixa nenhuma notícia aproveitável também aciona o RSS. Resposta inválida, grande demais ou item
-malformado não derrubam a busca; viram texto em ``erros``, sem a chave da API.
+A reserva é decidida DEPOIS dos filtros de janela, injeção e relevância: um Tavily que responde
+mas não deixa nenhuma notícia aproveitável também aciona o RSS. Resposta inválida, grande demais ou
+item malformado não derrubam a busca; viram texto em ``erros``, sem a chave da API.
+
+Relevância (conservadora e declarada): título ou trecho precisa falar do tema ("síndrome
+respiratória" ou a sigla SRAG como palavra) E de saúde pública (``_SAUDE``), e o domínio da
+notícia e o da fonte não podem ser de rede social nem de mercado financeiro
+(``DOMINIOS_BLOQUEADOS``). A primeira execução real trouxe notícias de bolsa de uma empresa com
+ticker "XETR:SRAG", um reel, um blog de esporte e um comitê científico britânico de mesma sigla.
+Limitação: é lista de termos, não classificador; notícia de outro país que fale de SRAG e de
+"casos" passa (a consulta já pede Brasil).
 """
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -23,6 +32,7 @@ from srag_agente.guardrails.conteudo_externo import (
     tem_injecao,
     url_segura,
 )
+from srag_agente.guardrails.padroes import normalizar_unicode
 
 Janela = Literal["periodo_dos_dados", "cenario_atual"]
 Provedor = Literal["tavily", "google_news_rss", "nenhum"]
@@ -31,6 +41,20 @@ URL_GOOGLE_NEWS = "https://news.google.com/rss/search"
 TIMEOUT_S = 20
 LIMITE_RESPOSTA_BYTES = 2_000_000
 LIMITE_MENSAGEM_ERRO = 300
+TEMA_CONSULTA = "síndrome respiratória aguda grave"
+PAIS_CONSULTA = "Brasil"
+DOMINIOS_BLOQUEADOS: tuple[str, ...] = (
+    # redes sociais e vídeo
+    "instagram.com", "facebook.com", "x.com", "twitter.com", "youtube.com", "tiktok.com",
+    # mercado financeiro (SRAG também é ticker de bolsa)
+    "tradingview.com", "investing.com", "marketscreener.com",
+)  # fmt: skip
+_TEMA = re.compile(r"s[ií]ndrome\s+respirat[óo]ria|(?<![\w-])srag(?![\w-])", re.IGNORECASE)
+_SAUDE = re.compile(
+    r"sa[úu]de|hospita|interna[çc]|vacin|\bcasos\b|secretaria|minist[ée]rio|fiocruz|boletim"
+    r"|influenza|covid|v[íi]rus|gripe|vigil[âa]ncia|epidemiol[óo]gic|notifica[çc]|[óo]bitos?\b",
+    re.IGNORECASE,
+)
 
 
 class Noticia(BaseModel):
@@ -51,6 +75,7 @@ class ResultadoBusca(BaseModel):
     provedor: Provedor
     noticias: list[Noticia]
     descartadas_por_injecao: int = 0
+    descartadas_por_irrelevancia: int = 0
     erros: list[str] = []
 
 
@@ -130,6 +155,32 @@ def _item_rss(entrada: dict) -> _ItemBruto | None:
     )
 
 
+def _dominio_bloqueado(url: str) -> bool:
+    host = _host(url).lower()
+    return any(host == d or host.endswith("." + d) for d in DOMINIOS_BLOQUEADOS)
+
+
+def noticia_relevante(titulo: str, trecho: str, *urls: str) -> bool:
+    """Fala de SRAG e de saúde pública, e nenhum dos ``urls`` é de rede social ou de finanças."""
+    texto = normalizar_unicode(f"{titulo} {trecho}")
+    return (
+        bool(_TEMA.search(texto))
+        and bool(_SAUDE.search(texto))
+        and not any(_dominio_bloqueado(u) for u in urls if u)
+    )
+
+
+def consulta_noticias(termo: str) -> str:
+    """O termo do orquestrador com o tema e o país, quando ele não os traz."""
+    sem_acento = normalizar_unicode(termo).casefold()
+    consulta = termo
+    if not re.search(r"s[ií]ndrome\s+respirat[óo]ria\s+aguda\s+grave", sem_acento):
+        consulta += f" {TEMA_CONSULTA}"
+    if not re.search(r"\bbrasil\b", sem_acento):
+        consulta += f" {PAIS_CONSULTA}"
+    return consulta
+
+
 def _registrar_malformados(erros: list[str], provedor: str, quantidade: int) -> None:
     if quantidade:
         erros.append(f"{provedor}: {quantidade} item(ns) malformado(s) ignorado(s)")
@@ -159,7 +210,7 @@ class BuscadorNoticias:
             "POST",
             URL_TAVILY,
             json={
-                "query": termo,
+                "query": consulta_noticias(termo),
                 "topic": "news",
                 "start_date": inicio.isoformat(),
                 "end_date": fim.isoformat(),
@@ -178,7 +229,8 @@ class BuscadorNoticias:
 
     def _rss(self, termo: str, inicio: date, fim: date, erros: list[str]) -> list[_ItemBruto]:
         consulta = (
-            f"{termo} after:{inicio.isoformat()} before:{(fim + timedelta(days=1)).isoformat()}"
+            f"{consulta_noticias(termo)} after:{inicio.isoformat()} "
+            f"before:{(fim + timedelta(days=1)).isoformat()}"
         )
         corpo = self._baixar(
             "GET",
@@ -207,9 +259,10 @@ class BuscadorNoticias:
         fim: date,
         provedor: str,
         erros: list[str],
-    ) -> tuple[list[Noticia], int]:
+    ) -> tuple[list[Noticia], int, int]:
+        """Devolve (notícias, descartadas por injeção, descartadas por irrelevância)."""
         noticias: list[Noticia] = []
-        descartadas = sem_conteudo = 0
+        descartadas = irrelevantes = sem_conteudo = 0
         for item in itens:
             if item.data is not None and not inicio <= item.data <= fim:
                 continue
@@ -222,6 +275,9 @@ class BuscadorNoticias:
             trecho = sanitizar_texto_externo(item.texto)
             if titulo is None or trecho is None:
                 sem_conteudo += 1
+                continue
+            if not noticia_relevante(titulo, trecho, item.url, item.url_fonte):
+                irrelevantes += 1
                 continue
             noticias.append(
                 Noticia(
@@ -236,7 +292,7 @@ class BuscadorNoticias:
             )
         if sem_conteudo:
             erros.append(f"{provedor}: {sem_conteudo} item(ns) sem título ou trecho ignorado(s)")
-        return noticias, descartadas
+        return noticias, descartadas, irrelevantes
 
     def buscar(self, termo: str, janela: Janela, inicio: date, fim: date) -> ResultadoBusca:
         coletores: list[tuple[Provedor, Callable[..., list[_ItemBruto]]]] = []
@@ -247,7 +303,7 @@ class BuscadorNoticias:
         erros: list[str] = []
         provedor: Provedor = "nenhum"
         noticias: list[Noticia] = []
-        descartadas = 0
+        descartadas = irrelevantes = 0
         for nome, coletar in coletores:
             try:
                 itens = coletar(termo, inicio, fim, erros)
@@ -263,12 +319,16 @@ class BuscadorNoticias:
                 erros.append(self._descrever_erro(nome, erro))
                 continue
             provedor = nome
-            noticias, descartadas_aqui = self._filtrar(itens, janela, inicio, fim, nome, erros)
+            noticias, descartadas_aqui, irrelevantes_aqui = self._filtrar(
+                itens, janela, inicio, fim, nome, erros
+            )
             descartadas += descartadas_aqui
+            irrelevantes += irrelevantes_aqui
             if noticias:
                 break
             erros.append(
-                f"{nome}: nenhuma notícia aproveitável após os filtros de janela e injeção"
+                f"{nome}: nenhuma notícia aproveitável após os filtros de janela, injeção e "
+                "relevância"
             )
 
         noticias.sort(key=lambda n: not n.confiavel)
@@ -280,5 +340,6 @@ class BuscadorNoticias:
             provedor=provedor,
             noticias=noticias[: self._max],
             descartadas_por_injecao=descartadas,
+            descartadas_por_irrelevancia=irrelevantes,
             erros=erros,
         )
