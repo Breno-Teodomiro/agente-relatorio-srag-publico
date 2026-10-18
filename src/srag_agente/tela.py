@@ -244,16 +244,28 @@ def executar_e_guardar[T](
 
 _FALSOS = frozenset({"0", "false", "f", "no", "n", "off"})
 
-# Opções do Streamlit que protegem a página pública: XSRF, CORS, sem barra de desenvolvedor e sem
-# servir arquivo estático. Comparação com o tipo exato (1 não vale por True). Só entra aqui o que é
-# segurança e que a plataforma de hospedagem não troca por um valor inseguro: `runOnSave` e
-# `gatherUsageStats` ela força (não protegem a página) e ficam de fora.
+# Opções do Streamlit exigidas na demonstração: sem barra de desenvolvedor e sem servir arquivo
+# estático (mais o detalhe de erro, abaixo). Comparação com o tipo exato (0 não vale por False).
+# Fora daqui: `runOnSave` e `gatherUsageStats`, que a plataforma de hospedagem força e não protegem
+# a página; e XSRF e CORS, que lá são geridos pelo proxy dela (no primeiro deploy o valor lido não
+# foi o do config.toml). A demo é pública, sem login, sem upload e sem componente que envie dados,
+# e o serviço estático segue exigido desligado. Os valores lidos vão para o log (OPCOES_OBSERVADAS).
 OPCOES_EXIGIDAS_DEMO: dict[str, object] = {
-    "server.enableXsrfProtection": True,
-    "server.enableCORS": True,
     "client.toolbarMode": "viewer",
     "server.enableStaticServing": False,
 }
+# Registradas no log na partida da demo (não são segredos): o dono vê o que a plataforma aplicou.
+OPCOES_OBSERVADAS_DEMO: tuple[str, ...] = (
+    "server.enableXsrfProtection",
+    "server.enableCORS",
+    "client.toolbarMode",
+    "server.enableStaticServing",
+    "client.showErrorDetails",
+    "server.runOnSave",
+    "browser.gatherUsageStats",
+    "runner.fastReruns",
+    "server.address",
+)
 # Detalhe de erro ao visitante: só "none". O legado False (que a plataforma de hospedagem impõe)
 # equivale a "stacktrace" no Streamlit e entrega tipo e traceback ao navegador; "full", "type" e
 # True também mostram algo. A tela troca a opção para "none" antes desta conferência.
@@ -322,8 +334,9 @@ def problemas_ambiente_demo(cfg: Config) -> list[str]:
 def problemas_opcoes_demo(ler_opcao: Callable[[str], object]) -> list[str]:
     """Opções efetivas do Streamlit (`st.get_option`) que diferem do exigido na demonstração.
 
-    Os textos citam só o nome da opção, nunca o valor.
+    Os textos vão só para o log do dono: nome, valor lido e o exigido (opções não são segredo).
     """
+    exigidos: dict[str, object] = {**OPCOES_EXIGIDAS_DEMO, OPCAO_DETALHE_ERRO: "none"}
     regras: dict[str, Callable[[object], bool]] = {
         nome: (lambda valor, esperado=esperado: type(valor) is type(esperado) and valor == esperado)
         for nome, esperado in OPCOES_EXIGIDAS_DEMO.items()
@@ -337,8 +350,19 @@ def problemas_opcoes_demo(ler_opcao: Callable[[str], object]) -> list[str]:
             problemas.append(f"{nome} ilegível")
             continue
         if not aceita(valor):
-            problemas.append(f"{nome} diferente do exigido")
+            problemas.append(f"{nome} lido={valor!r} (exigido {exigidos[nome]!r})")
     return problemas
+
+
+def valores_das_opcoes(ler_opcao: Callable[[str], object]) -> dict[str, str]:
+    """`repr` de cada opção observada (para o log); leitura que falha vira "ilegível"."""
+    valores = {}
+    for nome in OPCOES_OBSERVADAS_DEMO:
+        try:
+            valores[nome] = repr(ler_opcao(nome))
+        except Exception:
+            valores[nome] = "ilegível"
+    return valores
 
 
 def _detalhe_de_erro_escondido(valor: object) -> bool:

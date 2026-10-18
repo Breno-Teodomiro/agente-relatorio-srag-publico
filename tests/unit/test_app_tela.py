@@ -227,6 +227,30 @@ def test_demo_com_host_local_recusa_sem_listar_o_motivo(demo, caplog):
     assert "PG_HOST" in caplog.text  # o motivo vai só para o log do servidor
 
 
+def test_demo_registra_as_opcoes_observadas_uma_vez_sem_segredo(demo, caplog):
+    caplog.set_level(logging.INFO)
+    with _opcao("client.showErrorDetails", False):
+        at = _app(demo).run()
+        at.run()
+    marca = "opções do Streamlit observadas"
+    linhas = [r.getMessage() for r in caplog.records if marca in r.getMessage()]
+    assert len(linhas) == 1  # uma vez por processo
+    assert "server.enableXsrfProtection" in linhas[0]
+    # o valor que a plataforma aplicou, registrado antes da troca para "none"
+    assert "'client.showErrorDetails': 'False'" in linhas[0]
+    for proibido in (HOST, SENHA):
+        assert proibido not in caplog.text
+
+
+def test_demo_recusa_por_opcao_registra_o_valor_lido(demo, caplog):
+    caplog.set_level(logging.INFO)
+    with _opcao("client.toolbarMode", "minimal"):
+        at = _app(demo).run()
+    assert _textos(at.error) == [tela.MENSAGEM_DEMO_INDISPONIVEL]
+    assert "client.toolbarMode lido='minimal' (exigido 'viewer')" in caplog.text
+    assert "minimal" not in _todo_texto(at)
+
+
 def test_demo_com_senha_de_dono_recusa(demo):
     at = _app({**demo, "PG_SENHA_ADMIN": "dono"}).run()
     assert _textos(at.error) == [tela.MENSAGEM_DEMO_INDISPONIVEL]
@@ -247,7 +271,8 @@ def _forcadas_pela_plataforma():
     pilha = ExitStack()
     for nome, valor in (("client.showErrorDetails", False), ("server.runOnSave", True),
                         ("browser.gatherUsageStats", True), ("runner.fastReruns", True),
-                        ("server.enableXsrfProtection", True)):  # fmt: skip
+                        ("server.enableXsrfProtection", False),
+                        ("server.enableCORS", False)):  # fmt: skip
         pilha.enter_context(_opcao(nome, valor))
     return pilha
 

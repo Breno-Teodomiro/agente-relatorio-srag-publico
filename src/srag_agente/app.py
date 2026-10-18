@@ -137,6 +137,12 @@ def _banco_pronto() -> bool:
     return True
 
 
+@st.cache_resource
+def _registrar_opcoes_observadas() -> None:
+    # Uma vez por processo, antes de qualquer recusa: o que a plataforma aplicou de fato.
+    log.info("opções do Streamlit observadas: %s", tela.valores_das_opcoes(st.get_option))
+
+
 def _esconder_detalhe_de_erro() -> None:
     # A plataforma impõe o legado False, que o Streamlit trata como "stacktrace" (tipo e traceback
     # no navegador). O script troca para "none" antes de tudo; a conferência exige "none".
@@ -361,8 +367,9 @@ def main() -> None:
     # Pedido de demo em qualquer fonte: erro de configuração não mostra campo ao visitante.
     pedido = tela.demo_pedido(_segredos(), os.environ)
     if pedido:
-        _esconder_detalhe_de_erro()  # antes de montar o Config: nada de traceback ao visitante
         _log_demo()
+        _registrar_opcoes_observadas()  # antes da troca abaixo: registra o valor da plataforma
+        _esconder_detalhe_de_erro()  # antes de montar o Config: nada de traceback ao visitante
     else:
         _exigir_endereco_local()  # local: a regra de sempre, antes de tudo
     try:
@@ -379,8 +386,9 @@ def main() -> None:
         return
     pacote = None
     if cfg.demo_online:
-        _esconder_detalhe_de_erro()
         _log_demo()
+        _registrar_opcoes_observadas()
+        _esconder_detalhe_de_erro()
         if not _demo_pronta(cfg):
             st.stop()
         pacote = _ler_para_exibir(_pacote)

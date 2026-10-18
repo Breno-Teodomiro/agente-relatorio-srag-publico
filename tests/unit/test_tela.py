@@ -550,18 +550,18 @@ def test_ambiente_demo_exige_a_chave_do_openrouter():
 
 _OPCOES_OK = {
     "client.showErrorDetails": "none",
-    "server.enableXsrfProtection": True,
-    "server.enableCORS": True,
     "client.toolbarMode": "viewer",
     "server.enableStaticServing": False,
 }
-# O que a plataforma de hospedagem força por cima do config.toml (documentação dela): não é
-# controle de segurança da página e não pode impedir a demonstração de abrir.
+_EXIGIDO = {nome: repr(valor) for nome, valor in _OPCOES_OK.items()}
+# O que a plataforma de hospedagem força ou gerencia pelo proxy dela (inclusive XSRF e CORS, que
+# no primeiro deploy real não vieram como o config.toml): não pode impedir a demo de abrir.
 _FORCADAS_PELA_PLATAFORMA = {
     "server.runOnSave": True,
     "browser.gatherUsageStats": True,
     "runner.fastReruns": True,
-    "server.enableXsrfProtection": True,
+    "server.enableXsrfProtection": False,
+    "server.enableCORS": False,
 }
 
 
@@ -574,7 +574,14 @@ def test_valores_forcados_pela_plataforma_nao_bloqueiam():
     assert tela.problemas_opcoes_demo(opcoes.__getitem__) == []
 
 
-def test_so_as_opcoes_de_seguranca_sao_conferidas():
+@pytest.mark.parametrize("valor", [False, True, "estranho", None, 1])
+@pytest.mark.parametrize("opcao", ["server.enableXsrfProtection", "server.enableCORS"])
+def test_xsrf_e_cors_nao_bloqueiam_a_demo(opcao, valor):
+    opcoes = {**_OPCOES_OK, opcao: valor}
+    assert tela.problemas_opcoes_demo(opcoes.__getitem__) == []
+
+
+def test_so_as_tres_opcoes_exigidas_sao_conferidas():
     assert set(tela.OPCOES_EXIGIDAS_DEMO) | {"client.showErrorDetails"} == set(_OPCOES_OK)
 
 
@@ -589,18 +596,18 @@ def test_so_as_opcoes_de_seguranca_sao_conferidas():
         ("client.showErrorDetails", False),  # legado: equivale a "stacktrace" no Streamlit
         ("client.showErrorDetails", "false"),
         ("client.showErrorDetails", 0),  # 0 == False, mas não é o booleano
-        ("server.enableXsrfProtection", False),
-        ("server.enableCORS", False),
-        ("server.enableCORS", 1),  # 1 == True, mas não é o booleano esperado
         ("client.toolbarMode", "developer"),
         ("client.toolbarMode", "auto"),
+        ("client.toolbarMode", "minimal"),
         ("server.enableStaticServing", True),
+        ("server.enableStaticServing", 0),  # 0 == False, mas não é o booleano esperado
     ],
 )
 def test_cada_opcao_relaxada_recusa_a_demo(opcao, valor):
     opcoes = {**_OPCOES_OK, opcao: valor}
     problemas = tela.problemas_opcoes_demo(opcoes.__getitem__)
-    assert problemas == [f"{opcao} diferente do exigido"]  # só o nome, nunca o valor
+    # vai só para o log do dono: nome, valor lido e o exigido (não são segredos)
+    assert problemas == [f"{opcao} lido={valor!r} (exigido {_EXIGIDO[opcao]})"]
 
 
 @pytest.mark.parametrize("opcao", sorted(_OPCOES_OK))
@@ -611,6 +618,21 @@ def test_opcao_ilegivel_recusa_a_demo(opcao):
         return _OPCOES_OK[nome]
 
     assert tela.problemas_opcoes_demo(ler) == [f"{opcao} ilegível"]
+
+
+def test_valores_observados_para_o_log():
+    lidos = {**_OPCOES_OK, **_FORCADAS_PELA_PLATAFORMA, "server.address": "0.0.0.0"}
+
+    def ler(nome):
+        if nome == "runner.fastReruns":
+            raise RuntimeError("x")
+        return lidos[nome]
+
+    valores = tela.valores_das_opcoes(ler)
+    assert set(valores) == set(tela.OPCOES_OBSERVADAS_DEMO)
+    assert valores["server.enableXsrfProtection"] == "False"
+    assert valores["client.toolbarMode"] == "'viewer'"
+    assert valores["runner.fastReruns"] == "ilegível"
 
 
 # --- textos da demonstração ---
