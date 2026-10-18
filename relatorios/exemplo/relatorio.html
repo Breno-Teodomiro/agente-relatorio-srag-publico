@@ -38,6 +38,7 @@ th,td{border-bottom:1px solid var(--borda);padding:6px 8px;text-align:left;verti
 td.num{text-align:right;font-variant-numeric:tabular-nums}
 details{padding:10px 14px}
 a{color:var(--acento)}
+.marca{border:1px dashed var(--suave);border-radius:4px;padding:0 5px;font-style:italic;white-space:nowrap}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
 clip:rect(0,0,0,0);white-space:nowrap;border:0}
 :focus-visible{outline:2px solid var(--acento);outline-offset:2px}
@@ -58,14 +59,14 @@ ol a{display:inline-block;min-height:44px;line-height:44px;padding:0 10px}
     <h1>Relatório de SRAG — Brasil</h1>
     <div class="meta">Dados até <strong>25/06/2025</strong> (Open DATASUS,
       SIVEP-Gripe) · gerado em 18/10/2026 · situação:
-      <strong>concluído</strong> · execução 11aeb54c</div>
+      <strong>concluído</strong> · execução 0ba65d8c</div>
   </div>
   <button type="button" id="tema" aria-pressed="true">Tema escuro</button>
 </header>
 
 
 <h2>Resumo</h2>
-<p>No período de 29 de maio a 11 de junho de 2025, houve uma queda de 14,3% na taxa de casos de Síndrome Respiratória Aguda Grave (SRAG) no Brasil, apesar de um aumento de 28,6% nos 30 dias consolidados anteriores. A taxa de mortalidade por SRAG no período de dezembro de 2024 a junho de 2025 foi de 8,0%. A proporção de casos internados em UTI foi de 29,4%, e a taxa de vacinação contra COVID-19 entre os casos internados foi de 76,1%, com 32,1% vacinados contra a gripe. A maior parte dos casos permanece sem especificação do agente etiológico.</p>
+<p>No período de 29 de maio a 11 de junho de 2025, houve uma redução de 14,3% nos casos de Síndrome Respiratória Aguda Grave (SRAG) no Brasil em comparação com os 7 dias anteriores, embora a variação nos 30 dias consolidados até 11 de junho indique um aumento de 28,6%. A taxa de mortalidade por SRAG no país, considerando dados até 25 de junho de 2025, foi de 8,0%. A proporção de casos internados em Unidade de Terapia Intensiva (UTI) foi de 29,4%, e a taxa de vacinação contra COVID-19 entre os casos internados foi de 76,1%, com 32,1% vacinados contra a gripe. A classificação dos casos mostra predominância de casos não especificados e causados por outros vírus, com menor proporção de COVID-19.</p>
 
 <h2>Métricas</h2>
 <div class="cartoes">
@@ -76,7 +77,7 @@ ol a{display:inline-block;min-height:44px;line-height:44px;padding:0 10px}
       10.224 casos contra 11.928 na semana anterior
       · 29/05/2025 a 11/06/2025</div>
     <div class="pequeno">30 dias consolidados: 51.268 contra 39.878 nos 30 anteriores (+28,6%)</div>
-<p>A taxa de aumento de casos entre 29 de maio e 11 de junho de 2025 foi de queda de 14,3%, indicando redução recente nos casos de SRAG. Contudo, a variação nos 30 dias consolidados até 11 de junho mostra alta de 28,6%, sinalizando aumento em período anterior. Esse cenário é consistente com relatos de alerta para quadros graves de infecções respiratórias no país <a href="#ref-1">[1]</a>.</p>    <details>
+<p>A taxa de aumento de casos entre 29 de maio e 11 de junho de 2025 apresentou queda de 14,3% em relação aos 7 dias anteriores. No entanto, a variação nos 30 dias consolidados até 11 de junho indica alta de 28,6%, sugerindo aumento recente nos casos de SRAG no país [1,2,3].</p>    <details>
       <summary class="pequeno">Como é calculada</summary>
       <p class="pequeno">Variação entre os casos dos 7 dias consolidados mais recentes e os dos 7 dias anteriores, pela data dos primeiros sintomas. Consolidado = até 14 dias antes da data de referência.</p>
       <p class="pequeno"><strong>Limitação:</strong> Os 14 dias mais recentes ficam de fora porque ainda recebem notificações atrasadas; incluí-los mostraria uma queda que não aconteceu.</p>
@@ -89,7 +90,7 @@ ol a{display:inline-block;min-height:44px;line-height:44px;padding:0 10px}
     <div class="pequeno">
       9.885 de 124.188
       · 29/12/2024 a 25/06/2025</div>
-<p>A taxa de mortalidade por SRAG no Brasil, considerando o período de 29 de dezembro de 2024 a 25 de junho de 2025, foi de 8,0%. Esse indicador reflete os óbitos entre casos com desfecho conhecido, conforme definido na base de dados. O estado do Rio de Janeiro, por exemplo, registrou 676 mortes até junho de 2025 <a href="#ref-2">[2]</a>.</p>    <details>
+<p>A taxa de mortalidade por SRAG no Brasil, considerando o período de 29 de dezembro de 2024 a 25 de junho de 2025, foi de 8,0%. Essa taxa é calculada com base nos casos com desfecho conhecido, excluindo casos sem desfecho ou com desfecho ignorado [4,5].</p>    <details>
       <summary class="pequeno">Como é calculada</summary>
       <p class="pequeno">Óbitos por SRAG divididos pelos casos com desfecho conhecido (cura, óbito por SRAG ou óbito por outras causas), em todo o período da base.</p>
       <p class="pequeno"><strong>Limitação:</strong> Casos ainda sem desfecho ou com desfecho ignorado ficam fora do denominador.</p>
@@ -102,7 +103,7 @@ ol a{display:inline-block;min-height:44px;line-height:44px;padding:0 10px}
     <div class="pequeno">
       42.519 de 144.540
       · 29/12/2024 a 25/06/2025</div>
-<p>A taxa de internação em UTI entre os casos de SRAG com informação disponível foi de 29,4% no período de 29 de dezembro de 2024 a 25 de junho de 2025. Essa métrica representa a proporção de casos internados em UTI, não a ocupação de leitos, que depende de dados adicionais do CNES.</p>    <details>
+<p>A taxa de internação em UTI entre os casos com informação disponível foi de 29,4% no período de 29 de dezembro de 2024 a 25 de junho de 2025. Essa métrica representa a proporção de casos internados em UTI, não a ocupação de leitos, que requer dados adicionais [4,5].</p>    <details>
       <summary class="pequeno">Como é calculada</summary>
       <p class="pequeno">Casos internados em UTI divididos pelos casos com essa informação preenchida (sim ou não).</p>
       <p class="pequeno"><strong>Limitação:</strong> Não é a taxa de ocupação de leitos: a base não traz a capacidade de UTI. A ocupação real exigiria cruzar com o cadastro de leitos do CNES.</p>
@@ -116,7 +117,7 @@ ol a{display:inline-block;min-height:44px;line-height:44px;padding:0 10px}
       124.808 de 164.025
       · 29/12/2024 a 25/06/2025</div>
     <div class="pequeno">Vacina contra gripe: 32,1%</div>
-<p>A taxa de vacinação contra COVID-19 entre os casos internados por SRAG foi de 76,1% no período de 29 de dezembro de 2024 a 25 de junho de 2025. Além disso, 32,1% dos internados receberam vacina contra a gripe. Esses dados indicam cobertura vacinal significativa entre os casos graves, embora não representem a cobertura vacinal da população geral.</p>    <details>
+<p>A taxa de vacinação contra COVID-19 entre os casos internados por SRAG foi de 76,1% no período de 29 de dezembro de 2024 a 25 de junho de 2025. A vacinação contra a gripe entre esses casos foi de 32,1%. Esses dados refletem a vacinação entre os internados, não a cobertura vacinal da população geral <a href="#ref-4">[4]</a>.</p>    <details>
       <summary class="pequeno">Como é calculada</summary>
       <p class="pequeno">Casos com vacina contra COVID-19 divididos pelos casos com essa informação preenchida. A vacinação contra a gripe aparece como complemento.</p>
       <p class="pequeno"><strong>Limitação:</strong> Mede a vacinação entre os internados por SRAG, não a cobertura vacinal da população.</p>
@@ -2289,55 +2290,67 @@ L 108 36
 </table></div>
 
 <h2>Contexto do período dos dados</h2>
-<p>No período dos dados, de 29 de maio a 11 de junho de 2025, houve uma queda recente de 14,3% nos casos de SRAG, mas a variação consolidada dos 30 dias anteriores indica aumento de 28,6% nos casos. O país enfrentava alerta para quadros graves de gripe e COVID-19, com aumento de casos por influenza A e vírus sincicial respiratório em várias regiões <a href="#ref-1">[1]</a>. O estado do Rio de Janeiro, por exemplo, apresentava desaceleração nas internações, mas ainda com números elevados e 676 mortes registradas até junho de 2025 <a href="#ref-2">[2]</a>. A SRAG é causada por diversos agentes, incluindo vírus influenza e coronavírus <a href="#ref-3">[3]</a>.</p>
+<p>No período dos dados, entre o final de maio e junho de 2025, o Brasil enfrentou aumento nos casos de SRAG, com destaque para infecções por vírus respiratórios como influenza e vírus sincicial respiratório (VSR). O estado do Rio de Janeiro apresentou queda nos indicadores de SRAG na última semana de maio, mas manteve números elevados de internações e óbitos até junho, especialmente em grupos vulneráveis [1,4,2,5,3].</p>
 <h2>Cenário atual (notícias recentes)</h2>
-<p>No cenário atual, em outubro de 2026, os casos de SRAG por rinovírus, metapneumovírus e SARS-CoV-2 apresentam tendência de alta no Brasil, enquanto os casos por vírus sincicial respiratório e influenza B estão em queda. Os novos registros semanais de SRAG por COVID-19 permanecem baixos. Algumas capitais, como Aracaju, Porto Alegre, Rio Branco, São Luís e Vitória, apresentam aumento da atividade da SRAG <a href="#ref-4">[4]</a><a href="#ref-5">[5]</a><a href="#ref-6">[6]</a>. O boletim InfoGripe indica estabilização ou oscilação dos casos no país, com Sergipe em alerta para crescimento da incidência <a href="#ref-7">[7]</a>.</p>
+<p>Em outubro de 2026, os casos de SRAG por vírus respiratórios como rinovírus, metapneumovírus e Sars-CoV-2 apresentam tendência de alta no Brasil, embora os casos por COVID-19 permaneçam baixos. Algumas capitais registram aumento da atividade da síndrome, enquanto outros estados mantêm níveis elevados sem crescimento recente. Sergipe segue em alerta com tendência de crescimento [6,7,8,9].</p>
 <h2>Limitações</h2>
-<p>As taxas apresentadas consideram apenas casos com informações completas, excluindo casos sem desfecho conhecido ou sem dados sobre internação em UTI e vacinação. A taxa de internação em UTI refere-se à proporção de casos internados em UTI, não à ocupação de leitos hospitalares. A vacinação é medida entre os internados por SRAG, não refletindo a cobertura vacinal da população geral. Os 14 dias mais recentes dos dados ainda estão em consolidação e podem sofrer alterações com notificações atrasadas.</p>
+<p>As métricas apresentadas têm limitações importantes: a taxa de internação em UTI refere-se apenas aos casos com informação preenchida, não refletindo a ocupação real de leitos; a vacinação é medida entre os internados por SRAG, não representando a cobertura vacinal da população geral; os dados mais recentes, especialmente os últimos 14 dias, ainda estão em consolidação devido a notificações atrasadas; e os dados vão até a data de referência de 25 de junho de 2025.</p>
 
 <h2>Referências</h2>
 <ol>
-  <li id="ref-1" value="1">Brasil está em alerta de risco para quadros graves de gripe e Covid-19 | CNN Brasil — www.cnnbrasil.com.br,
-    05/06/2025 ·
-    <a href="https://www.cnnbrasil.com.br/nacional/brasil/brasil-esta-em-alerta-de-risco-para-quadros-graves-de-gripe-e-covid-19" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
-    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
-  <li id="ref-2" value="2">Síndrome Respiratória Aguda Grave já matou 676 pessoas este ano no Rio | Agência Brasil — agenciabrasil.ebc.com.br,
-    18/06/2025 ·
-    <a href="https://agenciabrasil.ebc.com.br/saude/noticia/2025-06/sindrome-respiratoria-aguda-grave-ja-matou-676-pessoas-este-ano-no-rio" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
-    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
-  <li id="ref-3" value="3">Casos de Síndrome Respiratória Aguda Grave disparam no Brasil | CNN Brasil — www.cnnbrasil.com.br,
+  <li id="ref-1" value="1">Casos de Síndrome Respiratória Aguda Grave disparam no Brasil | CNN Brasil — www.cnnbrasil.com.br,
     29/05/2025 ·
     <a href="https://www.cnnbrasil.com.br/nacional/brasil/casos-de-sindrome-respiratoria-aguda-grave-disparam-no-brasil" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
     <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
-  <li id="ref-4" value="4">Vírus respiratórios ainda estão em alta no país, alerta Fiocruz | Agência Brasil — agenciabrasil.ebc.com.br,
+  <li id="ref-2" value="2">Brasil está em alerta de risco para quadros graves de gripe e Covid-19 | CNN Brasil — www.cnnbrasil.com.br,
+    05/06/2025 ·
+    <a href="https://www.cnnbrasil.com.br/nacional/brasil/brasil-esta-em-alerta-de-risco-para-quadros-graves-de-gripe-e-covid-19" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
+  <li id="ref-3" value="3">Casos de síndrome respiratória aguda grave disparam no Brasil | G1 — g1.globo.com,
+    16/06/2025 ·
+    <a href="https://g1.globo.com/jornal-nacional/noticia/2025/06/16/casos-de-sindrome-respiratoria-aguda-grave-disparam-no-brasil.ghtml" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
+  <li id="ref-4" value="4">Rio alerta para vacinação contra Síndrome Respiratória Aguda Grave | Agência Brasil — agenciabrasil.ebc.com.br,
+    04/06/2025 ·
+    <a href="https://agenciabrasil.ebc.com.br/saude/noticia/2025-06/rio-alerta-para-vacinacao-contra-sindrome-respiratoria-aguda-grave" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
+  <li id="ref-5" value="5">Síndrome Respiratória Aguda Grave já matou 676 pessoas este ano no Rio | Agência Brasil — agenciabrasil.ebc.com.br,
+    18/06/2025 ·
+    <a href="https://agenciabrasil.ebc.com.br/saude/noticia/2025-06/sindrome-respiratoria-aguda-grave-ja-matou-676-pessoas-este-ano-no-rio" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
+  <li id="ref-6" value="6">Vírus respiratórios ainda estão em alta no país, alerta Fiocruz | Agência Brasil — agenciabrasil.ebc.com.br,
     08/10/2026 ·
     <a href="https://agenciabrasil.ebc.com.br/saude/noticia/2026-10/virus-respiratorios-ainda-estao-em-alta-no-pais-alerta-fiocruz" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
     <span class="pequeno">· cenário atual · fonte reconhecida</span></li>
-  <li id="ref-5" value="5">País registra tendência de alta de casos de síndrome respiratória | Radioagência Nacional — agenciabrasil.ebc.com.br,
+  <li id="ref-7" value="7">País registra tendência de alta de casos de síndrome respiratória | Radioagência Nacional — agenciabrasil.ebc.com.br,
     09/10/2026 ·
     <a href="https://agenciabrasil.ebc.com.br/radioagencia-nacional/saude/audio/2026-10/pais-registra-tendencia-de-alta-de-casos-de-sindrome-respiratoria" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
     <span class="pequeno">· cenário atual · fonte reconhecida</span></li>
-  <li id="ref-6" value="6">Fiocruz alerta para aumento de vírus respiratórios no Brasil - Portal 98 FM Natal — 98fmnatal.com.br,
+  <li id="ref-8" value="8">Fiocruz alerta para aumento de vírus respiratórios no Brasil - Portal 98 FM Natal — 98fmnatal.com.br,
     08/10/2026 ·
     <a href="https://98fmnatal.com.br/destaque_mais/fiocruz-aumento-virus-respiratorios-srag-brasil/400372" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
-    <span class="pequeno">· cenário atual</span></li>
-  <li id="ref-7" value="7">SRAG no Brasil mantém estabilidade, mas Sergipe segue em alerta - Portal Afya — portal.afya.com.br,
+    <span class="pequeno">· cenário atual      · <span class="marca">fonte não verificada</span></span></li>
+  <li id="ref-9" value="9">SRAG no Brasil mantém estabilidade, mas Sergipe segue em alerta - Portal Afya — portal.afya.com.br,
     17/10/2026 ·
     <a href="https://portal.afya.com.br/infectologia/srag-no-brasil-mantem-estabilidade-mas-sergipe-segue-em-alerta" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
-    <span class="pequeno">· cenário atual</span></li>
+    <span class="pequeno">· cenário atual      · <span class="marca">fonte não verificada</span></span></li>
 </ol>
 
 <h2>Como este relatório foi gerado</h2>
 <details open>
   <summary>Governança e auditoria desta execução</summary>
   <p class="pequeno">Modelo: openrouter / openai/gpt-4.1-mini · tokens:
-    15.976 de entrada e 1.476 de saída · custo
-    estimado: US$ 0,0088 · código 0690ea3 · prompts
-    388e449de8228eb1</p>
+    16.103 de entrada e 1.339 de saída · custo
+    estimado: US$ 0,0086 · código 321c1a6 · prompts
+    647377d812d1be21</p>
   <p class="pequeno">Os números dos cartões, tabelas e gráficos vêm de SQL na camada gold. O texto
     foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais).
-    A trilha completa está em <code>auditoria.jsonl</code> e na tabela
-    <code>auditoria.eventos</code>.</p>
+    A trilha de auditoria está em <code>auditoria.jsonl</code> e na tabela
+    <code>auditoria.eventos</code>, com resultados longos truncados em 2.000 caracteres; as notícias
+    citadas no texto (link, data e janela) ficam registradas no evento
+    <code>guardrail_saida</code>. Nas referências, "fonte não verificada" indica que o domínio não
+    está na lista de fontes reconhecidas do projeto e "sem data" que a notícia não informou data;
+    em ambos os casos o conteúdo não foi checado pelo sistema.</p>
   <p class="pequeno dica">Arraste a tabela para o lado para ver todas as colunas.</p>
   <div class="tabela larga" tabindex="0" role="region" aria-label="Tabela da trilha de auditoria"><table>
     <caption class="sr-only">Trilha de auditoria da execução: etapas, ferramentas e resultados</caption>
@@ -2348,57 +2361,57 @@ L 108 36
         <td></td>
         <td>
  — modelo: openai/gpt-4.1-mini</td>
-        <td class="num">4728</td></tr>
+        <td class="num">4362</td></tr>
       <tr><td class="num">2</td><td>ferramentas</td><td>ferramenta</td>
         <td>consultar_metricas</td>
-        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em 2026-10-18.
+        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em BR.
 </td>
-        <td class="num">35</td></tr>
+        <td class="num">31</td></tr>
       <tr><td class="num">3</td><td>ferramentas</td><td>ferramenta</td>
         <td>consultar_metricas</td>
-        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em 2026-10-18.
+        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em BR.
 </td>
         <td class="num">50</td></tr>
       <tr><td class="num">4</td><td>ferramentas</td><td>ferramenta</td>
         <td>consultar_metricas</td>
-        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em 2026-10-18.
+        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em BR.
 </td>
-        <td class="num">53</td></tr>
+        <td class="num">50</td></tr>
       <tr><td class="num">5</td><td>ferramentas</td><td>ferramenta</td>
         <td>consultar_metricas</td>
-        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em 2026-10-18.
+        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em BR.
 </td>
         <td class="num">51</td></tr>
       <tr><td class="num">6</td><td>ferramentas</td><td>ferramenta</td>
         <td>consultar_serie</td>
-        <td>Obter séries temporais para análise do cenário nacional de SRAG em 2026-10-18.
+        <td>Obter séries temporais diárias dos últimos 30 dias para análise do cenário atual de SRAG no Brasil.
 </td>
         <td class="num">32</td></tr>
       <tr><td class="num">7</td><td>ferramentas</td><td>ferramenta</td>
         <td>consultar_serie</td>
-        <td>Obter séries temporais para análise do cenário nacional de SRAG em 2026-10-18.
+        <td>Obter séries temporais mensais dos últimos 12 meses para análise de tendência de SRAG no Brasil.
 </td>
-        <td class="num">33</td></tr>
+        <td class="num">32</td></tr>
       <tr><td class="num">8</td><td>ferramentas</td><td>ferramenta</td>
         <td>consultar_distribuicao</td>
-        <td>Analisar a distribuição dos casos de SRAG por agente causador para o relatório nacional em 2026-10-18.
+        <td>Analisar a distribuição dos casos de SRAG por agente causador para entender o cenário epidemiológico no Brasil.
 </td>
         <td class="num">32</td></tr>
       <tr><td class="num">9</td><td>ferramentas</td><td>ferramenta</td>
         <td>buscar_noticias</td>
-        <td>Buscar notícias recentes para embasar o relatório nacional de SRAG no período dos dados até 2026-10-18.
+        <td>Buscar notícias recentes sobre síndrome respiratória aguda grave no Brasil para contextualizar o relatório.
 </td>
-        <td class="num">842</td></tr>
+        <td class="num">3328</td></tr>
       <tr><td class="num">10</td><td>ferramentas</td><td>ferramenta</td>
         <td>buscar_noticias</td>
-        <td>Buscar notícias atuais para embasar o relatório nacional de SRAG no cenário atual até 2026-10-18.
+        <td>Buscar notícias atuais sobre síndrome respiratória aguda grave no Brasil para contextualizar o cenário atual.
 </td>
-        <td class="num">182</td></tr>
+        <td class="num">805</td></tr>
       <tr><td class="num">11</td><td>orquestrador</td><td>llm</td>
         <td></td>
         <td>
  — modelo: openai/gpt-4.1-mini</td>
-        <td class="num">1543</td></tr>
+        <td class="num">1781</td></tr>
       <tr><td class="num">12</td><td>verificar_cobertura</td><td>decisao</td>
         <td></td>
         <td>
@@ -2408,7 +2421,7 @@ L 108 36
         <td></td>
         <td>
  — modelo: openai/gpt-4.1-mini</td>
-        <td class="num">6226</td></tr>
+        <td class="num">5511</td></tr>
       <tr><td class="num">14</td><td>guardrail_saida</td><td>guardrail</td>
         <td></td>
         <td>
