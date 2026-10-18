@@ -240,3 +240,27 @@ def test_qualidade_grava_onde_pedido(com_senhas, monkeypatch, tmp_path):
     monkeypatch.setattr("srag_agente.dados.qualidade.gerar_relatorio_qualidade", gerar)
     assert cli.main(["qualidade", "--saida", str(tmp_path / "q.md")]) == 0
     assert destinos == [tmp_path / "q.md"]
+
+
+# --- dicionario -------------------------------------------------------------------------------
+def test_dicionario_mostra_campo_texto_e_origem(com_senhas, monkeypatch, capsys):
+    from contextlib import nullcontext
+
+    from srag_agente.rag.consulta import Resposta
+
+    monkeypatch.setattr("srag_agente.rag.consulta.abrir_busca", lambda cfg: nullcontext("busca"))
+    monkeypatch.setattr(
+        "srag_agente.rag.consulta.responder",
+        lambda busca, pergunta: [Resposta("UTI", 7, "Campo UTI: internado em UTI", "nome exato")],
+    )
+    assert cli.main(["dicionario", "o que é UTI?"]) == 0
+    saida = capsys.readouterr().out
+    assert "[UTI] p.7 (nome exato)" in saida and "internado em UTI" in saida
+
+
+def test_dicionario_pergunta_vazia_sai_com_2_e_explica(com_senhas, monkeypatch, capsys):
+    from contextlib import nullcontext
+
+    monkeypatch.setattr("srag_agente.rag.consulta.abrir_busca", lambda cfg: nullcontext("busca"))
+    assert cli.main(["dicionario", "  "]) == 2
+    assert "Escreva uma pergunta" in capsys.readouterr().err

@@ -1,4 +1,4 @@
-"""Linha de comando: srag carga | indexar | qualidade | relatorio | grafo.
+"""Linha de comando: srag carga | indexar | qualidade | relatorio | dicionario | grafo.
 
 Códigos de saída: 0 deu certo; 1 falha ao rodar (ex.: banco fora do ar); 2 uso ou configuração
 inválidos (argumento, .env incompleto, teto fora da faixa, nenhuma chave de LLM); 130 Ctrl+C.
@@ -12,13 +12,10 @@ import sys
 from pathlib import Path
 from typing import get_args
 
-import psycopg
 from pydantic import ValidationError
 
-from srag_agente.auditoria.registro import descrever_erro
 from srag_agente.config import RAIZ_PROJETO, Config
 from srag_agente.ferramentas.registro import UF
-from srag_agente.guardrails.padroes import mascarar_pii
 
 ARQUIVO_QUALIDADE = RAIZ_PROJETO / "docs" / "QUALIDADE_DADOS.md"
 ARQUIVO_GRAFO = RAIZ_PROJETO / "docs" / "grafo_langgraph.mmd"
@@ -35,6 +32,8 @@ def _argumentos(argv: list[str] | None) -> argparse.Namespace:
     qualidade.add_argument("--saida", type=Path, default=ARQUIVO_QUALIDADE)
     grafo = sub.add_parser("grafo", help="gera o Mermaid do grafo a partir do código do agente")
     grafo.add_argument("--saida", type=Path, default=ARQUIVO_GRAFO)
+    dicionario = sub.add_parser("dicionario", help="consulta o dicionário de dados (sem LLM)")
+    dicionario.add_argument("pergunta", help="campo ou pergunta, ex.: 'o que é VACINA_COV?'")
     relatorio = sub.add_parser("relatorio", help="gera o relatório com o agente")
     relatorio.add_argument("--uf", default="BR", type=str.upper, choices=get_args(UF))
     relatorio.add_argument(
@@ -45,20 +44,6 @@ def _argumentos(argv: list[str] | None) -> argparse.Namespace:
 
 def _erro(mensagem: str) -> None:
     print(mensagem, file=sys.stderr)
-
-
-def _seguro(erro: BaseException, *, com_tipo: bool = True) -> str:
-    """Erro pronto para o terminal: sem o `input` do pydantic e com dado pessoal mascarado."""
-    texto = descrever_erro(erro) if com_tipo else str(erro)
-    return mascarar_pii(texto)[0]
-
-
-def _mensagem_configuracao(erro: ValidationError) -> str:
-    campos = "\n".join(
-        f"  - {'.'.join(map(str, e['loc']))}: {e['msg']}"
-        for e in erro.errors(include_url=False, include_input=False, include_context=False)
-    )
-    return f"Configuração inválida (confira o .env; modelo em .env.example):\n{campos}"
 
 
 def _grafo(destino: Path) -> int:
@@ -93,6 +78,14 @@ def _executar(args: argparse.Namespace, cfg: Config) -> int:
 
         with banco.conectar(cfg, "etl") as conn:
             print(f"Gerado {qualidade.gerar_relatorio_qualidade(conn, args.saida)}")
+    elif args.comando == "dicionario":
+        from srag_agente.rag.consulta import abrir_busca, responder, validar_pergunta
+
+        pergunta = validar_pergunta(args.pergunta)  # antes de abrir banco e carregar o modelo
+        with abrir_busca(cfg) as busca:
+            for resposta in responder(busca, pergunta):
+                print(f"[{resposta.campo or '?'}] p.{resposta.pagina} ({resposta.origem})\n"
+                      f"  {resposta.texto}\n")  # fmt: skip
     elif args.comando == "relatorio":
         from srag_agente import nucleo
 
@@ -116,50 +109,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.comando == "grafo":  # não precisa de banco nem de chave
         return _grafo(args.saida)
 
-    from srag_agente.agente.llm import ConfiguracaoInvalida
+    from srag_agente.erros import classificar, mensagem_configuracao  # puxa o langchain
 
     try:
         cfg = Config()
     except ValidationError as erro:  # só a do Config: a de outro ponto não é "configuração"
-        _erro(_mensagem_configuracao(erro))
+        _erro(mensagem_configuracao(erro))
         return 2
-    from srag_agente.metricas.repositorio import DadosIndisponiveis
-
-    # Nenhum texto de erro vai cru ao terminal: passa por descrever_erro (do ValidationError, só
-    # campo e mensagem) e por mascarar_pii (o psycopg repete valores de linha no DETAIL).
+    # Nenhum texto de erro vai cru ao terminal: `classificar` mascara e nunca mostra traceback.
     try:
         return _executar(args, cfg)
     except KeyboardInterrupt:
         _erro("Interrompido pelo usuário (Ctrl+C).")
         return 130
-    except ConfiguracaoInvalida as erro:
-        _erro(f"Configuração incompleta: {_seguro(erro, com_tipo=False)}")
-        return 2
-    except psycopg.OperationalError as erro:
-        # a mensagem do psycopg traz host, porta e usuário; a senha nunca
-        _erro(
-            "Não foi possível falar com o Postgres (o banco está de pé? `make subir`): "
-            f"{_seguro(erro, com_tipo=False)}"
-        )
-        return 1
-    except psycopg.Error as erro:
-        _erro(
-            "Erro no Postgres. Se o banco é novo ou foi recriado, rode `make carga` e depois "
-            f"`make indexar`. Detalhe: {_seguro(erro)}"
-        )
-        return 1
-    except DadosIndisponiveis as erro:
-        _erro(f"Sem dados na base ({_seguro(erro, com_tipo=False)}). Rode `make carga`.")
-        return 1
-    except FileNotFoundError as erro:
-        _erro(
-            f"Arquivo não encontrado: {mascarar_pii(str(erro.filename))[0]} "
-            "(confira ARQUIVO_DADOS e ARQUIVO_DICIONARIO no .env)."
-        )
-        return 1
     except Exception as erro:
-        _erro(f"Falha inesperada: {_seguro(erro)}")
-        return 1
+        codigo, mensagem = classificar(erro)
+        _erro(mensagem)
+        return codigo
 
 
 if __name__ == "__main__":
