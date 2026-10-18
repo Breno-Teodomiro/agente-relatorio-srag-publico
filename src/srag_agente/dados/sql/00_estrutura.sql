@@ -9,6 +9,16 @@ CREATE SCHEMA IF NOT EXISTS auditoria AUTHORIZATION srag_etl;
 -- Ninguém além do ETL enxerga raw e silver.
 REVOKE ALL ON SCHEMA raw, silver FROM PUBLIC;
 
+-- TEMPORARY no banco vem de PUBLIC por padrão: com ele o agente criaria tabela temporária (esquema
+-- pg_temp) fora do alcance dos GRANTs. Nenhum papel precisa: a carga usa COPY direto em raw e o
+-- auditor só grava por coluna. CONNECT fica com PUBLIC de propósito (ADR 0010). O nome do banco
+-- vem de current_database(), pois o mesmo arquivo roda no banco de produção e no de teste.
+DO $$
+BEGIN
+  EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+END
+$$;
+
 -- Agente: só lê a gold, em sessão somente leitura e com tempo máximo por consulta.
 GRANT USAGE ON SCHEMA gold TO srag_agente;
 ALTER ROLE srag_agente SET default_transaction_read_only = on;

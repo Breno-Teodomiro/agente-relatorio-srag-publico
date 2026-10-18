@@ -32,7 +32,7 @@ from srag_agente.guardrails.conteudo_externo import (
     tem_injecao,
     url_segura,
 )
-from srag_agente.guardrails.padroes import normalizar_unicode
+from srag_agente.guardrails.padroes import mascarar_pii, normalizar_unicode
 
 Janela = Literal["periodo_dos_dados", "cenario_atual"]
 Provedor = Literal["tavily", "google_news_rss", "nenhum"]
@@ -295,6 +295,13 @@ class BuscadorNoticias:
         return noticias, descartadas, irrelevantes
 
     def buscar(self, termo: str, janela: Janela, inicio: date, fim: date) -> ResultadoBusca:
+        if tem_injecao(termo) or mascarar_pii(termo)[1]:
+            # Segunda barreira (a primeira é a validação dos argumentos): nada sai para fora.
+            return ResultadoBusca(
+                termo="[omitido]", janela=janela, inicio=inicio, fim=fim, provedor="nenhum",
+                noticias=[],
+                erros=["termo recusado: dado pessoal ou instrução ao modelo; busca não feita"],
+            )  # fmt: skip
         coletores: list[tuple[Provedor, Callable[..., list[_ItemBruto]]]] = []
         if self._tavily_api_key:
             coletores.append(("tavily", self._tavily))

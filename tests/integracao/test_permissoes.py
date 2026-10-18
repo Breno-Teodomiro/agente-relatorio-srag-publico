@@ -88,6 +88,26 @@ def test_sessao_do_agente_e_somente_leitura(conn_agente):
         conn_agente.execute("CREATE TEMP TABLE t (x int)")
 
 
+def test_agente_nao_cria_tabela_temporaria_nem_desligando_o_somente_leitura(conn_agente):
+    """TEMPORARY no banco vinha de PUBLIC: o agente criaria tabela fora do alcance dos GRANTs."""
+    _liberar_escrita(conn_agente)
+    with pytest.raises(errors.InsufficientPrivilege, match="temporary"):
+        conn_agente.execute("CREATE TEMP TABLE t (x int)")
+
+
+def test_ninguem_do_publico_tem_temporary_no_banco(conn_etl):
+    assert conn_etl.execute(
+        "SELECT has_database_privilege('public', current_database(), 'TEMPORARY')"
+    ).fetchone() == (False,)
+
+
+def test_etl_e_auditor_seguem_funcionando_sem_temporary(conn_etl, conn_auditor):
+    # A carga usa COPY direto em raw.srag e o auditor só insere/atualiza por coluna: nenhum
+    # dos dois precisa de TEMPORARY, e a revogação não pode tê-los quebrado.
+    assert conn_etl.execute("SELECT count(*) FROM raw.srag").fetchone()[0] > 0
+    conn_auditor.execute("SELECT count(*) FROM auditoria.execucoes")
+
+
 @pytest.mark.parametrize(
     "comando",
     [
