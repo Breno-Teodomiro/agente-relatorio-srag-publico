@@ -5,12 +5,15 @@ os arquivos que ele gravou.
 """
 
 import base64
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass
 
 from srag_agente import nucleo
 from srag_agente.config import Config
 from srag_agente.relatorio.montar import ROTULOS_STATUS
+
+CHAVE_USADOS = "relatorios_usados"  # contador por sessão, em st.session_state
 
 _NIVEIS = {"ok": "sucesso", "parcial": "aviso", "revisao_humana": "aviso", "erro": "erro"}
 
@@ -48,3 +51,34 @@ def gerar_para_tela(
         trilha=arquivos.auditoria.read_text(encoding="utf-8"),
         custo_usd=resultado.custo_usd,
     )
+
+
+class RelatorioEmAndamentoError(Exception):
+    """Já há um relatório sendo gerado (a trava é global: vale para todas as sessões)."""
+
+
+class TetoDeRelatoriosError(Exception):
+    """A sessão já gastou o teto de relatórios."""
+
+
+def teto_atingido(estado: MutableMapping, teto: int) -> bool:
+    return estado.get(CHAVE_USADOS, 0) >= teto
+
+
+def executar_controlado[T](
+    trava: threading.Lock, estado: MutableMapping, teto: int, executar: Callable[[], T]
+) -> T:
+    """Roda `executar` sob a trava global e o teto da sessão; o controle é do servidor.
+
+    Cliques repetidos ou abas paralelas não geram relatórios simultâneos nem passam do teto.
+    A tentativa conta mesmo se falhar (o crédito pode ter sido gasto) e a trava sempre sai.
+    """
+    if teto_atingido(estado, teto):
+        raise TetoDeRelatoriosError
+    if not trava.acquire(blocking=False):
+        raise RelatorioEmAndamentoError
+    try:
+        estado[CHAVE_USADOS] = estado.get(CHAVE_USADOS, 0) + 1
+        return executar()
+    finally:
+        trava.release()

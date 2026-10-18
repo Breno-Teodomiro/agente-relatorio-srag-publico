@@ -81,6 +81,8 @@ class Config(BaseSettings):
     max_segundos_execucao: float = Field(300.0, gt=0, allow_inf_nan=False)
     max_voltas_cobertura: int = Field(2, ge=0)
     max_tentativas_redacao: int = Field(3, gt=0)
+    # Tela local: relatórios por sessão do navegador (cada um gasta crédito de LLM).
+    max_relatorios_sessao: int = Field(5, gt=0)
 
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None

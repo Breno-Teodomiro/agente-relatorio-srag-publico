@@ -1,0 +1,15 @@
+# Tela local: só 127.0.0.1, sem detalhe de erro nem barra de ferramentas (ver README, "Tela").
+[server]
+address = "127.0.0.1"
+headless = true
+enableCORS = true
+enableXsrfProtection = true
+runOnSave = false
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = "none"
+toolbarMode = "viewer"
