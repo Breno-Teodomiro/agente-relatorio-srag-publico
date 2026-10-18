@@ -2,6 +2,8 @@
 
 from datetime import date
 
+from srag_agente.arredondamento import percentual
+
 MESES = ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez")
 
 
@@ -9,7 +11,7 @@ def pct(fracao: float | None, casas: int = 1) -> str:
     """Fração nula (métrica suprimida ou sem denominador) vira "—", nunca "0,0%"."""
     if fracao is None:
         return "—"
-    return f"{fracao * 100:.{casas}f}".replace(".", ",") + "%"
+    return percentual(fracao, casas) + "%"
 
 
 def variacao(fracao: float | None) -> str:

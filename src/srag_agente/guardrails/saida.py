@@ -83,6 +83,7 @@ from datetime import date
 
 from pydantic import BaseModel
 
+from srag_agente.arredondamento import pontos
 from srag_agente.ferramentas.registro import Evidencia
 from srag_agente.guardrails.padroes import (
     TRACOS,
@@ -341,7 +342,7 @@ class ResultadoSaida(BaseModel):
 
 def _pct(valor: float) -> str:
     """Percentual como o redator deve escrever: uma casa, vírgula, sem sinal."""
-    return f"{abs(valor):.1f}".replace(".", ",") + "%"
+    return pontos(abs(valor)) + "%"
 
 
 def _variacao(valor: float) -> str:
