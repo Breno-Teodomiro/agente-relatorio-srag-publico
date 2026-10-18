@@ -173,6 +173,7 @@ conferência automática:
         {% if e.tipo == "guardrail" and e.resultado and e.resultado.aprovado is defined %}
           {{ "aprovado" if e.resultado.aprovado else "reprovado" }}
         {% endif %}
+        {% if e.resultado and e.resultado.modelo %} — modelo: {{ e.resultado.modelo }}{% endif %}
         {% if e.erro %} <strong>erro:</strong> {{ e.erro|truncate(160) }}{% endif %}</td>
         <td class="num">{{ e.duracao_ms if e.duracao_ms is not none else "" }}</td></tr>
     {% endfor %}

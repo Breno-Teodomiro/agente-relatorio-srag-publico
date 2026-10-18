@@ -11,7 +11,7 @@ from srag_agente.auditoria.registro import Auditoria
 from srag_agente.modelos import NoticiaCitavel
 from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br, pct, variacao
 from srag_agente.relatorio.graficos import _altura, grafico_diario, grafico_mensal
-from srag_agente.relatorio.montar import AVISO_FIXO, montar_dados, montar_relatorio
+from srag_agente.relatorio.montar import AVISO_FIXO, escrever_relatorio, montar_dados
 from tests.fakes import HOJE, evidencias_completas, texto_valido
 
 
@@ -73,6 +73,13 @@ def graficos_falsos(monkeypatch):
     )
 
 
+def _montar_relatorio(dados, auditoria, pasta):
+    """Como o núcleo: escreve o relatório e depois a trilha."""
+    arquivos = escrever_relatorio(dados, pasta)
+    auditoria.gravar_jsonl(arquivos.auditoria)
+    return arquivos
+
+
 def _montar(tmp_path, evidencias, **mudar):
     auditoria = Auditoria()
     auditoria.iniciar_execucao(
@@ -105,7 +112,7 @@ def _montar(tmp_path, evidencias, **mudar):
         custo_usd=0.00072,
     )
     campos.update(mudar)
-    return montar_relatorio(montar_dados(**campos), auditoria, tmp_path)
+    return _montar_relatorio(montar_dados(**campos), auditoria, tmp_path)
 
 
 def test_relatorio_tem_tudo_o_que_o_desafio_pede(tmp_path, evidencias):
@@ -211,7 +218,7 @@ def _montar_com_dados(tmp_path, evidencias, **mudar):
         tokens_saida=1,
         custo_usd=0.0,
     )
-    return montar_relatorio(replace(dados, **mudar), auditoria, tmp_path)
+    return _montar_relatorio(replace(dados, **mudar), auditoria, tmp_path)
 
 
 @pytest.mark.parametrize("url", ["javascript:alert(1)", "data:text/html,<b>x</b>", "vbscript:x"])
@@ -348,7 +355,7 @@ def completo(tmp_path_factory):
         tokens_saida=200,
         custo_usd=0.00072,
     )
-    return montar_relatorio(dados, auditoria, tmp_path_factory.mktemp("relatorio"))
+    return _montar_relatorio(dados, auditoria, tmp_path_factory.mktemp("relatorio"))
 
 
 def test_os_dois_graficos_saem_em_svg_nos_dois_temas_e_em_png(completo):
@@ -445,3 +452,85 @@ def test_supressao_aparece_no_html_e_no_markdown_com_as_notas(tmp_path, evidenci
     assert nota_serie in htmllib.unescape(html) and nota_dist in htmllib.unescape(html)
     assert nota_serie in markdown and nota_dist in markdown
     assert "Oculto (supressão complementar)" in html
+
+
+def _md_com_eventos(tmp_path, evidencias, graficos_falsos, eventos):
+    auditoria = Auditoria()
+    auditoria.iniciar_execucao(
+        provedor="p", modelo="m", parametros={}, versao_codigo="abc", hash_prompts="h"
+    )
+    dados = montar_dados(
+        evidencias=evidencias,
+        id_execucao=auditoria.id_execucao,
+        status="ok",
+        uf="BR",
+        data_execucao=HOJE,
+        texto=texto_valido(),
+        avisos=[],
+        violacoes=[],
+        auditoria=auditoria,
+        provedor="p",
+        modelo="m",
+        tokens_entrada=1,
+        tokens_saida=1,
+        custo_usd=0.0,
+    )
+    arquivos = _montar_relatorio(replace(dados, eventos=eventos), auditoria, tmp_path)
+    return arquivos.markdown.read_text(encoding="utf-8")
+
+
+def _evento(sequencia, **campos):
+    base = {
+        "sequencia": sequencia,
+        "no": "orquestrador",
+        "tipo": "ferramenta",
+        "ferramenta": None,
+        "motivo": None,
+        "resultado": None,
+        "erro": None,
+        "duracao_ms": 5,
+    }
+    return base | campos
+
+
+def test_markdown_traz_o_anexo_com_a_trilha(tmp_path, evidencias, graficos_falsos):
+    eventos = [
+        _evento(1, ferramenta="consultar_metricas", motivo="preciso da mortalidade"),
+        _evento(2, no="guardrail", tipo="guardrail", resultado={"aprovado": False}),
+        _evento(3, tipo="erro", erro="falhou"),
+    ]
+    markdown = _md_com_eventos(tmp_path, evidencias, graficos_falsos, eventos)
+    anexo = markdown[markdown.index("## Como este relatório foi gerado") :]
+    assert "| # | Etapa | Tipo | Ferramenta | Motivo / resultado | ms |" in anexo
+    assert (
+        "| 1 | orquestrador | ferramenta | consultar_metricas | preciso da mortalidade | 5 |"
+        in anexo
+    )
+    assert "— reprovado" in anexo and "**erro:** falhou" in anexo
+    assert "auditoria.jsonl" in anexo and AVISO_FIXO in anexo
+
+
+def test_texto_hostil_nao_quebra_a_tabela_de_eventos(tmp_path, evidencias, graficos_falsos):
+    hostil = "a | b\n[x](http://evil) <script>\n| c \\| d"
+    eventos = [_evento(1, ferramenta="f|g", motivo=hostil, erro=hostil)]
+    markdown = _md_com_eventos(tmp_path, evidencias, graficos_falsos, eventos)
+    linha = next(x for x in markdown.splitlines() if x.startswith("| 1 | orquestrador"))
+    assert "<script>" not in linha and "\n" not in linha  # sem tag e em uma linha só
+    assert "&lt;script&gt;" in linha and "\\[x\\]" in linha
+    # as 6 células: toda barra vertical do texto está escapada, sobram só as 7 delimitadoras
+    assert len(re.findall(r"(?<!\\)(?:\\\\)*\|", linha)) == 7
+
+
+def test_markdown_diz_casos_contra_semana_anterior(tmp_path, evidencias, graficos_falsos):
+    markdown = _montar(tmp_path, evidencias).markdown.read_text(encoding="utf-8")
+    assert " casos contra " in markdown and " na semana anterior" in markdown
+    linha = next(x for x in markdown.splitlines() if x.startswith("| Taxa de aumento"))
+    assert " de " not in linha.split("|")[3]  # a Base não se lê como fração
+
+
+def test_anexo_mostra_o_modelo_que_respondeu_no_markdown(tmp_path, evidencias, graficos_falsos):
+    eventos = [_evento(1, tipo="llm", resultado={"modelo": "reserva|<b>x</b>"})]
+    markdown = _md_com_eventos(tmp_path, evidencias, graficos_falsos, eventos)
+    linha = next(x for x in markdown.splitlines() if x.startswith("| 1 | orquestrador"))
+    assert "modelo: reserva\\|&lt;b&gt;x&lt;/b&gt;" in linha
+    assert len(re.findall(r"(?<!\\)(?:\\\\)*\|", linha)) == 7

@@ -41,9 +41,3 @@ def motivo_de_parada(
     if segundos >= limites.max_segundos:
         return f"limite de {limites.max_segundos:g} segundos de execução atingido"
     return None
-
-
-def chamadas_restantes(limites: Limites, chamadas: int) -> int:
-    """Quantas ferramentas de um lote paralelo ainda cabem (o resto não executa)."""
-    _conferir(chamadas, 0, 0)
-    return max(0, limites.max_chamadas_ferramenta - chamadas)

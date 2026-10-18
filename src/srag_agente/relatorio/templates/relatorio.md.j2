@@ -24,7 +24,7 @@ Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · ge
 | Métrica | Valor | Base | Período |
 |---|---:|---|---|
 {% for m in d.metricas %}
-| {{ m.nome }} | {{ m.valor|variacao if m.chave == "aumento_casos" else m.valor|pct }} | {{ m.numerador|inteiro }} de {{ m.denominador|inteiro }} | {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }} |
+| {{ m.nome }} | {{ m.valor|variacao if m.chave == "aumento_casos" else m.valor|pct }} | {{ (m.numerador|inteiro ~ " casos contra " ~ m.denominador|inteiro ~ " na semana anterior") if m.chave == "aumento_casos" else (m.numerador|inteiro ~ " de " ~ m.denominador|inteiro) }} | {{ m.periodo_inicio|data_br }} a {{ m.periodo_fim|data_br }} |
 {% endfor %}
 
 {% for m in d.metricas %}
@@ -90,6 +90,16 @@ Nenhuma notícia foi encontrada nas buscas desta execução.
 
 ---
 
-Modelo {{ d.provedor }} / {{ d.modelo }} · {{ d.tokens_entrada|inteiro }} + {{ d.tokens_saida|inteiro }} tokens · custo estimado US$ {{ d.custo_usd|usd }} · código {{ d.versao_codigo }} · trilha completa em `auditoria.jsonl`.
+## Como este relatório foi gerado
+
+Modelo {{ d.provedor }} / {{ d.modelo }} · {{ d.tokens_entrada|inteiro }} de entrada e {{ d.tokens_saida|inteiro }} de saída · custo estimado US$ {{ d.custo_usd|usd }} · código {{ d.versao_codigo }} · prompts {{ d.hash_prompts }}
+
+Os números das tabelas e dos gráficos vêm de SQL na camada gold. O texto foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais). A trilha completa está em `auditoria.jsonl` e na tabela `auditoria.eventos`.
+
+| # | Etapa | Tipo | Ferramenta | Motivo / resultado | ms |
+|--:|---|---|---|---|--:|
+{% for e in d.eventos %}
+| {{ e.sequencia }} | {{ e.no|md_celula }} | {{ e.tipo|md_celula }} | {{ (e.ferramenta or "")|md_celula }} | {{ (e.motivo or "")|md_celula }}{% if e.tipo == "guardrail" and e.resultado and e.resultado.aprovado is defined %} — {{ "aprovado" if e.resultado.aprovado else "reprovado" }}{% endif %}{% if e.resultado and e.resultado.modelo %} — modelo: {{ e.resultado.modelo|md_celula }}{% endif %}{% if e.erro %} — **erro:** {{ e.erro|truncate(160)|md_celula }}{% endif %} | {{ e.duracao_ms if e.duracao_ms is not none else "" }} |
+{% endfor %}
 
 *{{ aviso }}*

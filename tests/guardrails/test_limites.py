@@ -2,7 +2,7 @@
 
 import pytest
 
-from srag_agente.guardrails.limites import Limites, chamadas_restantes, motivo_de_parada
+from srag_agente.guardrails.limites import Limites, motivo_de_parada
 
 
 def test_padroes_do_spec():
@@ -24,14 +24,6 @@ def test_para_por_tempo():
     limites = Limites(max_segundos=60)
     assert motivo_de_parada(limites, 0, 0, segundos=59.9) is None
     assert "segundos" in motivo_de_parada(limites, 0, 0, segundos=60)
-
-
-def test_chamadas_restantes_corta_o_lote_paralelo():
-    # o orquestrador pode pedir 5 ferramentas de uma vez quando só cabe 1
-    limites = Limites(max_chamadas_ferramenta=12)
-    assert chamadas_restantes(limites, 11) == 1
-    assert chamadas_restantes(limites, 12) == 0
-    assert chamadas_restantes(limites, 15) == 0
 
 
 @pytest.mark.parametrize("chamadas,tokens,segundos", [(-1, 0, 0), (0, -1, 0), (0, 0, -1)])

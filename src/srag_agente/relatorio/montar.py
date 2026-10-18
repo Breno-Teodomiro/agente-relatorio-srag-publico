@@ -176,10 +176,16 @@ def _ambiente() -> Environment:
         citacoes=_citacoes,
         url_segura=_url_segura,
         md=md_texto,
+        md_celula=_md_celula,
         md_url=md_url,
         categoria=lambda c: NOMES_CATEGORIAS.get(c, c),
     )
     return ambiente
+
+
+def _md_celula(texto: str | None) -> str:
+    """`md_texto` para célula de tabela: o `|` que o `md_texto` não escapou também é escapado."""
+    return re.sub(r"(?<!\\)((?:\\\\)*)\|", r"\1\\|", md_texto(texto))
 
 
 def _svg(conteudo: bytes) -> Markup:
@@ -189,15 +195,6 @@ def _svg(conteudo: bytes) -> Markup:
 
 def _hash_script(script: str) -> str:
     return base64.b64encode(hashlib.sha256(script.encode("utf-8")).digest()).decode("ascii")
-
-
-def montar_relatorio(
-    dados: DadosRelatorio, auditoria: Auditoria, pasta_base: Path
-) -> ArquivosRelatorio:
-    """Gráficos, HTML, Markdown e a trilha, de uma vez (trilha já encerrada)."""
-    arquivos = escrever_relatorio(dados, pasta_base)
-    auditoria.gravar_jsonl(arquivos.auditoria)
-    return arquivos
 
 
 def escrever_relatorio(dados: DadosRelatorio, pasta_base: Path) -> ArquivosRelatorio:
