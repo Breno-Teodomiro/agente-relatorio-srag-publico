@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
@@ -28,17 +29,33 @@ from srag_agente.guardrails.limites import Limites, motivo_de_parada, motivo_de_
 from srag_agente.guardrails.padroes import mascarar_pii
 from srag_agente.guardrails.saida import verificar_saida
 from srag_agente.metricas.repositorio import DadosIndisponiveis
-from srag_agente.modelos import TextoRelatorio, numerar_noticias
+from srag_agente.modelos import NoticiaCitavel, TextoRelatorio, numerar_noticias
 
 AVISO_COBERTURA = "Evidências incompletas"
 ERRO_JSON_INVALIDO = (
     "Argumentos inválidos: o JSON da chamada não pôde ser lido. Reenvie a chamada com JSON válido."
 )
 ERRO_DESCONHECIDA = "Ferramenta desconhecida: use só as ferramentas disponíveis."
+_NOME_DE_TIPO = re.compile(r"[A-Za-z_]\w{0,79}")
 
 
 def _ms(inicio: float) -> int:
     return int((perf_counter() - inicio) * 1000)
+
+
+def _tipo_do_erro(exc: ErroRedacao) -> str:
+    """'ErroRedacao (causa: OutputParserException)': só nomes de tipo, nunca a mensagem."""
+    causa = exc.causa if isinstance(exc.causa, str) and _NOME_DE_TIPO.fullmatch(exc.causa) else None
+    return f"{type(exc).__name__} (causa: {causa})" if causa else type(exc).__name__
+
+
+def _noticias_citadas(noticias: list[NoticiaCitavel], ids: list[int]) -> list[dict]:
+    """O que a trilha guarda de cada notícia citada: id (o número da trilha, que o texto usou),
+    URL exata, data e janela. O título não entra (texto de fora, livre); o relatório renumera as
+    referências na ordem de leitura e a URL liga as duas numerações."""
+    por_id = {n.id: n for n in noticias}
+    return [{"id": i, "url": por_id[i].url, "data": por_id[i].data, "janela": por_id[i].janela}
+            for i in ids if i in por_id]  # fmt: skip
 
 
 def _identificar(texto: TextoRelatorio) -> dict:
@@ -333,8 +350,12 @@ class NosAgente:
         """Redige o texto; roda mesmo depois de um teto (sai o relatório parcial).
 
         Saída fora do formato (ErroRedacao) vira uma violação de texto FIXO (só o tipo do erro):
-        a saída crua pode repetir o que o modelo escreveu e a violação chega ao relatório. O
-        detalhe fica na auditoria, mascarado.
+        a saída crua pode repetir o que o modelo escreveu e a violação chega ao relatório. A
+        trilha também guarda só tipos (o do erro e o da causa), nunca a mensagem: com
+        function_calling ela traz os `arguments` crus, e o campo `erro` aparece no relatório. Os
+        tokens que o provedor informou na tentativa mal formada entram no total da execução (o
+        custo e a soma que o teto de tokens confere); se ele não informou, a tentativa conta 0
+        (limite declarado no ADR 0010).
 
         Se a ÚLTIMA tentativa der ErroRedacao, a execução vai a revisão humana sem texto: o
         relatório sai igual ao de um texto reprovado (que fica retido), só sem o hash dele na
@@ -354,16 +375,21 @@ class NosAgente:
         try:
             texto, (tokens_entrada, tokens_saida), modelo = self.d.redator(contexto)
         except ErroRedacao as exc:
+            tokens_entrada, tokens_saida = exc.tokens
             self.d.auditoria.registrar(
                 "redator",
                 "llm",
                 resultado={"tentativa": tentativa, "modelo": exc.modelo},
                 duracao_ms=_ms(inicio),
-                erro=str(exc),  # sem corte: a auditoria mascara e só depois limita o tamanho
+                tokens_entrada=tokens_entrada,
+                tokens_saida=tokens_saida,
+                erro=_tipo_do_erro(exc),
             )
             return {
                 "texto": None,
                 "tentativas_redacao": tentativa,
+                "tokens_entrada": tokens_entrada,
+                "tokens_saida": tokens_saida,
                 "violacoes": [
                     "saida_invalida: o redator devolveu texto fora do formato estruturado "
                     f"({type(exc).__name__})."
@@ -396,12 +422,12 @@ class NosAgente:
         para a próxima redação: a trilha guarda as violações curtas, nunca as instruções.
         """
         texto = estado["texto"]
+        citadas: list[dict] | None = None
         if texto is None:
             violacoes, pii, avisos, instrucoes = estado["violacoes"], [], [], []
         else:
-            resultado = verificar_saida(
-                texto, estado["evidencias"], numerar_noticias(estado["evidencias"])
-            )
+            noticias = numerar_noticias(estado["evidencias"])
+            resultado = verificar_saida(texto, estado["evidencias"], noticias)
             texto, violacoes, pii, avisos, instrucoes = (
                 resultado.texto,
                 resultado.violacoes,
@@ -409,6 +435,7 @@ class NosAgente:
                 resultado.avisos,
                 resultado.instrucoes,
             )
+            citadas = _noticias_citadas(noticias, resultado.citadas)
         if not violacoes:
             status = "parcial" if estado["cobertura_incompleta"] else "ok"
         elif estado["tentativas_redacao"] < self.d.limites.max_tentativas_redacao:
@@ -419,8 +446,13 @@ class NosAgente:
         self.d.auditoria.registrar(
             "guardrail_saida",
             "guardrail",
+            # Em `argumentos`, com teto de tamanho próprio: violações longas no resultado não
+            # empurram para fora as notícias que o texto cita.
+            argumentos=None if citadas is None else {"noticias_citadas": citadas},
             resultado={
                 "aprovado": not violacoes,
+                # número curto: sobrevive como chave própria mesmo se a lista for truncada
+                "total_noticias_citadas": len(citadas or []),
                 # antes das listas: um resultado longo é truncado pelo fim (`resumir`)
                 **({"texto_retido": _identificar(texto)} if retido else {}),
                 "violacoes": violacoes,

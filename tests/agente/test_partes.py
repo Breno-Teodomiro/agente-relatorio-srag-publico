@@ -27,6 +27,7 @@ from tests.fakes import (
     HOJE,
     MODELO_RESERVA,
     estruturado_com_reserva,
+    estruturado_mal_formado,
     evidencias_completas,
     resposta_crua,
     texto_valido,
@@ -206,6 +207,41 @@ def test_erro_de_redacao_carrega_o_modelo_que_respondeu():
         criar_redator(falha)(contexto)
     assert erro.value.modelo == MODELO_RESERVA
     assert ErroRedacao("sem modelo").modelo is None
+
+
+# ---- revisão final: texto cru fora do erro (I2) e tokens da tentativa mal formada (M3) --------
+
+
+def test_erro_de_redacao_nao_carrega_o_texto_cru_do_modelo():
+    """Com function_calling, o erro de leitura traz os `arguments` crus: nada disso segue."""
+    contexto = montar_contexto(evidencias_completas(), uf="BR", data_execucao=HOJE)
+    with pytest.raises(ErroRedacao) as erro:
+        criar_redator(estruturado_mal_formado())(contexto)
+    for texto in (str(erro.value), repr(erro.value), str(erro.value.args)):
+        assert "TEXTO CRU" not in texto and "arguments" not in texto
+    assert erro.value.causa == "OutputParserException"  # só o TIPO da causa
+    assert erro.value.__cause__ is None and erro.value.__context__ is None  # sem encadear
+
+
+def test_erro_de_redacao_carrega_os_tokens_que_o_provedor_informou():
+    contexto = montar_contexto(evidencias_completas(), uf="BR", data_execucao=HOJE)
+    with pytest.raises(ErroRedacao) as erro:
+        criar_redator(estruturado_mal_formado())(contexto)
+    assert erro.value.tokens == (50, 10)
+    # provedor que não devolve a resposta crua: 0, o limite declarado (ADR 0010)
+    with pytest.raises(ErroRedacao) as sem_raw:
+        criar_redator(estruturado_mal_formado(raw=AIMessage(content="")))(contexto)
+    assert sem_raw.value.tokens == (0, 0)
+    assert ErroRedacao("x").tokens == (0, 0) and ErroRedacao("x").causa is None
+
+
+def test_classificador_mal_formado_conta_os_tokens_gastos():
+    resultado = entrada.verificar_entrada(
+        "Como está a UTI?", criar_classificador(estruturado_mal_formado())
+    )
+    assert not resultado.aprovado
+    assert resultado.motivos == ["classificador_indisponivel: ErroRedacao"]
+    assert (resultado.tokens_entrada, resultado.tokens_saida) == (50, 10)
 
 
 def test_limite_da_pergunta_tem_uma_fonte_so():

@@ -184,6 +184,34 @@ def estruturado_com_reserva(parsed, modelo: str | None = MODELO_RESERVA):
     return RunnableLambda(_principal_fora_do_ar).with_fallbacks([RunnableLambda(reserva)])
 
 
+# --- revisão final: saída mal formada traz o texto cru do modelo na mensagem de erro (I2) ---
+# É o formato do OutputParserException do langchain com method="function_calling": os
+# `arguments` crus (o que o modelo escreveu) vêm dentro da mensagem.
+TEXTO_CRU_DO_MODELO = "TEXTO CRU DO MODELO com CPF 123.456.789-09"
+MENSAGEM_ERRO_CRUA = (
+    f'Function TextoRelatorio arguments:\n\n{{"resumo_executivo": "{TEXTO_CRU_DO_MODELO}", '
+    '"limitacoes": "corta\n\nare not valid JSON. Received JSONDecodeError Unterminated string'
+)
+
+
+def estruturado_mal_formado(raw=None):
+    """`with_structured_output(include_raw=True)` que não conseguiu ler a resposta do modelo.
+
+    A resposta crua (com uso de tokens 50/10, de `resposta_crua`) vem em `raw`, como no real.
+    """
+    from langchain_core.exceptions import OutputParserException
+    from langchain_core.runnables import RunnableLambda
+
+    bruto = resposta_crua() if raw is None else raw
+    return RunnableLambda(
+        lambda _: {
+            "raw": bruto,
+            "parsed": None,
+            "parsing_error": OutputParserException(MENSAGEM_ERRO_CRUA),
+        }
+    )
+
+
 def orquestrador_com_reserva(*respostas):
     """Orquestrador cujo principal falha sempre; a reserva devolve `respostas` em ordem."""
     from langchain_core.runnables import RunnableLambda

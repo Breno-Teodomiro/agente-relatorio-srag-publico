@@ -51,8 +51,17 @@ leitura, erro sem a chave da API, decisão de reserva **depois** dos filtros e t
   respiratória ou SRAG) e um termo de saúde pública e barra uma lista pequena e declarada de
   domínios (redes sociais e sites financeiros, `DOMINIOS_BLOQUEADOS` em `noticias.py`). Passa
   notícia estrangeira que fale de SRAG e casos, e sigla de outro assunto com termo de saúde em
-  domínio fora da lista. A trilha trunca o resultado das buscas em 2000 caracteres, então um
-  número que vem só da notícia não é auditável depois pela trilha.
+  domínio fora da lista.
+- A trilha trunca o resultado de cada busca em 2000 caracteres (`LIMITE_RESULTADO`): título e
+  trecho das notícias **não citadas** podem ficar só em parte. As notícias **citadas** pelo texto
+  ficam registradas à parte, em `argumentos.noticias_citadas` do evento `guardrail_saida` (id da
+  trilha, URL exata, data e janela; o título não entra), e `resultado.total_noticias_citadas`
+  guarda a contagem. Um número que vem só de uma notícia é auditável pela URL citada, não pelo
+  trecho. Essa lista tem o mesmo teto de 2000 caracteres por campo: com muitas citações de URL
+  longa ela sai truncada (`resumo_truncado` + `tamanho_original`), e a contagem continua
+  inteira. O teste `test_trilha_guarda_as_noticias_citadas_mesmo_com_a_busca_truncada` cobre
+  sete citações com a busca truncada. O relatório renumera as referências na ordem de leitura;
+  a URL liga as duas numerações.
 - A relevância das notícias depende do filtro local do buscador: a Tavily devolve resultados
   fora de assunto (por exemplo, a sigla SRAG de outras áreas) e o filtro descarta o que não
   trata de saúde pública.

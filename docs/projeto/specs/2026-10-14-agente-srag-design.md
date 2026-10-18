@@ -59,7 +59,7 @@ entrada (uf?, pergunta_extra?)
  → [3] ferramentas (auditadas)                  │
  → [4] verificar_cobertura (código) ─ faltou? ──┘  (máx. 2 voltas)
  → [5] redator (LLM, saída estruturada Pydantic)
- → [6] guardrail_saida           falhou → volta 1x ao redator → falhou de novo → faixa "revisão humana", texto retido
+ → [6] guardrail_saida           falhou → volta ao redator com instruções de correção (até 3 tentativas no total) → falhou na 3ª → faixa "revisão humana", texto retido
  → [7] montar_relatorio (código) gráficos + HTML + Markdown + anexo de auditoria
 ```
 

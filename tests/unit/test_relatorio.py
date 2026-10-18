@@ -661,6 +661,61 @@ def test_sem_noticia_nas_buscas_a_mensagem_continua_a_mesma(tmp_path, evidencias
     assert "Nenhuma notícia foi encontrada nas buscas desta execução." in markdown
 
 
+# ---- revisão final: aviso com [n] segue a numeração das referências (M2) ----------------------
+_AVISO_SEM_DATA = ("noticia_sem_data: [{n}] citada em cenario_atual; a janela não pôde ser "
+                   "conferida pela data")  # fmt: skip
+
+
+def test_aviso_de_noticia_sem_data_usa_o_numero_da_referencia(evidencias):
+    """Ordem de leitura: [3] (resumo) vira 1, [1] vira 2 e [2] (cenário atual) vira 3."""
+    texto = texto_valido(resumo_executivo="Alta nas internações [3].",
+                         contexto_periodo_dados="Boletins do período [1][3].",
+                         cenario_atual="O Ministério divulgou boletim [2].")  # fmt: skip
+    outro = "Evidências incompletas: faltou consultar_serie [9]."  # aviso nosso: não muda
+    dados = montar_dados(**{**_campos(evidencias), "evidencias": _com_mais_noticias(evidencias),
+                            "texto": texto,
+                            "avisos": [outro, _AVISO_SEM_DATA.format(n=2)]})  # fmt: skip
+    assert [n.url for n in dados.noticias][2] == "https://www.gov.br/saude/n2"
+    assert dados.avisos == [outro, _AVISO_SEM_DATA.format(n=3)]
+
+
+def test_aviso_sem_referencia_aponta_para_a_trilha_e_nao_para_um_numero(
+    tmp_path, evidencias, graficos_falsos
+):
+    """Revisão humana: texto retido, nenhuma referência. "[2]" apontaria para o nada."""
+    arquivos = _montar(tmp_path, evidencias, texto=None, status="revisao_humana",
+                       violacoes=["numero_nao_conferido: '9%' em resumo_executivo"],
+                       avisos=[_AVISO_SEM_DATA.format(n=2)])  # fmt: skip
+    markdown = arquivos.markdown.read_text(encoding="utf-8")
+    html = htmllib.unescape(arquivos.html.read_text(encoding="utf-8"))
+    for conteudo in (markdown, html):
+        assert "noticia_sem_data: notícia 2 da trilha de auditoria citada em" in conteudo
+        assert "[2]" not in conteudo and "\\[2\\]" not in conteudo
+
+
+def test_aviso_de_noticia_citada_so_pelo_link_nao_vira_numero_de_referencia(evidencias):
+    """Notícia citada só pela URL não entra nas referências: o aviso dela aponta para a trilha."""
+    texto = texto_valido(cenario_atual="Ver https://www.gov.br/saude/n2 para o boletim.")
+    dados = montar_dados(**{**_campos(evidencias), "texto": texto,
+                            "avisos": [_AVISO_SEM_DATA.format(n=2)]})  # fmt: skip
+    assert [n.id for n in dados.noticias] == [1]  # só [1], do contexto do período
+    assert dados.avisos == [_AVISO_SEM_DATA.format(n=2).replace(
+        "[2]", "notícia 2 da trilha de auditoria")]  # fmt: skip
+
+
+# ---- revisão final: o anexo diz a verdade sobre a trilha (I3) ---------------------------------
+def test_anexo_nao_promete_trilha_completa_e_diz_onde_ficam_as_citadas(
+    tmp_path, evidencias, graficos_falsos
+):
+    """A trilha trunca resultados longos (2.000 caracteres): "completa" seria falso."""
+    arquivos = _montar(tmp_path, evidencias)
+    sem_citacao = _montar(tmp_path / "b", evidencias, texto=None, status="revisao_humana")
+    for caminho in (arquivos.markdown, arquivos.html, sem_citacao.markdown, sem_citacao.html):
+        conteudo = re.sub(r"\s+", " ", htmllib.unescape(caminho.read_text(encoding="utf-8")))
+        assert "trilha completa" not in conteudo and "(estão na trilha" not in conteudo
+        assert "truncados" in conteudo and "guardrail_saida" in conteudo
+
+
 def _campos(evidencias):
     auditoria = Auditoria()
     auditoria.iniciar_execucao(provedor="p", modelo="m", parametros={}, versao_codigo="abc",

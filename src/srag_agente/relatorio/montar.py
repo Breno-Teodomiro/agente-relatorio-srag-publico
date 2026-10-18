@@ -152,7 +152,7 @@ def montar_dados(
         (date.fromisoformat(s["data_referencia"]) for s in series.values()), None
     )
     encontradas = numerar_noticias(evidencias)
-    texto, citadas = citar_referencias(texto, encontradas)
+    texto, citadas, mapa = _citar(texto, encontradas)
     return DadosRelatorio(
         id_execucao=id_execucao,
         status=status,
@@ -165,7 +165,7 @@ def montar_dados(
         noticias=citadas,
         noticias_encontradas=len(encontradas),
         texto=texto,
-        avisos=list(avisos),
+        avisos=renumerar_avisos(avisos, mapa),
         violacoes=list(violacoes),
         eventos=list(auditoria.eventos),
         provedor=provedor,
@@ -188,8 +188,39 @@ def citar_referencias(
     Sem texto (revisão humana) nada é citado. Citação de notícia que não existe (o guardrail de
     saída já a barra) vira "[?]": com o número antigo, poderia coincidir com uma referência nova.
     """
+    texto, citadas, _mapa = _citar(texto, noticias)
+    return texto, citadas
+
+
+# Aviso do guardrail de saída que cita uma notícia pelo número da trilha (o único que o faz).
+_AVISO_COM_NOTICIA = re.compile(r"^(noticia_sem_data: )\[(\d+)\]")
+
+
+def renumerar_avisos(avisos: list[str], mapa: dict[int, int]) -> list[str]:
+    """Avisos com o número da referência, não o da trilha.
+
+    O guardrail escreve "noticia_sem_data: [7] ..." com o número da trilha (o das buscas). Com
+    a notícia nas referências, vale o número novo ([7] → [2]); sem ela (revisão humana, texto
+    retido, ou notícia citada só pela URL), "[7]" apontaria para uma referência que não existe
+    ou para outra notícia: vira "notícia 7 da trilha de auditoria" (o id do evento
+    guardrail_saida). Os demais avisos não mudam.
+    """
+
+    def trocar(achado: re.Match[str]) -> str:
+        antigo = int(achado.group(2))
+        novo = mapa.get(antigo)
+        alvo = f"[{novo}]" if novo else f"notícia {antigo} da trilha de auditoria"
+        return achado.group(1) + alvo
+
+    return [_AVISO_COM_NOTICIA.sub(trocar, aviso) for aviso in avisos]
+
+
+def _citar(
+    texto: TextoRelatorio | None, noticias: list[NoticiaCitavel]
+) -> tuple[TextoRelatorio | None, list[NoticiaCitavel], dict[int, int]]:
+    """`citar_referencias` e o mapa número da trilha → número da referência."""
     if texto is None:
-        return None, []
+        return None, [], {}
     por_id = {n.id: n for n in noticias}
     secoes = {nome: conteudo.translate(_SINAIS_CITACAO)
               for nome, conteudo in texto.secoes().items()}  # fmt: skip
@@ -206,7 +237,7 @@ def citar_referencias(
     renumeradas = {nome: CITACAO.sub(renumerar, conteudo) for nome, conteudo in secoes.items()}
     citadas = [por_id[antigo].model_copy(update={"id": id_novo})
                for antigo, id_novo in novo.items()]  # fmt: skip
-    return texto.com_secoes(renumeradas), citadas
+    return texto.com_secoes(renumeradas), citadas, novo
 
 
 def _citacoes(texto: str | None) -> Markup:

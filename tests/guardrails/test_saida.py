@@ -66,6 +66,8 @@ def test_extrai_formatos_brasileiros_e_ignora_datas_anos_e_rotulos():
         ("10.0%", [(10.0, True)]),  # decimal com ponto (escorregão do inglês)
         ("1.500 casos", [(1500.0, False)]),
         ("2.050 casos", [(2050.0, False)]),  # com separador de milhar não é ano
+        ("2025 óbitos", [(2025.0, False)]),  # seguido de contagem não é ano
+        ("Em 2025, óbitos", []),  # com a vírgula, é ano
         ("\uff11\uff10\uff05 dos casos", [(10.0, True)]),  # largura total
         ("8\u200b4%", [(84.0, True)]),  # largura zero no meio do número
         ("H1N1, H3N2, SARS-CoV-2 e COVID-19", []),
@@ -170,6 +172,63 @@ def test_ano_fora_das_evidencias_e_barrado(evidencias):
     assert _tem(_violacoes(evidencias, resumo_executivo="Desde 2019 os casos sobem."),
                 "numero_nao_conferido")  # fmt: skip
     assert _violacoes(evidencias, resumo_executivo="Em 2025 e em 2026 houve boletins.") == []
+
+
+# ---- revisão final: inteiro com cara de ano seguido de contagem é contagem (I1) ---------------
+@pytest.mark.parametrize(
+    "resumo",
+    [
+        "Foram 2025 óbitos no período.",
+        "Foram 2026 internações em UTI.",
+        "Foram 2025 novos casos no período.",  # uma palavra entre o número e o substantivo
+        "Em 2025 casos foram notificados.",  # sem vírgula, "2025 casos" é lido como contagem
+    ],
+)
+def test_ano_seguido_de_contagem_e_conferido_como_contagem(evidencias, resumo):
+    """2025 e 2026 estão nas evidências como ANO: não podem salvar uma contagem inventada."""
+    violacoes = _violacoes(evidencias, resumo_executivo=resumo)
+    assert _tem(violacoes, "numero_nao_conferido"), violacoes
+
+
+def test_citadas_traz_so_noticias_existentes_sem_repetir_e_inclui_as_citadas_por_link(
+    evidencias,
+):
+    """I3: a lista que a trilha registra. [9] não existe; [1] repetida; [2] só pela URL."""
+    texto = texto_valido(
+        resumo_executivo="Ver [9] e [1].",
+        contexto_periodo_dados="Boletim [1].",
+        cenario_atual="Ver https://www.gov.br/saude/n2 para o boletim.",
+    )
+    assert _verificar(texto, evidencias).citadas == [1, 2]
+    assert _verificar(texto_neutro(), evidencias).citadas == []
+
+
+@pytest.mark.parametrize(
+    "resumo",
+    [
+        "Em 2025, os casos subiram.",
+        "Em 2025 e em 2026 houve boletins.",
+        "2025 foi o ano com mais boletins.",
+        "Os casos de 2025 foram consolidados.",
+    ],
+)
+def test_ano_de_verdade_segue_passando(evidencias, resumo):
+    assert _violacoes(evidencias, resumo_executivo=resumo) == []
+
+
+def test_contagem_com_cara_de_ano_passa_se_estiver_nas_evidencias(evidencias):
+    """Lido como contagem, 2025 confere com as contagens do JSON como qualquer outro número."""
+    extra = Evidencia(ferramenta="consultar_metricas", argumentos={},
+                      dados={"chave": "obitos_extra", "numerador": 2025})  # fmt: skip
+    com_2025 = [*evidencias, extra]
+    assert _violacoes(com_2025, resumo_executivo="Foram 2025 óbitos no período.") == []
+
+
+def test_instrucao_do_ano_seguido_de_contagem_explica_as_duas_leituras(evidencias):
+    resultado = _verificar(texto_valido(resumo_executivo="Foram 2025 óbitos no período."),
+                           evidencias)  # fmt: skip
+    (instrucao,) = [i for i in resultado.instrucoes if "2025" in i]
+    assert "contagem" in instrucao and "vírgula" in instrucao
 
 
 @pytest.mark.parametrize(
@@ -566,7 +625,8 @@ def test_violacao_com_dado_pessoal_e_mascarada(evidencias, monkeypatch):
 
     def conferir(nome, *_):
         violacao = f"numero_nao_conferido: '123.456.789-09' em {nome}"
-        return [violacao], [f"Na seção {nome}, '123.456.789-09' não está no JSON: remova-o."]
+        instrucao = f"Na seção {nome}, '123.456.789-09' não está no JSON: remova-o."
+        return [violacao], [instrucao], []
 
     monkeypatch.setattr(saida, "_conferir_secao", conferir)
     resultado = _verificar(texto_valido(), evidencias)

@@ -181,7 +181,7 @@ conferência automática:
 </ol>
 {% elif d.noticias_encontradas %}
 <p>Nenhuma das {{ d.noticias_encontradas }} notícias encontradas nas buscas foi citada no texto
-  (estão na trilha de auditoria).</p>
+  (as buscas ficam na trilha de auditoria, com resultados longos truncados).</p>
 {% else %}
 <p>Nenhuma notícia foi encontrada nas buscas desta execução.</p>
 {% endif %}
@@ -195,8 +195,10 @@ conferência automática:
     {{ d.hash_prompts }}</p>
   <p class="pequeno">Os números dos cartões, tabelas e gráficos vêm de SQL na camada gold. O texto
     foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais).
-    A trilha completa está em <code>auditoria.jsonl</code> e na tabela
-    <code>auditoria.eventos</code>.</p>
+    A trilha de auditoria está em <code>auditoria.jsonl</code> e na tabela
+    <code>auditoria.eventos</code>, com resultados longos truncados em 2.000 caracteres; as notícias
+    citadas no texto (link, data e janela) ficam registradas no evento
+    <code>guardrail_saida</code>.</p>
   <p class="pequeno dica">Arraste a tabela para o lado para ver todas as colunas.</p>
   <div class="tabela larga" tabindex="0" role="region" aria-label="Tabela da trilha de auditoria"><table>
     <caption class="sr-only">Trilha de auditoria da execução: etapas, ferramentas e resultados</caption>

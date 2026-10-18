@@ -22,7 +22,9 @@ Barra (violação → nova redação → revisão humana):
   barram, porque não há casa decimal a conferir; de 2 a 4 ("três casos") é valor suprimido;
 - número derivado (diferença, soma, razão, "pontos") só passa se coincidir com um número das
   evidências: a tolerância é só a de arredondamento na casa exibida;
-- ano e data que não aparecem nas evidências;
+- ano e data que não aparecem nas evidências; inteiro com cara de ano seguido de substantivo de
+  contagem ("Foram 2025 óbitos") é contagem e confere só com contagem (sem vírgula, "Em 2025
+  casos..." também é lido assim; a instrução pede a vírgula);
 - citação inexistente, notícia de uma janela usada em seção da outra, notícia com data fora da
   busca que a trouxe; link que não é exatamente uma das URLs devolvidas (com ou sem esquema);
 - recomendação clínica, marcação HTML e instrução dirigida a modelo.
@@ -254,6 +256,9 @@ class ResultadoSaida(BaseModel):
     avisos: list[str] = []
     # Só para o LLM da nova tentativa: não vão à trilha nem ao relatório.
     instrucoes: list[str] = []
+    # Ids das notícias que o texto cita ([n] ou a URL) e que existem, na ordem das seções, sem
+    # repetir: a trilha registra essas notícias (o resultado da busca pode estar truncado).
+    citadas: list[int] = []
 
 
 def _pct(valor: float) -> str:
@@ -389,8 +394,12 @@ def _limpar_para_numeros(texto: str) -> str:
 
 
 def extrair_numeros(texto: str) -> list[NumeroCitado]:
-    """Números citados num texto (sem anos, datas, links, citações [n] nem rótulos "<5")."""
-    return [n for n, ano in _tokens(_limpar_para_numeros(_normalizar(texto))) if not ano]
+    """Números citados num texto (sem anos, datas, links, citações [n] nem rótulos "<5").
+
+    Inteiro com cara de ano seguido de contagem ("2025 óbitos") é número, não ano.
+    """
+    limpo = _limpar_para_numeros(_normalizar(texto))
+    return [n for n, ano in _tokens(limpo) if not ano or _SEGUE_CONTAGEM.match(limpo, n.fim)]
 
 
 # ---- o que as evidências permitem --------------------------------------------------------------
@@ -566,6 +575,12 @@ def _host_e_caminho(endereco: str) -> tuple[str, str]:
     return host.lower(), caminho
 
 
+def _instrucao_ano_contagem(numero: NumeroCitado) -> str:
+    return (f"'{numero.bruto}' seguido de casos, óbitos etc. é lido como contagem e não está no "
+            "JSON. Se é o ano, separe-o com vírgula ('Em 2025, os casos...'); se é contagem, use "
+            "só uma contagem do JSON ou remova o número.")  # fmt: skip
+
+
 def _trecho(texto: str) -> str:
     curto = texto[:_LIMITE_TRECHO] + ("…" if len(texto) > _LIMITE_TRECHO else "")
     return "[omitido: contém instrução]" if contem_injecao(curto) else curto
@@ -622,7 +637,13 @@ class _Secao:
         texto = _limpar_para_numeros(_apagar_rotulos_dos_dados(frase, p))
         texto = self._proporcoes(texto, p.fracoes | perc_citadas)
         for numero, ano in _tokens(texto):
-            if ano:
+            # "Foram 2025 óbitos": inteiro com cara de ano seguido de contagem é contagem; o ano
+            # das evidências não o salva.
+            contagem_com_cara_de_ano = ano and _SEGUE_CONTAGEM.match(texto, numero.fim)
+            if contagem_com_cara_de_ano:
+                if not _perto(numero, p.contagens | cont_citadas):
+                    self._nao_conferido(numero.bruto, numero, _instrucao_ano_contagem(numero))
+            elif ano:
                 if int(numero.valor) not in p.anos:
                     instrucao = f"o ano '{numero.bruto}' não aparece nas evidências: remova-o."
                     self._nao_conferido(numero.bruto, None, instrucao)
@@ -855,8 +876,8 @@ def _conferir_citacoes(secao: str, ids: list[int], noticias: dict[int, NoticiaCi
 
 
 def _conferir_secao(nome: str, texto: str, noticias: dict[int, NoticiaCitavel], p: _Permitidos,
-                    avisos: list[str]) -> tuple[list[str], list[str]]:  # fmt: skip
-    """(violações, instruções de correção) de uma seção."""
+                    avisos: list[str]) -> tuple[list[str], list[str], list[int]]:  # fmt: skip
+    """(violações, instruções de correção, ids citados) de uma seção."""
     secao = _Secao(nome, noticias, p)
     if achado := _HTML.search(texto):
         secao.violacoes.append(f"marcacao_html: '{_trecho(achado.group(0))}' em {nome}")
@@ -874,7 +895,8 @@ def _conferir_secao(nome: str, texto: str, noticias: dict[int, NoticiaCitavel], 
         ids_secao += sorted(citadas) + sorted(citadas_por_link)
         secao.datas(sem_links)
         secao.numeros(sem_links, citadas | citadas_por_link)
-    return secao.violacoes + _conferir_citacoes(nome, ids_secao, noticias, avisos), secao.instrucoes
+    violacoes = secao.violacoes + _conferir_citacoes(nome, ids_secao, noticias, avisos)
+    return violacoes, secao.instrucoes, ids_secao
 
 
 def verificar_saida(texto: TextoRelatorio, evidencias: list[Evidencia],
@@ -890,12 +912,14 @@ def verificar_saida(texto: TextoRelatorio, evidencias: list[Evidencia],
     violacoes: list[str] = []
     instrucoes: list[str] = []
     avisos: list[str] = []
+    citadas: list[int] = []
     for nome, conteudo in mascaradas.items():
-        da_secao, instrucoes_da_secao = _conferir_secao(
+        da_secao, instrucoes_da_secao, ids = _conferir_secao(
             nome, _normalizar(conteudo), por_id, permitidos, avisos
         )
         violacoes += da_secao
         instrucoes += instrucoes_da_secao
+        citadas += [i for i in ids if i in por_id]
     # Segunda barreira: a mensagem repete trechos do texto; nenhum dado pessoal sai por ela.
     violacoes = list(dict.fromkeys(mascarar_pii(v)[0] for v in violacoes))
     instrucoes = list(dict.fromkeys(mascarar_pii(i)[0] for i in instrucoes))[:LIMITE_VIOLACOES]
@@ -908,4 +932,5 @@ def verificar_saida(texto: TextoRelatorio, evidencias: list[Evidencia],
         dados_pessoais_mascarados=pii,
         avisos=list(dict.fromkeys(mascarar_pii(a)[0] for a in avisos)),
         instrucoes=instrucoes,
+        citadas=list(dict.fromkeys(citadas)),
     )

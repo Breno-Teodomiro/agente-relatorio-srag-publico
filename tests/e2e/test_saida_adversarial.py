@@ -216,3 +216,32 @@ def test_limite_de_ferramentas_entrega_relatorio_parcial_com_faixa(
     ferramentas = [e for e in eventos_no_banco(conn_etl, resultado.id_execucao)
                    if e["tipo"] == "ferramenta"]  # fmt: skip
     assert len(ferramentas) == 3
+
+
+# ---- revisão final: saída mal formada do redator (I2: texto cru; M3: tokens) -------------------
+def test_saida_mal_formada_nao_vaza_texto_cru_e_conta_os_tokens(
+    cfg_teste, banco_carregado, conn_etl, pasta_saida
+):
+    """function_calling com JSON truncado nas três tentativas: o erro do parser traz os
+    `arguments` crus. Nada disso chega à trilha (banco e JSONL), ao HTML nem ao Markdown; os
+    tokens que o provedor informou entram no total da execução."""
+    from srag_agente.agente.llm import criar_redator
+    from tests.fakes import TEXTO_CRU_DO_MODELO, estruturado_mal_formado
+
+    simulacao = Simulacao(redator=criar_redator(estruturado_mal_formado()))
+    resultado = simulacao.rodar(cfg_teste, pasta_saida)
+    assert resultado.status == "revisao_humana"
+    trilha = trilha_no_banco(conn_etl, resultado.id_execucao)
+    for pedaco in (TEXTO_CRU_DO_MODELO, "TEXTO CRU", "123.456", "arguments", "not valid JSON"):
+        assert pedaco not in trilha
+        for nome, conteudo in arquivos_gerados(resultado.arquivos.pasta).items():
+            assert pedaco not in _texto_legivel(nome, conteudo), f"{pedaco!r} em {nome}"
+    redator = [e for e in eventos_no_banco(conn_etl, resultado.id_execucao)
+               if e["no"] == "redator"]  # fmt: skip
+    assert [e["erro"] for e in redator] == ["ErroRedacao (causa: OutputParserException)"] * 3
+    entrada, saida = conn_etl.execute(
+        "SELECT tokens_entrada, tokens_saida FROM auditoria.execucoes WHERE id_execucao = %s",
+        (resultado.id_execucao,),
+    ).fetchone()
+    # orquestrador 2 x (100, 20) + 3 tentativas mal formadas x (50, 10)
+    assert (entrada, saida) == (350, 70)

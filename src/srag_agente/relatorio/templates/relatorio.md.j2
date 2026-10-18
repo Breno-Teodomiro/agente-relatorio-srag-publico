@@ -94,7 +94,7 @@ Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · ge
 {{ n.id }}. [{{ n.titulo|md }}]({{ n.url|url_segura|md_url }}) — {{ n.fonte|md }}{% if n.data %}, {{ n.data|data_br }}{% endif %} ({{ "período dos dados" if n.janela == "periodo_dos_dados" else "cenário atual" }})
 {% else %}
 {% if d.noticias_encontradas %}
-Nenhuma das {{ d.noticias_encontradas }} notícias encontradas nas buscas foi citada no texto (estão na trilha de auditoria).
+Nenhuma das {{ d.noticias_encontradas }} notícias encontradas nas buscas foi citada no texto (as buscas ficam na trilha de auditoria, com resultados longos truncados).
 {% else %}
 Nenhuma notícia foi encontrada nas buscas desta execução.
 {% endif %}
@@ -106,7 +106,7 @@ Nenhuma notícia foi encontrada nas buscas desta execução.
 
 Modelo {{ d.provedor }} / {{ d.modelo }} · {{ d.tokens_entrada|inteiro }} de entrada e {{ d.tokens_saida|inteiro }} de saída · custo estimado US$ {{ d.custo_usd|usd }} · código {{ d.versao_codigo }} · prompts {{ d.hash_prompts }}
 
-Os números das tabelas e dos gráficos vêm de SQL na camada gold. O texto foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais). A trilha completa está em `auditoria.jsonl` e na tabela `auditoria.eventos`.
+Os números das tabelas e dos gráficos vêm de SQL na camada gold. O texto foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais). A trilha de auditoria está em `auditoria.jsonl` e na tabela `auditoria.eventos`, com resultados longos truncados em 2.000 caracteres; as notícias citadas no texto (link, data e janela) ficam registradas no evento `guardrail_saida`.
 
 | # | Etapa | Tipo | Ferramenta | Motivo / resultado | ms |
 |--:|---|---|---|---|--:|

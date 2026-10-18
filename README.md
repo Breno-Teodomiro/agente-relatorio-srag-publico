@@ -110,7 +110,7 @@ motivo da recusa registrado. O mesmo pela CLI: `uv run srag relatorio --uf SP --
 | `relatorio.html` | autocontido (gráficos em SVG embutido, nada carregado de fora), tema claro e escuro |
 | `relatorio.md` | o mesmo conteúdo em Markdown |
 | `graficos/diaria_30d.png`, `graficos/mensal_12m.png` | os gráficos usados pelo Markdown |
-| `auditoria.jsonl` | a trilha completa da execução, um evento por linha |
+| `auditoria.jsonl` | a trilha da execução, um evento por linha; resultados longos ficam truncados em 2.000 caracteres, e as notícias citadas no texto (link, data e janela) ficam registradas no evento `guardrail_saida` |
 
 Situações possíveis: `ok`, `parcial` (faltou evidência ou estourou um teto; sai com aviso),
 `revisao_humana` (o texto não passou no guardrail de saída; ver [seção 4](#4-guardrails)) e `erro`.
@@ -134,7 +134,15 @@ as mesmas guardrails e a mesma auditoria. A aba Relatório gasta crédito de LLM
 Segurança da tela: escuta só em `127.0.0.1` (não abre para a rede); o texto de LLM ou de notícia
 nunca entra como HTML da página (o relatório, já escapado, aparece num iframe isolado, e o
 dicionário como texto puro); chaves não aparecem e os erros chegam sem traceback e com dado
-pessoal mascarado.
+pessoal mascarado. O servidor limita o gasto: uma geração por vez (trava global; quem clica
+durante outra recebe aviso), no máximo 5 relatórios por sessão (`MAX_RELATORIOS_SESSAO`) e o
+último relatório fica na sessão, então consultar o dicionário não o apaga. `.streamlit/config.toml`
+fixa `127.0.0.1`, sem detalhe de erro, e a tela se recusa a rodar em outro endereço. As consultas ao
+dicionário não usam LLM e não ficam na auditoria (só os relatórios ficam).
+
+Risco aceito (dono: Breno): *DNS rebinding* contra a porta local, em que uma página maliciosa
+aberta no navegador tenta falar com a tela. O impacto é só custo de LLM, mitigado pela trava, pelo
+teto por sessão e por manter a tela desligada quando não está em uso.
 
 ### Alternativa: tudo por Docker
 
@@ -222,7 +230,7 @@ graph TD;
 | `ferramentas` | código | executa a ferramenta, registra na auditoria |
 | `verificar_cobertura` | código, sem LLM | exige as 4 métricas, as 2 séries e uma busca de notícias em cada janela; faltando algo, devolve ao orquestrador (até 2 voltas) |
 | `redator` | LLM, saída estruturada (Pydantic) | escreve os comentários a partir das evidências |
-| `guardrail_saida` | código | confere números, citações, links, janelas de notícia, dado pessoal e conteúdo clínico; reprovado, volta uma vez ao redator |
+| `guardrail_saida` | código | confere números, citações, links, janelas de notícia, dado pessoal e conteúdo clínico; reprovado, volta ao redator com instruções de correção (até 3 tentativas no total) |
 
 Depois do grafo, o código monta o relatório (HTML, Markdown, gráficos) e o anexo de auditoria
 ([`relatorio/montar.py`](src/srag_agente/relatorio/montar.py)). O ponto único de entrada é
@@ -394,7 +402,7 @@ Cada linha é um teste automatizado de ponta a ponta, com LLM e notícias falsos
 | Redator cita notícia que não existe ou da janela errada | `citacao_inexistente` / `noticia_fora_da_janela` |
 | Redator recomenda medicamento e dose | `conteudo_clinico` |
 | Redator escreve um CPF | mascarado como `[dado removido]`; não vaza |
-| Redator erra duas vezes | situação `revisao_humana`, faixa visível, texto retido |
+| Redator erra nas 3 tentativas | situação `revisao_humana`, faixa visível, texto retido |
 | Orquestrador estoura o teto de ferramentas | relatório parcial com aviso |
 | Provedor principal fora do ar | a reserva responde e o modelo dela aparece em cada evento, no JSONL e no anexo |
 

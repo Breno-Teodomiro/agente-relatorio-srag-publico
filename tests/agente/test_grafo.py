@@ -22,7 +22,8 @@ from srag_agente.auditoria.registro import Auditoria
 from srag_agente.ferramentas.registro import Ferramenta
 from srag_agente.guardrails.entrada import ClassificacaoEscopo
 from srag_agente.guardrails.limites import Limites
-from srag_agente.modelos import ComentarioMetrica
+from srag_agente.modelos import ComentarioMetrica, numerar_noticias
+from srag_agente.relatorio.montar import escrever_relatorio, montar_dados
 from tests.fakes import (
     CHAMADAS_COMPLETAS,
     HOJE,
@@ -30,6 +31,7 @@ from tests.fakes import (
     BuscadorFalso,
     BuscadorSemData,
     estruturado_com_reserva,
+    estruturado_mal_formado,
     evidencias_completas,
     ferramentas_falsas,
     orquestrador_com_reserva,
@@ -645,7 +647,63 @@ def test_erro_do_redator_nao_vaza_saida_crua_nas_violacoes_nem_cpf_na_auditoria(
     assert violacao.startswith("saida_invalida") and "ErroRedacao" in violacao
     assert "xxx" not in violacao and "123.456" not in violacao
     trilha = json.dumps(deps.auditoria.eventos)
-    assert "123.456" not in trilha and "x" * 50 in trilha  # o detalhe fica na auditoria
+    # revisão final (I2): a mensagem do erro pode ser texto cru do LLM; só o tipo vai à trilha
+    assert "123.456" not in trilha and "xxx" not in trilha
+    (evento,) = [e for e in deps.auditoria.eventos if e["no"] == "redator" and e["erro"]]
+    assert evento["erro"] == "ErroRedacao"
+
+
+# ---- revisão final: texto cru do LLM (I2) e tokens da tentativa mal formada (M3) --------------
+
+
+def test_saida_mal_formada_nao_vaza_texto_cru_na_trilha_nem_no_relatorio(tmp_path):
+    """function_calling com JSON truncado: os `arguments` crus vêm na mensagem do erro."""
+    deps = _deps(
+        _orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+        redator=criar_redator(estruturado_mal_formado()),
+    )
+    estado = _rodar(deps)
+    assert (estado["status"], estado["tentativas_redacao"]) == ("revisao_humana", 3)
+    redator = [e for e in deps.auditoria.eventos if e["no"] == "redator"]
+    assert [e["erro"] for e in redator] == ["ErroRedacao (causa: OutputParserException)"] * 3
+    dados = montar_dados(
+        evidencias=estado["evidencias"], id_execucao=deps.auditoria.id_execucao,
+        status=estado["status"], uf="BR", data_execucao=HOJE, texto=estado["texto"],
+        avisos=estado["avisos"], violacoes=estado["violacoes"], auditoria=deps.auditoria,
+        provedor="falso", modelo="falso", tokens_entrada=estado["tokens_entrada"],
+        tokens_saida=estado["tokens_saida"], custo_usd=0.0,
+    )  # fmt: skip
+    arquivos = escrever_relatorio(dados, tmp_path)
+    deps.auditoria.gravar_jsonl(arquivos.auditoria)
+    for caminho in (arquivos.auditoria, arquivos.markdown, arquivos.html):
+        conteudo = caminho.read_text(encoding="utf-8")
+        for pedaco in ("TEXTO CRU", "123.456", "arguments", "not valid JSON"):
+            assert pedaco not in conteudo, f"{pedaco!r} em {caminho.name}"
+    assert "OutputParserException" in arquivos.markdown.read_text(encoding="utf-8")
+
+
+def test_erro_de_redacao_com_causa_estranha_grava_so_o_tipo():
+    """A causa só entra se for nome de tipo: texto qualquer posto nela não chega à trilha."""
+
+    def redator(contexto):
+        raise ErroRedacao("x", causa="arguments: TEXTO CRU")
+
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator)
+    _rodar(deps)
+    erros = [e["erro"] for e in deps.auditoria.eventos if e["no"] == "redator"]
+    assert erros and all(e == "ErroRedacao" for e in erros)
+
+
+def test_tokens_da_tentativa_mal_formada_entram_no_total_e_na_trilha():
+    deps = _deps(
+        _orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+        redator=criar_redator(estruturado_mal_formado()),
+    )
+    estado = _rodar(deps)
+    # orquestrador 2 x (100, 20) + 3 tentativas mal formadas x (50, 10)
+    assert (estado["tokens_entrada"], estado["tokens_saida"]) == (350, 70)
+    redator = [e for e in deps.auditoria.eventos if e["no"] == "redator"]
+    assert [(e["tokens_entrada"], e["tokens_saida"]) for e in redator] == [(50, 10)] * 3
 
 
 # ---- revisão final da branch: avisos do guardrail de saída (I1) -------------------------------
@@ -859,3 +917,74 @@ def test_instrucao_de_uma_tentativa_nao_sobra_depois_de_saida_fora_do_formato():
     assert any("32,2%" in i for i in recebidas[1][1])
     violacoes, instrucoes = recebidas[2]
     assert violacoes[0].startswith("saida_invalida") and instrucoes == []
+
+
+# ---- revisão final: a trilha guarda as notícias citadas pelo texto (I3) -----------------------
+
+
+class BuscadorVolumoso(BuscadorFalso):
+    """Cinco notícias por janela, com trecho longo: o resultado da busca passa de 2.000
+    caracteres e a trilha o guarda truncado, como na execução real do exemplo."""
+
+    def buscar(self, termo, janela, inicio, fim):
+        resultado = super().buscar(termo, janela, inicio, fim)
+        base = resultado.noticias[0]
+        resultado.noticias = [
+            base.model_copy(update={
+                "titulo": f"Boletim {i} sobre SRAG",
+                "url": f"https://www.gov.br/saude/{janela}/boletim-semanal-de-srag-{i}-" + "a" * 40,
+                "trecho": "Boletim de acompanhamento dos vírus respiratórios. " * 9,
+            })
+            for i in range(1, 6)
+        ]  # fmt: skip
+        return resultado
+
+
+def test_trilha_guarda_as_noticias_citadas_mesmo_com_a_busca_truncada():
+    """Sete das dez notícias citadas: todas ficam no evento guardrail_saida (id, URL exata,
+    data e janela), mesmo com o resultado das buscas truncado. Título não entra."""
+    texto = texto_valido(contexto_periodo_dados="Boletins do período [1][2][3][4].",
+                         cenario_atual="Boletins atuais [6] [7] e o [8].")  # fmt: skip
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), _redator(texto))
+    deps.ferramentas = ferramentas_falsas(buscador=BuscadorVolumoso())
+    estado = _rodar(deps)
+    assert estado["status"] == "ok"
+    buscas = [e for e in deps.auditoria.eventos if e["ferramenta"] == "buscar_noticias"]
+    assert buscas and all("resumo_truncado" in e["resultado"] for e in buscas)  # o defeito
+    noticias = {n.id: n for n in numerar_noticias(estado["evidencias"])}
+    (evento,) = [e for e in deps.auditoria.eventos if e["no"] == "guardrail_saida"]
+    citadas = evento["argumentos"]["noticias_citadas"]
+    assert [c["id"] for c in citadas] == [1, 2, 3, 4, 6, 7, 8]
+    for citada in citadas:
+        noticia = noticias[citada["id"]]
+        assert citada == {"id": noticia.id, "url": noticia.url, "data": noticia.data,
+                          "janela": noticia.janela}  # fmt: skip
+    assert evento["resultado"]["total_noticias_citadas"] == 7
+    assert "Boletim 1 sobre SRAG" not in json.dumps(evento)
+
+
+def test_texto_sem_citacao_registra_lista_vazia_e_retido_tambem_registra():
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+                 _redator(texto_neutro()))  # fmt: skip
+    _rodar(deps)
+    (evento,) = [e for e in deps.auditoria.eventos if e["no"] == "guardrail_saida"]
+    assert evento["argumentos"] == {"noticias_citadas": []}
+    assert evento["resultado"]["total_noticias_citadas"] == 0
+    # texto reprovado e retido: as notícias que ele citou ficam (são nossas, não do LLM)
+    errado = texto_valido(resumo_executivo="A mortalidade foi de 50,0%.")
+    retido = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), _redator(errado))
+    _rodar(retido)
+    ultimo = [e for e in retido.auditoria.eventos if e["no"] == "guardrail_saida"][-1]
+    assert "texto_retido" in ultimo["resultado"]
+    assert [c["id"] for c in ultimo["argumentos"]["noticias_citadas"]] == [1, 2]
+
+
+def test_saida_fora_do_formato_nao_registra_noticias_citadas():
+    def redator(contexto):
+        raise ErroRedacao("saída vazia")
+
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator)
+    _rodar(deps)
+    eventos = [e for e in deps.auditoria.eventos if e["no"] == "guardrail_saida"]
+    assert eventos and all(e["argumentos"] is None for e in eventos)
+    assert all(e["resultado"]["total_noticias_citadas"] == 0 for e in eventos)

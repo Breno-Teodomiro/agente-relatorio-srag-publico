@@ -90,7 +90,9 @@ def verificar_entrada(pergunta: str | None, classificador: Classificador) -> Res
     try:
         classificacao, tokens_brutos, modelo_bruto = classificador(texto)
     except Exception as erro:  # falha fechada; o texto da exceção pode repetir a pergunta
-        return _recusa(f"classificador_indisponivel: {type(erro).__name__}")
+        # resposta mal formada (ErroRedacao) já custou: os tokens que o provedor informou contam
+        gastos = _tokens_validos(getattr(erro, "tokens", None)) or (0, 0)
+        return _recusa(f"classificador_indisponivel: {type(erro).__name__}", gastos)
     tokens = _tokens_validos(tokens_brutos)
     # o nome do modelo só informa a auditoria: estranho ou ausente vira None, não recusa
     modelo = modelo_bruto if isinstance(modelo_bruto, str) and modelo_bruto else None

@@ -28,12 +28,19 @@ class ConfiguracaoInvalida(RuntimeError):  # noqa: N818 (nome do contrato da Tas
 class ErroRedacao(RuntimeError):  # noqa: N818 (nome do contrato da Task 12)
     """O redator devolveu algo fora do formato estruturado.
 
-    `modelo` diz quem respondeu (principal ou reserva), quando o provedor informa.
+    `modelo` diz quem respondeu (principal ou reserva), quando o provedor informa. `causa` é só o
+    NOME do tipo do erro de leitura: a mensagem dele, com method="function_calling", traz os
+    `arguments` crus que o modelo escreveu, e nada disso pode seguir para a trilha ou o relatório.
+    `tokens` é o uso que o provedor informou na resposta mal formada ((0, 0) se não informou):
+    a tentativa custou e entra no total e no teto.
     """
 
-    def __init__(self, *args: object, modelo: str | None = None) -> None:
+    def __init__(self, *args: object, modelo: str | None = None, causa: str | None = None,
+                 tokens: tuple[int, int] = (0, 0)) -> None:  # fmt: skip
         super().__init__(*args)
         self.modelo = modelo
+        self.causa = causa
+        self.tokens = tokens
 
 
 @dataclass(frozen=True)
@@ -155,9 +162,21 @@ def mensagem_do_redator(contexto: ContextoRedacao) -> str:
 
 
 def _extrair(saida: dict) -> tuple[object, tuple[int, int], str | None]:
+    """(objeto lido, tokens, modelo). Fora do formato, levanta ErroRedacao com mensagem FIXA.
+
+    O erro de leitura não é encadeado (`from`) nem copiado: a mensagem dele repete o texto cru do
+    modelo. Seguem só o nome do tipo e os tokens da resposta crua (o provedor os informa mesmo
+    quando a leitura falha; sem a resposta crua, ficam 0).
+    """
     modelo = modelo_da_resposta(saida.get("raw"))
     if saida.get("parsed") is None:
-        raise ErroRedacao(str(saida.get("parsing_error") or "saída vazia"), modelo=modelo)
+        erro = saida.get("parsing_error")
+        raise ErroRedacao(
+            "saída fora do formato estruturado" if erro else "saída vazia",
+            modelo=modelo,
+            causa=type(erro).__name__ if erro else None,
+            tokens=uso_tokens(saida.get("raw")),
+        )
     return saida["parsed"], uso_tokens(saida.get("raw")), modelo
 
 
