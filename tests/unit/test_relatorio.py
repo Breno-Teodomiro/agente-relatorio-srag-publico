@@ -187,15 +187,15 @@ def test_todo_texto_externo_e_escapado_e_nada_ativo_vem_de_fora(
     assert not re.search(r"url\(\s*['\"]?https?:", html)
 
 
-def _com_noticia(url, titulo="Boletim", fonte="Fiocruz"):
+def _com_noticia(url, titulo="Boletim", fonte="Fiocruz", confiavel=True, data=None):
     return NoticiaCitavel(
         id=1,
         titulo=titulo,
         fonte=fonte,
         url=url,
-        data=None,
+        data=data,
         janela="cenario_atual",
-        confiavel=True,
+        confiavel=confiavel,
         trecho="trecho",
         inicio_janela=None,
         fim_janela=None,
@@ -239,6 +239,37 @@ def test_link_que_nao_e_http_e_neutralizado_nos_dois_templates(
         assert esquema not in texto.lower().replace('href="#"', ""), saida.name
     assert 'href="#"' in arquivos.html.read_text(encoding="utf-8")
     assert "(<#>)" in arquivos.markdown.read_text(encoding="utf-8")
+
+
+def _referencias(arquivos):
+    html = arquivos.html.read_text(encoding="utf-8")
+    md = arquivos.markdown.read_text(encoding="utf-8")
+    refs_html = html.split("<h2>Referências</h2>")[1].split("<h2>Como")[0]
+    return refs_html, md.split("## Referências")[1].split("## Como")[0]
+
+
+def test_referencia_fora_da_lista_confiavel_e_sem_data_leva_marca_nos_dois_formatos(
+    tmp_path, evidencias, graficos_falsos
+):
+    noticia = _com_noticia("https://exemplo.com/a", titulo="<b>x</b>", confiavel=False)
+    arquivos = _montar_com_dados(tmp_path, evidencias, noticias=[noticia])
+    html, md = _referencias(arquivos)
+    for saida in (html, md):
+        assert "fonte não verificada" in saida
+        assert "sem data" in saida
+        assert "fonte reconhecida" not in saida
+    assert "&lt;b&gt;x&lt;/b&gt;" in html and "<b>x</b>" not in html
+    assert "<b>x</b>" not in md
+    for saida in (arquivos.html, arquivos.markdown):
+        assert "não verificada" in saida.read_text(encoding="utf-8").split("Como este relatório")[1]
+
+
+def test_referencia_confiavel_e_datada_nao_recebe_marca(tmp_path, evidencias, graficos_falsos):
+    noticia = _com_noticia("https://fiocruz.br/a", confiavel=True, data="2026-10-01")
+    html, md = _referencias(_montar_com_dados(tmp_path, evidencias, noticias=[noticia]))
+    for saida in (html, md):
+        assert "não verificada" not in saida
+        assert "sem data" not in saida
 
 
 def test_url_http_com_parenteses_nao_fecha_o_link_do_markdown(

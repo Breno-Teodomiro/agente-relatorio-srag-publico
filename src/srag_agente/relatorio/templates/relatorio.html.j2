@@ -38,6 +38,7 @@ th,td{border-bottom:1px solid var(--borda);padding:6px 8px;text-align:left;verti
 td.num{text-align:right;font-variant-numeric:tabular-nums}
 details{padding:10px 14px}
 a{color:var(--acento)}
+.marca{border:1px dashed var(--suave);border-radius:4px;padding:0 5px;font-style:italic;white-space:nowrap}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
 clip:rect(0,0,0,0);white-space:nowrap;border:0}
 :focus-visible{outline:2px solid var(--acento);outline-offset:2px}
@@ -173,10 +174,11 @@ conferência automática:
 <ol>
 {% for n in d.noticias %}
   <li id="ref-{{ n.id }}" value="{{ n.id }}">{{ n.titulo }} — {{ n.fonte }}{% if n.data %},
-    {{ n.data|data_br }}{% endif %} ·
+    {{ n.data|data_br }}{% else %} <span class="marca">sem data</span>{% endif %} ·
     <a href="{{ n.url|url_segura }}" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
     <span class="pequeno">· {{ "período dos dados" if n.janela == "periodo_dos_dados" else
-      "cenário atual" }}{% if n.confiavel %} · fonte reconhecida{% endif %}</span></li>
+      "cenário atual" }}{% if n.confiavel %} · fonte reconhecida{% else %}
+      · <span class="marca">fonte não verificada</span>{% endif %}</span></li>
 {% endfor %}
 </ol>
 {% elif d.noticias_encontradas %}
@@ -198,7 +200,9 @@ conferência automática:
     A trilha de auditoria está em <code>auditoria.jsonl</code> e na tabela
     <code>auditoria.eventos</code>, com resultados longos truncados em 2.000 caracteres; as notícias
     citadas no texto (link, data e janela) ficam registradas no evento
-    <code>guardrail_saida</code>.</p>
+    <code>guardrail_saida</code>. Nas referências, "fonte não verificada" indica que o domínio não
+    está na lista de fontes reconhecidas do projeto e "sem data" que a notícia não informou data;
+    em ambos os casos o conteúdo não foi checado pelo sistema.</p>
   <p class="pequeno dica">Arraste a tabela para o lado para ver todas as colunas.</p>
   <div class="tabela larga" tabindex="0" role="region" aria-label="Tabela da trilha de auditoria"><table>
     <caption class="sr-only">Trilha de auditoria da execução: etapas, ferramentas e resultados</caption>

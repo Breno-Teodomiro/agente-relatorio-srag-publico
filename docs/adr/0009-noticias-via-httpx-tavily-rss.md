@@ -26,6 +26,11 @@ leitura, erro sem a chave da API, decisão de reserva **depois** dos filtros e t
   de uma lista de domínios confiáveis vêm primeiro. Ao LLM, cada notícia vai dentro de
   `<noticia_externa>`, com os campos como string JSON e o aviso de que é dado não confiável.
 
+- **Marca no relatório:** a lista de domínios confiáveis só ordena, não filtra. Por isso a
+  seção Referências (Markdown e HTML) marca "fonte não verificada" quando `confiavel` é falso e
+  "sem data" quando a notícia não traz data, e a seção de governança explica as duas marcas. A
+  marca informa o leitor; não bloqueia a citação.
+
 ## Alternativas consideradas
 
 - **`langchain-tavily`:** descartada; uma dependência a mais, sem controle fino de bytes,
