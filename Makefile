@@ -74,8 +74,8 @@ docker-relatorio:
 
 tudo: subir carga indexar relatorio
 
-# Renderiza com mermaid-cli (npx + Chromium). Sem Chromium do sistema, o puppeteer baixa o dele;
+# Renderiza com mermaid-cli (npx + Chromium); -f ajusta a página ao desenho (proporção ~A4 paisagem). Sem Chromium do sistema, o puppeteer baixa o dele;
 # para usar um já instalado: PUPPETEER_EXECUTABLE_PATH=/caminho/do/chrome make diagrama
 diagrama:
-	npx -y @mermaid-js/mermaid-cli@11.4.2 -p docs/puppeteer.config.json -w 1800 \
+	npx -y @mermaid-js/mermaid-cli@11.4.2 -p docs/puppeteer.config.json -w 1600 -H 1131 \
 	  -i docs/arquitetura.mmd -o docs/arquitetura.pdf -f -b white
