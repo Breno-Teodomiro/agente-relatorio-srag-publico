@@ -23,6 +23,11 @@ from srag_agente.relatorio.markdown import md_texto, md_url
 AVISO_FIXO = (
     "Prova de conceito. Não substitui avaliação clínica nem boletim epidemiológico oficial."
 )
+# Em revisão humana o agente retém o texto reprovado (não chega aqui): no lugar dos comentários.
+AVISO_RETENCAO = (
+    "Os comentários desta edição foram retidos pelo guardrail de saída e precisam de revisão "
+    "humana; as violações estão listadas no aviso do topo e na trilha de auditoria."
+)
 ROTULOS_STATUS = {
     "ok": "concluído",
     "parcial": "parcial",
@@ -215,6 +220,7 @@ def escrever_relatorio(dados: DadosRelatorio, pasta_base: Path) -> ArquivosRelat
         "d": dados,
         "graficos": graficos,
         "aviso": AVISO_FIXO,
+        "aviso_retencao": AVISO_RETENCAO,
         "rotulo_status": ROTULOS_STATUS.get(dados.status, dados.status),
         "comentarios": (
             {c.metrica: c.comentario for c in dados.texto.comentarios_metricas}

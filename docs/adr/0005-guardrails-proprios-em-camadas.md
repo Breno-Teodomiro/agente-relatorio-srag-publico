@@ -23,7 +23,10 @@ classificador de escopo da pergunta). Três momentos, que cobrem as cinco camada
    número contra as evidências com tolerância só de arredondamento; sentido de variação; links
    que não estão nos resultados; notícia de uma janela usada na outra; contagem de 1 a 4 (que a
    supressão nunca exibe, ADR 0011); recomendação clínica; HTML e instrução a modelo. Violação
-   → 1 nova redação → faixa "revisão humana necessária" (status `revisao_humana`).
+   → 1 nova redação → faixa "revisão humana necessária" (status `revisao_humana`); o texto
+   reprovado é retido (`agente/nos.py`): o relatório sai com o que vem do SQL, a faixa com as
+   violações e um aviso de retenção no lugar dos comentários; a trilha guarda as violações e o
+   tamanho e o SHA-256 do texto retido, nunca o texto.
 3. **Execução** — `guardrails/limites.py`: 12 chamadas de ferramenta, 60.000 tokens, 300 s,
    2 voltas de cobertura, 2 tentativas de redação. Reserva OpenRouter → OpenAI
    (`agente/llm.py`, `with_fallbacks`) e Tavily → RSS (ADR 0009). Teto atingido → para,
@@ -48,7 +51,10 @@ hash SHA-256** do único script da página (alternador de tema): texto que escap
 
 - Cada regra tem teste de ataque em `tests/guardrails/` (e o README mostra a tabela ataque →
   resultado). Falso positivo é aceito onde o custo é pequeno (notícia legítima descartada).
-- O relatório nunca sai em silêncio com texto reprovado: sai marcado para revisão humana.
+- O relatório nunca publica texto reprovado: sai marcado para revisão humana, com o texto
+  retido (a violação listada na faixa repete só um trecho curto e mascarado do que foi barrado).
+- Markdown: endereço em texto livre tem o autolink quebrado (`https\://`, `www\.`), para o
+  visualizador GFM não o tornar clicável.
 
 ## Limites conhecidos (declarados nas docstrings e testados como `xfail` quando cabe)
 

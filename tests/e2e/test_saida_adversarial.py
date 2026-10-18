@@ -1,17 +1,20 @@
 """E2E 3 — saída adversarial (spec §6, camada 4): o LLM redator mente e o guardrail reage.
 
 O redator falso devolve o mesmo texto ruim nas duas tentativas. Esperado: a 2ª tentativa recebe
-as violações, a execução termina como `revisao_humana` com a faixa visível, e os cartões, as
-tabelas e os gráficos continuam sendo os números do SQL: o número inventado só aparece dentro da
-faixa, como violação listada, nunca como dado.
+as violações, a execução termina como `revisao_humana` com a faixa visível, o texto reprovado é
+retido (nem relatório, nem trilha) e os cartões, as tabelas e os gráficos continuam sendo os
+números do SQL: o número inventado só aparece dentro da faixa, como violação listada, nunca como
+dado.
 """
 
+import json
 import re
 from datetime import date
 from html import unescape
 
 import pytest
 
+from srag_agente.relatorio.montar import AVISO_RETENCAO
 from tests.e2e.apoio import (
     Simulacao,
     arquivos_gerados,
@@ -87,26 +90,46 @@ def test_texto_reprovado_duas_vezes_vira_revisao_humana_com_faixa(
     assert any(v.startswith(violacao) for v in saidas[-1]["resultado"]["violacoes"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="DEFEITO a decidir: em revisao_humana o texto reprovado (link inventado, recomendação "
-    "clínica, número falso) é publicado no corpo do relatório, sob a faixa. O spec §6 só manda "
-    "pôr a faixa; reter o texto reprovado seria mais seguro. nos.py:guardrail_saida devolve o "
-    "texto mesmo com violações e montar.py:montar_dados o repassa ao template.",
-)
+def _texto_legivel(nome: str, conteudo: bytes) -> str:
+    """O arquivo como alguém o leria: HTML sem entidades, JSONL sem escape de acento."""
+    if nome.endswith(".png"):
+        return conteudo.decode("latin-1")
+    texto = conteudo.decode("utf-8")
+    if nome.endswith(".html"):
+        return unescape(texto)
+    if nome.endswith(".jsonl"):
+        return "\n".join(json.dumps(json.loads(linha), ensure_ascii=False)
+                         for linha in texto.splitlines())  # fmt: skip
+    return texto
+
+
 @pytest.mark.parametrize("caso", TEXTOS_RUINS)
 def test_texto_reprovado_nao_e_publicado_no_corpo_do_relatorio(
-    caso, cfg_teste, banco_carregado, pasta_saida
+    caso, cfg_teste, banco_carregado, conn_etl, pasta_saida
 ):
-    trocas, _ = TEXTOS_RUINS[caso]
+    """Revisão humana retém o texto reprovado: nem relatório, nem trilha; o SQL continua."""
+    trocas, violacao = TEXTOS_RUINS[caso]
     simulacao = Simulacao(textos=[lambda ctx: texto_dos_dados(ctx, **trocas)])
-    simulacao.rodar(cfg_teste, pasta_saida)
+    resultado = simulacao.rodar(cfg_teste, pasta_saida)
+    assert resultado.status == "revisao_humana"
     frase = next(iter(trocas.values()))
-    sem_faixa_html = re.sub(r'<div class="faixa perigo">.*?</div>', "", simulacao.html, flags=re.S)
-    sem_faixa_md = "\n".join(linha for linha in simulacao.markdown.splitlines()
-                             if not linha.startswith(">"))  # fmt: skip
-    assert frase not in unescape(sem_faixa_html)
-    assert frase not in sem_faixa_md
+    for nome, conteudo in arquivos_gerados(resultado.arquivos.pasta).items():
+        assert frase not in _texto_legivel(nome, conteudo), f"texto reprovado em {nome}"
+    trilha = trilha_no_banco(conn_etl, resultado.id_execucao)
+    assert frase not in trilha
+    # a trilha guarda o que foi barrado (violação) e a identidade do texto retido, não ele
+    saidas = [e for e in eventos_no_banco(conn_etl, resultado.id_execucao)
+              if e["no"] == "guardrail_saida"]  # fmt: skip
+    retido = saidas[-1]["resultado"]["texto_retido"]
+    assert retido["caracteres"] > 0 and re.fullmatch(r"[0-9a-f]{64}", retido["sha256"])
+    assert any(v.startswith(violacao) for v in saidas[-1]["resultado"]["violacoes"])
+    # o relatório sai com o que é do SQL, a faixa e a mensagem de retenção
+    _conferir_cartoes_do_sql(simulacao)
+    assert "graficos/diaria_30d.png" in simulacao.markdown and "<svg" in simulacao.html
+    assert '<div class="faixa perigo"><strong>Revisão humana necessária.</strong>' in simulacao.html
+    assert "> **Revisão humana necessária.**" in simulacao.markdown
+    assert AVISO_RETENCAO in unescape(simulacao.html) and AVISO_RETENCAO in simulacao.markdown
+    assert "<h2>Resumo</h2>" not in simulacao.html and "## Resumo" not in simulacao.markdown
 
 
 def test_numero_inventado_nao_vira_dado_do_relatorio(cfg_teste, banco_carregado, pasta_saida):
@@ -128,6 +151,8 @@ def test_link_inventado_nao_vira_link_clicavel(cfg_teste, banco_carregado, pasta
     assert 'href="https://noticias-falsas' not in simulacao.html
     assert "](https://noticias-falsas" not in simulacao.markdown
     assert "<https://noticias-falsas" not in simulacao.markdown
+    # nem em texto puro, que visualizadores GFM transformam em link (autolink)
+    assert "https://noticias-falsas" not in simulacao.markdown
 
 
 def test_noticia_datada_fora_da_busca_e_reprovada(cfg_teste, banco_carregado, pasta_saida):

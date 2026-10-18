@@ -1,5 +1,7 @@
 """Nós do grafo do agente. Cada nó registra na auditoria o que decidiu e por quê."""
 
+import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
@@ -26,7 +28,7 @@ from srag_agente.guardrails.limites import Limites, motivo_de_parada
 from srag_agente.guardrails.padroes import mascarar_pii
 from srag_agente.guardrails.saida import verificar_saida
 from srag_agente.metricas.repositorio import DadosIndisponiveis
-from srag_agente.modelos import numerar_noticias
+from srag_agente.modelos import TextoRelatorio, numerar_noticias
 
 AVISO_COBERTURA = "Evidências incompletas"
 ERRO_JSON_INVALIDO = (
@@ -37,6 +39,15 @@ ERRO_DESCONHECIDA = "Ferramenta desconhecida: use só as ferramentas disponívei
 
 def _ms(inicio: float) -> int:
     return int((perf_counter() - inicio) * 1000)
+
+
+def _identificar(texto: TextoRelatorio) -> dict:
+    """Tamanho e SHA-256 do texto (já mascarado), sem o conteúdo: identifica o texto retido."""
+    serializado = json.dumps(texto.model_dump(), ensure_ascii=False, sort_keys=True)
+    return {
+        "caracteres": sum(len(secao) for secao in texto.secoes().values()),
+        "sha256": hashlib.sha256(serializado.encode("utf-8")).hexdigest(),
+    }
 
 
 @dataclass
@@ -313,10 +324,9 @@ class NosAgente:
         a saída crua pode repetir o que o modelo escreveu e a violação chega ao relatório. O
         detalhe fica na auditoria, mascarado.
 
-        Limitação conhecida: se a ÚLTIMA tentativa der ErroRedacao, o texto reprovado da
-        tentativa anterior é descartado (texto None → revisão humana sem texto). Mantê-lo
-        exigiria reconferi-lo no guardrail de saída, e o mascaramento já aplicado pode mudar as
-        violações dele; ficou de fora para não complicar o fluxo.
+        Se a ÚLTIMA tentativa der ErroRedacao, a execução vai a revisão humana sem texto: o
+        relatório sai igual ao de um texto reprovado (que fica retido), só sem o hash dele na
+        trilha.
         """
         tentativa = estado["tentativas_redacao"] + 1
         contexto = montar_contexto(
@@ -388,18 +398,23 @@ class NosAgente:
             status = "em_andamento"
         else:
             status = "revisao_humana"
+        retido = status == "revisao_humana" and texto is not None
         self.d.auditoria.registrar(
             "guardrail_saida",
             "guardrail",
             resultado={
                 "aprovado": not violacoes,
+                # antes das listas: um resultado longo é truncado pelo fim (`resumir`)
+                **({"texto_retido": _identificar(texto)} if retido else {}),
                 "violacoes": violacoes,
                 "dados_pessoais_mascarados": pii,
                 "avisos": avisos,
                 "status": status,
             },
         )
-        atualizacao = {"texto": texto, "violacoes": violacoes, "status": status}
+        # Em revisão humana o texto reprovado fica retido: não segue ao relatório (que publica só
+        # o que vem do SQL, a faixa e as violações) nem à trilha (que guarda tamanho e hash).
+        atualizacao = {"texto": None if retido else texto, "violacoes": violacoes, "status": status}
         if status != "em_andamento":
             atualizacao["avisos"] = avisos
         return atualizacao

@@ -64,6 +64,9 @@ conferência automática:
 {% if d.texto %}
 <h2>Resumo</h2>
 <p>{{ d.texto.resumo_executivo|citacoes }}</p>
+{% elif d.status == "revisao_humana" %}
+<h2>Comentários</h2>
+<p>{{ aviso_retencao }}</p>
 {% endif %}
 
 <h2>Métricas</h2>

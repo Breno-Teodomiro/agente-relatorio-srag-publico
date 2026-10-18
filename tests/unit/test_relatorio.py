@@ -11,7 +11,13 @@ from srag_agente.auditoria.registro import Auditoria
 from srag_agente.modelos import NoticiaCitavel
 from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br, pct, variacao
 from srag_agente.relatorio.graficos import _altura, grafico_diario, grafico_mensal
-from srag_agente.relatorio.montar import AVISO_FIXO, escrever_relatorio, montar_dados
+from srag_agente.relatorio.markdown import md_texto
+from srag_agente.relatorio.montar import (
+    AVISO_FIXO,
+    AVISO_RETENCAO,
+    escrever_relatorio,
+    montar_dados,
+)
 from tests.fakes import HOJE, evidencias_completas, texto_valido
 
 
@@ -407,6 +413,45 @@ def test_faixa_de_revisao_humana(tmp_path, evidencias, graficos_falsos):
     )
     html = arquivos.html.read_text(encoding="utf-8")
     assert "Revisão humana necessária" in html and "50,0%" in html
+
+
+def test_revisao_humana_mostra_retencao_no_lugar_dos_comentarios(
+    tmp_path, evidencias, graficos_falsos
+):
+    """O agente retém o texto reprovado (texto None): o relatório diz isso, com SQL e faixa."""
+    violacao = "link_nao_verificado: https://falso.example.com/x em cenario_atual"
+    arquivos = _montar(
+        tmp_path, evidencias, texto=None, status="revisao_humana", violacoes=[violacao]
+    )
+    html = arquivos.html.read_text(encoding="utf-8")
+    markdown = arquivos.markdown.read_text(encoding="utf-8")
+    assert '<div class="faixa perigo"><strong>Revisão humana necessária.</strong>' in html
+    assert "> **Revisão humana necessária.**" in markdown
+    assert f"<p>{AVISO_RETENCAO}</p>" in html
+    assert f"\n{AVISO_RETENCAO}\n" in markdown
+    for saida in (html, markdown):
+        assert "10,0%" in saida  # mortalidade do SQL
+        assert "Resumo" not in saida and "Limitações" not in saida
+    assert "falso.example.com/x" in markdown and "https://falso" not in markdown  # sem autolink
+
+
+@pytest.mark.parametrize("status", ["ok", "parcial"])
+def test_retencao_so_aparece_em_revisao_humana(tmp_path, evidencias, graficos_falsos, status):
+    arquivos = _montar(tmp_path, evidencias, status=status)
+    for saida in (arquivos.html, arquivos.markdown):
+        conteudo = saida.read_text(encoding="utf-8")
+        assert AVISO_RETENCAO not in conteudo and "Resumo" in conteudo
+    # sem texto e fora da revisão humana (o grafo não produz isso): nada é dito como retido
+    sem_texto = _montar(tmp_path, evidencias, status=status, texto=None)
+    for saida in (sem_texto.html, sem_texto.markdown):
+        assert AVISO_RETENCAO not in saida.read_text(encoding="utf-8")
+
+
+def test_markdown_nao_transforma_endereco_em_autolink():
+    """GFM transforma http(s):// e www. em link clicável; com o escape, ficam texto."""
+    saida = md_texto("Veja https://a.example/x, HTTP://b.example e www.c.example/y.")
+    assert not re.search(r"(?<!\\)://", saida) and "www." not in saida
+    assert saida == "Veja https\\://a.example/x, HTTP\\://b.example e www\\.c.example/y."
 
 
 def test_relatorio_sem_texto_ainda_sai_com_numeros(tmp_path, evidencias, graficos_falsos):

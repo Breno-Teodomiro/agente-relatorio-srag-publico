@@ -18,6 +18,11 @@ Dados até **{{ d.data_referencia|data_br }}** (Open DATASUS, SIVEP-Gripe) · ge
 
 {{ d.texto.resumo_executivo|md }}
 
+{% elif d.status == "revisao_humana" %}
+## Comentários
+
+{{ aviso_retencao|md }}
+
 {% endif %}
 ## Métricas
 

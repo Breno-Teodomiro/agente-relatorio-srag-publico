@@ -254,6 +254,77 @@ def test_texto_reprovado_duas_vezes_vai_para_revisao_humana():
     assert any("50,0%" in v for v in estado["violacoes"])
 
 
+def _resultados_saida(deps):
+    return [e["resultado"] for e in deps.auditoria.eventos if e["no"] == "guardrail_saida"]
+
+
+def test_texto_reprovado_na_ultima_tentativa_e_retido_e_a_trilha_guarda_so_tamanho_e_hash():
+    """Revisão humana: o texto reprovado não sai do grafo; a trilha guarda violações e hash."""
+    clinico = "Recomenda-se tomar oseltamivir 75 mg a cada 12 horas."
+    link = "Detalhes em https://noticias-falsas.example.com/srag [1]."
+    cpf = "123.456.789-09"
+    errado = texto_valido(
+        resumo_executivo="A mortalidade foi de 50,0%.",
+        contexto_periodo_dados=link,
+        limitacoes=f"{clinico} Contato: CPF {cpf}.",
+    )
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), _redator(errado))
+    estado = _rodar(deps)
+    assert (estado["status"], estado["tentativas_redacao"]) == ("revisao_humana", 2)
+    assert estado["texto"] is None
+    assert any(v.startswith("conteudo_clinico") for v in estado["violacoes"])
+    assert any(v.startswith("link_nao_verificado") for v in estado["violacoes"])
+    primeira, ultima = _resultados_saida(deps)
+    assert "texto_retido" not in primeira  # 1ª reprovação: o texto ainda vai ser refeito
+    retido = ultima["texto_retido"]
+    # tamanho e hash do texto MASCARADO: o CPF não entra nem pelo hash
+    mascarado = errado.secoes() | {"limitacoes": f"{clinico} Contato: CPF [dado removido]."}
+    assert retido["caracteres"] == sum(len(v) for v in mascarado.values())
+    assert re.fullmatch(r"[0-9a-f]{64}", retido["sha256"])
+    trilha = json.dumps(deps.auditoria.eventos, ensure_ascii=False)
+    for literal in (clinico, link, "A mortalidade foi de 50,0%.", cpf):
+        assert literal not in trilha
+
+
+def test_hash_do_texto_retido_identifica_o_texto():
+    """Mesmo texto, mesmo hash; texto diferente, hash diferente (serve para conferir depois)."""
+
+    def retido(texto):
+        deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), _redator(texto))
+        _rodar(deps)
+        return _resultados_saida(deps)[-1]["texto_retido"]
+
+    um = texto_valido(resumo_executivo="A mortalidade foi de 50,0%.")
+    outro = texto_valido(resumo_executivo="A mortalidade foi de 60,0%.")
+    assert retido(um) == retido(um.model_copy())
+    assert retido(um)["sha256"] != retido(outro)["sha256"]
+
+
+def test_revisao_humana_por_saida_fora_do_formato_nao_tem_texto_nem_hash():
+    def redator(contexto):
+        raise ErroRedacao("saída vazia")
+
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator)
+    estado = _rodar(deps)
+    assert (estado["status"], estado["texto"]) == ("revisao_humana", None)
+    assert "texto_retido" not in _resultados_saida(deps)[-1]
+
+
+def test_texto_aprovado_ok_ou_parcial_segue_publicado_sem_texto_retido():
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"))
+    estado = _rodar(deps)
+    assert estado["status"] == "ok" and estado["texto"] == texto_valido()
+    assert "texto_retido" not in _resultados_saida(deps)[-1]
+    parcial = _deps(
+        _orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+        redator=_redator(texto_neutro()),
+        limites=Limites(max_chamadas_ferramenta=3),
+    )
+    estado = _rodar(parcial)
+    assert estado["status"] == "parcial" and estado["texto"] == texto_neutro()
+    assert "texto_retido" not in _resultados_saida(parcial)[-1]
+
+
 def test_redator_corrige_na_segunda_tentativa():
     errado = texto_valido(resumo_executivo="A mortalidade foi de 50,0%.")
     textos, recebidas = [errado, texto_valido()], []

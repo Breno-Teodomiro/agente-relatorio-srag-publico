@@ -59,7 +59,7 @@ entrada (uf?, pergunta_extra?)
  → [3] ferramentas (auditadas)                  │
  → [4] verificar_cobertura (código) ─ faltou? ──┘  (máx. 2 voltas)
  → [5] redator (LLM, saída estruturada Pydantic)
- → [6] guardrail_saida           falhou → volta 1x ao redator → falhou de novo → faixa "revisão humana"
+ → [6] guardrail_saida           falhou → volta 1x ao redator → falhou de novo → faixa "revisão humana", texto retido
  → [7] montar_relatorio (código) gráficos + HTML + Markdown + anexo de auditoria
 ```
 
@@ -185,7 +185,7 @@ Guardrails AI): código próprio é mais testável e explicável.
 | 1. Entrada | fora do escopo, injeção, texto > 500 car. | tamanho + regex de injeção + classificador LLM `{no_escopo, motivo}` | recusa registrada |
 | 2. Ferramentas | parâmetro inválido, SQL malicioso, consulta pesada | Pydantic + SQL fixo com bind + usuário read-only + timeout | erro ao orquestrador |
 | 3. Conteúdo externo | injeção indireta, HTML/script | limpa HTML, corta 500 car., envolve em `<noticia_externa>`, descarta item com padrão de injeção, prioriza fontes confiáveis | descarte registrado |
-| 4. Saída | número não conferido, link inventado, notícia fora da janela, CPF/CNS/telefone/e-mail, recomendação clínica | conferência numérica com tolerância de arredondamento, URL ∈ resultados, data × seção, regex PII, lista de termos clínicos | 1 nova tentativa → faixa "revisão humana necessária"; dado pessoal no texto é mascarado (não conta como violação) |
+| 4. Saída | número não conferido, link inventado, notícia fora da janela, CPF/CNS/telefone/e-mail, recomendação clínica | conferência numérica com tolerância de arredondamento, URL ∈ resultados, data × seção, regex PII, lista de termos clínicos | 1 nova tentativa → faixa "revisão humana necessária"; texto reprovado é retido (fora do relatório e da trilha, que guarda violações, tamanho e hash); dado pessoal no texto é mascarado (não conta como violação) |
 | 5. Execução | laço, custo, indisponibilidade | ≤12 chamadas de ferramenta, teto de tokens/tempo, temperatura 0,2, retry com backoff, reserva OpenRouter→OpenAI e Tavily→RSS | para, registra, entrega parcial com aviso |
 
 Aviso fixo, inserido pelo código: *"Prova de conceito. Não substitui avaliação clínica nem boletim
