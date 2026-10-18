@@ -19,7 +19,7 @@
 - **Nenhuma ferramenta aceita SQL.** Toda consulta é SQL fixo com parâmetros por bind.
 - **Números do relatório vêm do SQL**, nunca do LLM.
 - "Hoje" dos dados = `max(dt_sintomas)` (data de referência). Janela de consolidação = **14 dias**.
-- Supressão: contagem entre 1 e 4 → `"<5"`.
+- Supressão: contagem entre 1 e 4 → `"<5"` (zero não se suprime); havendo `"<5"`, a menor célula ≥ 5 → `"oculto"` (complementar, percentual nulo, total exato); na série diária, por bloco das janelas publicadas. Ver `docs/adr/0011-supressao-de-celulas-pequenas.md`.
 - Colunas que **não** passam da raw: `nu_notific`, `dt_nasc`, todos os municípios e unidades, `cs_raca`, `cs_etinia`, `cs_escol_n`, `pac_cocbo`, `pac_dscbo`, lotes, `tem_cpf`, `pov_ct`, `estrang`, `cs_sexo`, sintomas, textos livres.
 - LLM padrão: OpenRouter `openai/gpt-4.1-mini`; reserva: OpenAI `gpt-4.1-mini`; temperatura 0,2.
 - Limites: 12 chamadas de ferramenta, 60.000 tokens, 2 voltas de cobertura, 2 tentativas de redação.
@@ -30,7 +30,7 @@
 ## Review Focus
 
 1. **Datas absurdas e formatos mistos** (`1695-01-17 02:32:37.742690304`, `2025-05-14 00:00:00.000000000`): devem virar `NULL` ou ser lidas pelo prefixo, sem derrubar a carga. Teste na Tarefa 3.
-2. **UF sem casos ou com poucos casos** (ex.: `--uf RR`): o relatório não pode quebrar e as contagens pequenas precisam sair como `"<5"`. Testes nas Tarefas 5 e 6.
+2. **UF sem casos ou com poucos casos** (ex.: `--uf RR`): o relatório não pode quebrar e as contagens pequenas precisam sair como `"<5"` (com a complementar `"oculto"`). Testes nas Tarefas 5 e 6.
 3. **Busca de notícias sem resultado ou com as duas fontes fora do ar**: o relatório sai e diz claramente que não houve notícia, sem inventar. Testes nas Tarefas 7 e 13.
 4. **LLM que cita número arredondado do jeito errado ou faz conta própria** ("queda de 50%"): o guardrail de saída pega e o relatório não sai em silêncio. Testes nas Tarefas 11 e 13.
 5. **Texto do LLM ou título de notícia com HTML/script**: no HTML do relatório precisa aparecer escapado. Teste na Tarefa 14.

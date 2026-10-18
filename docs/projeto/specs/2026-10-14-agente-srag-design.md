@@ -132,7 +132,7 @@ sensível.
 | Schema | Conteúdo | Acesso |
 |---|---|---|
 | `raw` | CSV como veio: 194 colunas, tudo `text`, carga via `COPY` | `srag_etl` |
-| `silver` | ~20 colunas tipadas e limpas, chave interna no lugar de `NU_NOTIFIC`, idade → faixa etária | `srag_etl` |
+| `silver` | colunas tipadas e limpas (lista em `docs/DICIONARIO_SILVER.md`), chave interna no lugar de `NU_NOTIFIC`, idade → faixa etária | `srag_etl` |
 | `gold` | **somente views agregadas** + a tabela `dicionario_trechos` (texto do dicionário público, para o RAG) | `srag_agente` (SELECT) |
 | `auditoria` | execuções e eventos do agente | `srag_auditor` (INSERT/SELECT; UPDATE só nas colunas de encerramento de `execucoes` e só enquanto `em_andamento`; eventos não se alteram), usado só pelo registro de auditoria, nunca pelas ferramentas do LLM |
 
@@ -147,7 +147,12 @@ notificação, faixa etária, datas de notificação/sintomas/internação/UTI/e
 
 1. `srag_agente`: `SELECT` só em `gold`, `default_transaction_read_only=on`, `statement_timeout=5s`.
    Um teste tenta ler `silver` e `raw` com esse usuário e **precisa falhar**.
-2. Supressão de células pequenas: agregado com < 5 casos é devolvido como `"<5"`.
+2. Supressão de células pequenas: contagem de 1 a 4 é devolvida como `"<5"` (zero não se suprime).
+   Havendo algum `"<5"` numa resposta, a menor célula com 5 ou mais sai `"oculto"` (supressão
+   complementar; percentual nulo; empate: a primeira), e outras saem enquanto algum `"<5"` ficar
+   determinável; o total é exato. Na série diária a regra roda por bloco das janelas cuja soma
+   também é publicada (semanas do aumento, dias em consolidação, meses inteiros nos 30 dias).
+   Regra e limites: `docs/adr/0011-supressao-de-celulas-pequenas.md`.
 3. A auditoria guarda só agregados, nunca linhas da base.
 4. `.env` fora do Git, `.env.example` versionado, `gitleaks` no pre-commit e no CI.
 5. CSV e zip fora do Git. O README explica a origem e onde colocar o arquivo. O dicionário de dados
@@ -211,8 +216,8 @@ fora do escopo). O README mostra a tabela "ataque → resultado".
 | Carga e transformação | `psycopg` (`COPY`) + arquivos `.sql` versionados e numerados | transparente, sem dbt (excessivo para 1 tabela) |
 | Agente | LangGraph 1.x + `langchain-openai` | grafo explícito e auditável |
 | LLM | OpenRouter `openai/gpt-4.1-mini` (padrão) · OpenAI (reserva) | configurável no `.env` (`LLM_PROVIDER`, `LLM_MODELO`) |
-| Notícias | `langchain-tavily` + `feedparser` (RSS) | busca padrão de agentes + reserva sem chave |
-| RAG | `pymupdf` (PDF) + `fastembed` multilíngue local + pgvector | sem custo nem chave, reproduzível pelo avaliador |
+| Notícias | API da Tavily via `httpx` + `feedparser` (RSS) | controle de bytes, timeout e erro, testável sem rede + reserva sem chave (ADR 0009) |
+| RAG | `pymupdf` (PDF) + `fastembed` (ONNX) multilíngue local + pgvector, busca híbrida (nome exato do campo + similaridade) | sem custo nem chave, reproduzível pelo avaliador (ADR 0006) |
 | Relatório | `matplotlib` + `Jinja2` → HTML autocontido + Markdown | abre em qualquer navegador |
 | Diagrama | Mermaid (`docs/arquitetura.mmd`) → PDF via `mermaid-cli` no Docker | fonte versionada + PDF exigido |
 | Qualidade | `ruff`, `pytest`, `pytest-cov`, `pre-commit`, `gitleaks`, GitHub Actions | clean code verificável |
