@@ -62,8 +62,11 @@ def contem_injecao(texto: str) -> bool:
 # "/" antes do dígito verificador) sai sempre: um CPF digitado com erro continua sendo dado
 # pessoal. Sem ela (só espaços, separadores misturados ou 11 dígitos colados) só sai se o dígito
 # verificador conferir: "valores 100 200 300 400 50" é uma lista de números, não um documento.
+#
+# O formato com três separadores (123.456.789-09) é sinal tão forte que vale até colado em dígitos
+# à esquerda ("1234123.456.789-09"): a máscara depois se estende sobre os dígitos encostados.
 _CPF_FORMATADO = re.compile(
-    r"(?<!\d)\d{3}(?P<s>[.,-])\d{3}(?P=s)\d{3}(?:[./-]|(?P=s))\d{2}(?!\d)"  # 123.456.789-09
+    r"\d{3}(?P<s>[.,-])\d{3}(?P=s)\d{3}(?:[./-]|(?P=s))\d{2}(?!\d)"  # 123.456.789-09
     r"|(?<!\d)\d{9}[./-]\d{2}(?!\d)"  # 123456789-09
 )
 _CPF_SOLTO = re.compile(r"(?<!\d)\d{3}[ .,-]?\d{3}[ .,-]?\d{3}[ .,/-]?\d{2}(?!\d)")
@@ -109,7 +112,7 @@ TRACOS = dict.fromkeys((*range(0x2010, 0x2016), 0x2212, 0xFE58, 0xFE63, 0xFF0D),
 # hexadecimal com tamanho de hash de verdade (md5 32, sha1/git 40, sha256 64, sha512 128). Um
 # achado que cabe INTEIRO dentro de um deles não é mascarado, senão "…-a716-446655440000" vira
 # cartão SUS. Duas regras impedem que o identificador esconda um documento colado nele:
-# - tamanho exato: "b"*50 + "12345678909" não é hash (61 caracteres), então o CPF aparece;
+# - tamanho exato: "b"*50 + "12345678909" não é hash (61 caracteres), então o CPF é mascarado;
 # - só o achado inteiro lá dentro é poupado: o que atravessa a borda ("<hash>123.456.789-09",
 #   "<hex>beef@exemplo.com") é documento colado e sai.
 _IDENTIFICADOR = re.compile(
@@ -118,6 +121,10 @@ _IDENTIFICADOR = re.compile(
     re.IGNORECASE,
 )
 MASCARA = "[dado removido]"
+# Dígitos encostados num achado, com no máximo um separador entre eles (sem espaço): saem junto,
+# senão "123456789012123.456.789-09" deixaria ".456.789-09" ao lado da máscara.
+_SEPARADORES_COLADOS = ".,/-"
+_COLADO_A_DIREITA = re.compile(rf"(?:[{re.escape(_SEPARADORES_COLADOS)}]?\d)+")
 
 
 def _sem_invisiveis(texto: str) -> str:
@@ -128,20 +135,44 @@ def _dentro_de_identificador(achado: re.Match[str], identificadores: list[tuple[
     return any(ini <= achado.start() and achado.end() <= fim for ini, fim in identificadores)
 
 
+def _estender_colados(
+    texto: str, achado: re.Match[str], limite: int, identificadores: list[tuple[int, int]]
+) -> tuple[int, int]:
+    """Alarga o achado sobre a sequência de dígitos e separadores encostada nos dois lados.
+
+    À direita, "[sep]dígito" repetido; à esquerda, "dígito[sep]" repetido, sem voltar antes de
+    `limite` (o fim da máscara anterior). Separador sozinho (ponto final da frase) não entra, e a
+    extensão não entra num identificador (UUID, hash) que fica inteiro fora do achado.
+    """
+    inicio, fim = achado.span()
+    limite = max([limite] + [f for _, f in identificadores if f <= inicio])
+    teto = min([len(texto)] + [i for i, _ in identificadores if i >= fim])
+    if colado := _COLADO_A_DIREITA.match(texto, fim, teto):
+        fim = colado.end()
+    while True:
+        separador = inicio > limite and texto[inicio - 1] in _SEPARADORES_COLADOS
+        antes = inicio - 1 if separador else inicio
+        if antes > limite and texto[antes - 1].isdecimal():  # isdecimal() é o `\d` do re
+            inicio = antes - 1
+        else:
+            return inicio, fim
+
+
 def _trocar_padrao(
     texto: str, tipo: str, padrao: re.Pattern[str], valido: Validador, encontrados: list[str]
 ) -> str:
-    """Mascara cada achado válido. O inválido (ou inteiro dentro de um identificador) não
-    consome o texto: a busca recomeça um caractere adiante, para um candidato falso não esconder
-    um documento que começa dentro dele."""
+    """Mascara cada achado válido, junto com os dígitos encostados nele. O inválido (ou inteiro
+    dentro de um identificador) não consome o texto: a busca recomeça um caractere adiante, para
+    um candidato falso não esconder um documento que começa dentro dele."""
     # Recalculado a cada padrão: a troca do padrão anterior muda as posições do texto.
     identificadores = [a.span() for a in _IDENTIFICADOR.finditer(texto)]
     pedacos, inicio, posicao = [], 0, 0
     while achado := padrao.search(texto, posicao):
         poupar = _dentro_de_identificador(achado, identificadores)
         if not poupar and (valido is None or valido(achado.group(0))):
-            pedacos += [texto[inicio : achado.start()], MASCARA]
-            inicio = posicao = achado.end()
+            ini, fim = _estender_colados(texto, achado, inicio, identificadores)
+            pedacos += [texto[inicio:ini], MASCARA]
+            inicio = posicao = fim
             encontrados.append(tipo)
         else:
             posicao = achado.start() + 1
@@ -169,7 +200,14 @@ def mascarar_pii(texto: str) -> tuple[str, list[str]]:
     Limitações: documento soletrado ("um dois três…"), com um dígito por linha ou com separador
     fora do padrão (``123_456``) passa; CPF sem pontuação e com dígito verificador errado também
     (não é de ninguém, mas pode ser um CPF real digitado errado); RG de formato estadual sem
-    dígito verificador também.
+    dígito verificador também. Documento escondido dentro de um falso hash de tamanho exato
+    (``"b"*21 + "12345678909"``: 32 caracteres hexadecimais, tamanho de md5) é poupado como
+    identificador; distingui-lo de um md5 de verdade exigiria adivinhar. Número longo só de
+    dígitos, sem separador (``"1189800123456789012"``), não é reconhecido: qualquer número
+    grande contém 11 ou 15 dígitos seguidos.
+
+    Achado mascarado leva junto a sequência de dígitos e separadores (``. , / -``) encostada nele,
+    para não sobrar pedaço do documento ao lado da máscara.
     """
     mascarado, encontrados = _trocar(_sem_invisiveis(texto or ""))
     normalizado = unicodedata.normalize("NFKC", mascarado).translate(TRACOS)

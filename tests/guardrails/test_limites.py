@@ -49,6 +49,10 @@ def test_contagem_negativa_e_erro_de_programacao(chamadas, tokens, segundos):
         ("max_voltas_cobertura", -1),
         ("max_tentativas_redacao", 0),
         ("max_chamadas_ferramenta", True),
+        ("max_segundos", float("nan")),  # nan < 0 e nan == 0 são falsos: passava
+        ("max_segundos", float("inf")),
+        ("max_tokens", float("nan")),
+        ("max_segundos", -1.5),
     ],
 )
 def test_limite_impossivel_e_recusado(campo, valor):

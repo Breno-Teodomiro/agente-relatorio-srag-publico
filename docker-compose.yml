@@ -5,7 +5,8 @@ services:
       POSTGRES_PASSWORD: ${PG_SENHA_ADMIN:?defina PG_SENHA_ADMIN no .env}
       POSTGRES_DB: srag
     ports:
-      - "5435:5432"
+      # só na máquina local: publicar em 0.0.0.0 abriria o banco para a rede (Wi-Fi, VPN)
+      - "127.0.0.1:5435:5432"
     volumes:
       - dados_pg:/var/lib/postgresql/data
     healthcheck:
@@ -13,7 +14,8 @@ services:
       interval: 5s
       retries: 10
 
-  # Aplicação (opcional): make docker-build && make docker-relatorio UF=SP
+  # Aplicação (opcional): make docker-build, depois make docker-carga, make docker-indexar e
+  # make docker-relatorio UF=SP
   app:
     build:
       context: .
@@ -21,6 +23,9 @@ services:
         SRAG_VERSAO_CODIGO: ${SRAG_VERSAO_CODIGO:-desconhecida}
     profiles: ["app"]
     env_file: .env
+    # A CLI não precisa de nenhuma capacidade do Linux nem de subir privilégio (setuid).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     environment:
       PG_HOST: banco
       PG_PORTA: "5432"

@@ -119,6 +119,72 @@ def test_banco_fora_do_ar_explica_e_sai_com_1(com_senhas, monkeypatch, capsys):
     assert "make subir" in erro and "connection refused" in erro
 
 
+# --- M3: falha ao rodar sai limpa, sem texto de erro cru no terminal --------------------------
+CPF = "123.456.789-09"  # fictício
+
+
+def _modelo_invalido():
+    from pydantic import BaseModel, ValidationError
+
+    class Modelo(BaseModel):
+        quantidade: int
+
+    try:
+        Modelo(quantidade=f"valor cru {CPF}")
+    except ValidationError as erro:
+        return erro
+
+
+def _quebrar(monkeypatch, erro):
+    def quebra(cfg, **_):
+        raise erro
+
+    monkeypatch.setattr("srag_agente.nucleo.gerar_relatorio", quebra)
+
+
+@pytest.mark.parametrize(
+    "erro,codigo,dica",
+    [
+        (psycopg.errors.UndefinedTable(f"relation gold.x does not exist {CPF}"), 1, "make carga"),
+        (psycopg.errors.UndefinedTable("relation rag.trechos does not exist"), 1, "make indexar"),
+        (psycopg.OperationalError(f"connection refused {CPF}"), 1, "make subir"),
+        (RuntimeError(f"falhou para {CPF}"), 1, "RuntimeError"),
+        (_modelo_invalido(), 1, "quantidade"),
+        (KeyboardInterrupt(), 130, "nterrompid"),
+    ],
+    ids=["psycopg", "psycopg_indexar", "operacional", "inesperado", "validacao", "ctrl_c"],
+)
+def test_falha_ao_rodar_sai_limpa_e_mascarada(com_senhas, monkeypatch, capsys, erro, codigo, dica):
+    _quebrar(monkeypatch, erro)
+    assert cli.main(["relatorio"]) == codigo
+    saida = capsys.readouterr()
+    texto = saida.out + saida.err
+    assert dica in texto
+    assert "456" not in texto and "valor cru" not in texto  # nem o CPF nem o valor recebido
+    assert "Traceback" not in texto
+
+
+def test_dados_indisponiveis_explicam_a_carga(com_senhas, monkeypatch, capsys):
+    from srag_agente.metricas.repositorio import DadosIndisponiveis
+
+    _quebrar(monkeypatch, DadosIndisponiveis("base vazia"))
+    assert cli.main(["relatorio"]) == 1
+    erro = capsys.readouterr().err
+    assert "base vazia" in erro and "make carga" in erro
+
+
+def test_zip_ausente_na_carga_explica_onde_procurou(com_senhas, monkeypatch, capsys):
+    destino = "/nao/existe/INFLUD25.zip"
+
+    def sem_zip(cfg):
+        raise FileNotFoundError(2, "No such file or directory", destino)
+
+    monkeypatch.setattr("srag_agente.dados.carga.executar_carga", sem_zip)
+    assert cli.main(["carga"]) == 1
+    erro = capsys.readouterr().err
+    assert destino in erro and "ARQUIVO_DADOS" in erro and "Errno" not in erro
+
+
 # --- configuração -----------------------------------------------------------------------------
 def test_configuracao_incompleta_nao_mostra_segredo(sem_env, monkeypatch, capsys):
     monkeypatch.setenv("PG_SENHA_ADMIN", "segredo-que-nao-pode-vazar")
@@ -128,6 +194,21 @@ def test_configuracao_incompleta_nao_mostra_segredo(sem_env, monkeypatch, capsys
     texto = saida.out + saida.err
     assert "pg_senha_etl" in texto and ".env" in texto
     assert "segre" not in texto and "sk-chave" not in texto
+
+
+@pytest.mark.parametrize(
+    "variavel,valor",
+    [("MAX_SEGUNDOS_EXECUCAO", "nan"), ("MAX_TOKENS_EXECUCAO", "-1"),
+     ("MAX_CHAMADAS_FERRAMENTA", "0"), ("PRECO_SAIDA_USD_MTOK", "-1.6")],
+)  # fmt: skip
+def test_teto_ou_preco_invalido_no_ambiente_sai_com_2(com_senhas, monkeypatch, capsys,
+                                                      variavel, valor):  # fmt: skip
+    chamado = []
+    monkeypatch.setattr("srag_agente.nucleo.gerar_relatorio", lambda *a, **k: chamado.append(1))
+    monkeypatch.setenv(variavel, valor)
+    assert cli.main(["relatorio"]) == 2
+    assert variavel.lower() in capsys.readouterr().err
+    assert chamado == []  # nem chega a rodar o agente
 
 
 # --- carga, indexar, qualidade ----------------------------------------------------------------

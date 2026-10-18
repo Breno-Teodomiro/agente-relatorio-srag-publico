@@ -58,6 +58,10 @@ As views da gold rodam com o privilégio do dono: o agente lê o agregado sem le
   o horário de fim é do servidor e o encerrado não muda mais.
 - O JSONL não leva `fsync`; uma queda de energia no instante da gravação pode perder o arquivo
   (nunca deixa um pela metade).
+- Se o próprio auditor cair no meio de uma execução (banco fora do ar), a execução fica
+  `em_andamento`: o código não finge que encerrou, e o erro original sobe com as falhas da
+  auditoria anexadas. Para listar as órfãs (a hora vem do servidor), use
+  `SELECT id_execucao, inicio FROM auditoria.execucoes WHERE status = 'em_andamento' AND inicio < now() - interval '1 hour';`
 - O `motivo` é declarado pelo LLM (ADR 0001).
 - A carga (`04_auditoria.sql`) trava `eventos` por alguns instantes; o tempo de espera do
   auditor durante a carga não foi medido.

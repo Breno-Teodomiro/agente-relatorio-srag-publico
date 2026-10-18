@@ -1,8 +1,9 @@
 """Linha de comando: srag carga | indexar | qualidade | relatorio | grafo.
 
 Códigos de saída: 0 deu certo; 1 falha ao rodar (ex.: banco fora do ar); 2 uso ou configuração
-inválidos (argumento, .env incompleto, nenhuma chave de LLM). Mensagem de erro nunca repete
-senha nem chave: o Config esconde o valor recebido e aqui só se mostra campo e mensagem.
+inválidos (argumento, .env incompleto, teto fora da faixa, nenhuma chave de LLM); 130 Ctrl+C.
+Mensagem de erro nunca repete senha nem chave: o Config esconde o valor recebido e aqui só se
+mostra campo e mensagem, com dado pessoal mascarado; sem traceback no terminal.
 """
 
 import argparse
@@ -14,8 +15,10 @@ from typing import get_args
 import psycopg
 from pydantic import ValidationError
 
+from srag_agente.auditoria.registro import descrever_erro
 from srag_agente.config import RAIZ_PROJETO, Config
 from srag_agente.ferramentas.registro import UF
+from srag_agente.guardrails.padroes import mascarar_pii
 
 ARQUIVO_QUALIDADE = RAIZ_PROJETO / "docs" / "QUALIDADE_DADOS.md"
 ARQUIVO_GRAFO = RAIZ_PROJETO / "docs" / "grafo_langgraph.mmd"
@@ -42,6 +45,12 @@ def _argumentos(argv: list[str] | None) -> argparse.Namespace:
 
 def _erro(mensagem: str) -> None:
     print(mensagem, file=sys.stderr)
+
+
+def _seguro(erro: BaseException, *, com_tipo: bool = True) -> str:
+    """Erro pronto para o terminal: sem o `input` do pydantic e com dado pessoal mascarado."""
+    texto = descrever_erro(erro) if com_tipo else str(erro)
+    return mascarar_pii(texto)[0]
 
 
 def _mensagem_configuracao(erro: ValidationError) -> str:
@@ -114,14 +123,42 @@ def main(argv: list[str] | None = None) -> int:
     except ValidationError as erro:  # só a do Config: a de outro ponto não é "configuração"
         _erro(_mensagem_configuracao(erro))
         return 2
+    from srag_agente.metricas.repositorio import DadosIndisponiveis
+
+    # Nenhum texto de erro vai cru ao terminal: passa por descrever_erro (do ValidationError, só
+    # campo e mensagem) e por mascarar_pii (o psycopg repete valores de linha no DETAIL).
     try:
         return _executar(args, cfg)
+    except KeyboardInterrupt:
+        _erro("Interrompido pelo usuário (Ctrl+C).")
+        return 130
     except ConfiguracaoInvalida as erro:
-        _erro(f"Configuração incompleta: {erro}")
+        _erro(f"Configuração incompleta: {_seguro(erro, com_tipo=False)}")
         return 2
     except psycopg.OperationalError as erro:
         # a mensagem do psycopg traz host, porta e usuário; a senha nunca
-        _erro(f"Não foi possível falar com o Postgres (o banco está de pé? `make subir`): {erro}")
+        _erro(
+            "Não foi possível falar com o Postgres (o banco está de pé? `make subir`): "
+            f"{_seguro(erro, com_tipo=False)}"
+        )
+        return 1
+    except psycopg.Error as erro:
+        _erro(
+            "Erro no Postgres. Se o banco é novo ou foi recriado, rode `make carga` e depois "
+            f"`make indexar`. Detalhe: {_seguro(erro)}"
+        )
+        return 1
+    except DadosIndisponiveis as erro:
+        _erro(f"Sem dados na base ({_seguro(erro, com_tipo=False)}). Rode `make carga`.")
+        return 1
+    except FileNotFoundError as erro:
+        _erro(
+            f"Arquivo não encontrado: {mascarar_pii(str(erro.filename))[0]} "
+            "(confira ARQUIVO_DADOS e ARQUIVO_DICIONARIO no .env)."
+        )
+        return 1
+    except Exception as erro:
+        _erro(f"Falha inesperada: {_seguro(erro)}")
         return 1
 
 

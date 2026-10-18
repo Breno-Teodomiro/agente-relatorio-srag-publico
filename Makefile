@@ -1,7 +1,14 @@
 .PHONY: instalar subir parar carga indexar avaliar-rag qualidade grafo relatorio testes lint \
-        diagrama docker-build docker-relatorio tudo
+        diagrama docker-build docker-carga docker-indexar docker-relatorio tudo
 
 UF ?= BR
+# Pergunta complementar opcional: make relatorio UF=SP PERGUNTA="Como está a UTI?"
+# Vai ao comando pelo ambiente ("$$PERGUNTA"), nunca colada no texto do comando: aspas ou $ na
+# pergunta não viram código do shell. Sem PERGUNTA, o --pergunta nem aparece.
+# $(value) guarda o texto literal: sem ele o make leria "R$ 100" como variável e comeria o "$ ".
+override PERGUNTA := $(value PERGUNTA)
+export PERGUNTA
+COM_PERGUNTA = $${PERGUNTA:+--pergunta "$$PERGUNTA"}
 # No WSL sem integração do Docker Desktop o binário é docker.exe: make subir DOCKER=docker.exe
 DOCKER ?= docker
 # Versão gravada na auditoria de quem roda pela imagem (no container não há Git). Vai como
@@ -37,7 +44,7 @@ grafo:
 	uv run srag grafo
 
 relatorio:
-	uv run srag relatorio --uf $(UF)
+	uv run srag relatorio --uf $(UF) $(COM_PERGUNTA)
 
 testes:
 	EXIGIR_BANCO=1 uv run pytest --cov=srag_agente --cov-report=term-missing
@@ -48,8 +55,14 @@ lint:
 docker-build:
 	$(DOCKER) compose --profile app build --build-arg SRAG_VERSAO_CODIGO=$(VERSAO_CODIGO) app
 
+docker-carga:
+	$(DOCKER) compose --profile app run --rm app carga
+
+docker-indexar:
+	$(DOCKER) compose --profile app run --rm app indexar
+
 docker-relatorio:
-	$(DOCKER) compose --profile app run --rm app relatorio --uf $(UF)
+	$(DOCKER) compose --profile app run --rm app relatorio --uf $(UF) $(COM_PERGUNTA)
 
 tudo: subir carga indexar relatorio
 

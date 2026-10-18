@@ -188,3 +188,72 @@ def test_documento_colado_em_texto_hexadecimal_longo_e_mascarado(texto, tipo):
 def test_hash_e_uuid_legitimos_continuam_intactos(identificador, molde):
     texto = molde.format(identificador, identificador)
     assert mascarar_pii(texto) == (texto, [])
+
+
+# --- Documento colado em dígitos: nunca sobra pedaço numérico ao lado da máscara (revisão Task 15)
+# Antes: "123456789012123.456.789-09" virava "[dado removido].456.789-09" (8 dos 11 dígitos do
+# CPF, verificadores inclusive) e "1234123.456.789-09" passava inteiro.
+@pytest.mark.parametrize(
+    "documento",
+    [
+        "123456789012123.456.789-09",  # o caso da revisão: 15 dígitos "de SUS" + resto do CPF
+        "1234123.456.789-09",  # CPF formatado com dígitos colados à esquerda
+        "898001234567890123.456.789-09",  # cartão SUS colado num CPF formatado
+        "123.456.789-09.987",  # CPF formatado seguido de ".dígitos"
+        "123.456.789-09/12",
+        "12345678909.5",  # CPF sem pontuação seguido de ".dígito"
+        "7-12345678909",  # e precedido de "dígito-"
+        "898001160564312.12",  # cartão SUS seguido de ".dígitos"
+        "12-898001160564312",  # e precedido de "dígitos-"
+        "(11) 98765-4321.55",  # telefone seguido de ".dígitos"
+        "98765-4321-12",  # telefone sem DDD seguido de "-dígitos"
+        "3-11 98765-4321",  # telefone com DDD precedido de "dígito-"
+    ],
+)
+def test_documento_colado_em_digitos_sai_inteiro(documento):
+    mascarado, tipos = mascarar_pii(f"paciente {documento} internado")
+    assert mascarado == f"paciente {MASCARA} internado"
+    assert tipos  # foi reconhecido como dado pessoal
+
+
+def test_extensao_nao_atravessa_espaco_nem_pontuacao_final():
+    # só a sequência ENCOSTADA (dígitos e . , / -) sai junto; o resto do texto fica
+    texto = "Em 2025, 123.456.789-09. Foram 53.476 casos."
+    assert mascarar_pii(texto) == (f"Em 2025, {MASCARA}. Foram 53.476 casos.", ["cpf"])
+
+
+@pytest.mark.parametrize(
+    "identificador",
+    [  # os dois terminam e começam em dígito, encostados no documento só pelo "-"
+        "550e8400-e29b-41d4-a716-446655440000",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ],
+)
+def test_extensao_nao_come_identificador_vizinho(identificador):
+    # o documento encostado sai; o UUID/hash ao lado (que não é dado pessoal) fica inteiro
+    cpf = "123.456.789-09"
+    assert mascarar_pii(f"{identificador}-{cpf}") == (f"{identificador}-{MASCARA}", ["cpf"])
+    assert mascarar_pii(f"{cpf}-{identificador}") == (f"{MASCARA}-{identificador}", ["cpf"])
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "Custo de R$ 1.234,56 e variação de -12,5% (45,3% do total).",
+        "Data de referência 12/03/2026; execução em 2025-10-17.",
+        "Total de 165.397 casos e 1.234.567.890 doses aplicadas.",
+        "De 10/2024 a 09/2025, IC 95%: 1,2-3,4; versão 1.2.3.",
+        "Semana 2025-42: 12.345 internações, 3.210 em UTI (26,0%).",
+        "sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 em 2025",
+        "execução 550e8400-e29b-41d4-a716-446655440000 de 17/10/2026",
+    ],
+)
+def test_texto_comum_com_numeros_continua_intacto(texto):
+    assert mascarar_pii(texto) == (texto, [])
+
+
+@pytest.mark.xfail(strict=True, reason="limitação declarada: documento dentro de falso hash")
+def test_documento_escondido_em_falso_hash_de_tamanho_exato():
+    # "b"*21 + CPF válido = 32 caracteres hexadecimais com letra: tem tamanho de md5 e é poupado.
+    # Distinguir isso de um md5 de verdade exigiria adivinhar; fica declarado em mascarar_pii.
+    assert MASCARA in mascarar_pii("b" * 21 + "12345678909")[0]

@@ -103,3 +103,40 @@ def test_limites_de_execucao_tem_os_padroes_do_spec(cfg):
     assert cfg.max_segundos_execucao == 300
     assert cfg.max_voltas_cobertura == 2
     assert cfg.max_tentativas_redacao == 2
+
+
+# --- M2: tetos e preços com faixa e finitude --------------------------------------------------
+@pytest.mark.parametrize(
+    "variavel,valor",
+    [
+        ("MAX_SEGUNDOS_EXECUCAO", "nan"),
+        ("MAX_SEGUNDOS_EXECUCAO", "inf"),
+        ("MAX_SEGUNDOS_EXECUCAO", "0"),
+        ("MAX_SEGUNDOS_EXECUCAO", "-5"),
+        ("MAX_TOKENS_EXECUCAO", "0"),
+        ("MAX_TOKENS_EXECUCAO", "-1"),
+        ("MAX_TOKENS_EXECUCAO", "nan"),
+        ("MAX_CHAMADAS_FERRAMENTA", "0"),
+        ("MAX_TENTATIVAS_REDACAO", "0"),
+        ("MAX_VOLTAS_COBERTURA", "-1"),
+        ("PRECO_ENTRADA_USD_MTOK", "nan"),
+        ("PRECO_ENTRADA_USD_MTOK", "-0.4"),
+        ("PRECO_SAIDA_USD_MTOK", "inf"),
+        ("PRECO_SAIDA_USD_MTOK", "-1"),
+    ],
+)
+def test_teto_ou_preco_fora_da_faixa_e_erro_de_configuracao(cfg, monkeypatch, variavel, valor):
+    monkeypatch.setenv(variavel, valor)
+    with pytest.raises(ValidationError) as erro:
+        Config(_env_file=None)
+    assert variavel.lower() in str(erro.value)
+
+
+@pytest.mark.parametrize(
+    "variavel,valor",
+    [("MAX_VOLTAS_COBERTURA", "0"), ("PRECO_ENTRADA_USD_MTOK", "0"), ("PRECO_SAIDA_USD_MTOK", "0")],
+)
+def test_zero_vale_onde_tem_sentido(cfg, monkeypatch, variavel, valor):
+    # zero voltas = não insiste na cobertura (Limites aceita); preço zero = modelo gratuito
+    monkeypatch.setenv(variavel, valor)
+    assert getattr(Config(_env_file=None), variavel.lower()) == 0

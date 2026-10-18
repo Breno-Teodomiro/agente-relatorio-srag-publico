@@ -4,6 +4,8 @@ Regras do encerramento, valendo em sucesso e em erro:
 - toda execução aberta se encerra (status final + consumo + contagem da silver que ela viu),
   inclusive com Ctrl+C; se nem a auditoria conseguir encerrar, o erro ORIGINAL é o que sobe,
   com a falha da auditoria anotada nele e no log;
+- a execução só se encerra como sucesso depois que o relatório está no disco (falha ao gravá-lo
+  encerra como "erro"); o arquivo da trilha vem por último, já com o encerramento;
 - os tokens gastos antes de um erro entram no custo (somados da trilha de eventos);
 - nada chega à auditoria sem mascarar: a pergunta nos parâmetros, o texto do erro (o registro
   mascara) e, num erro de validação do pydantic, só campo e mensagem, nunca o valor recebido.
@@ -17,7 +19,6 @@ from uuid import UUID
 
 import httpx
 from langchain_core.runnables import Runnable
-from pydantic import ValidationError
 
 from srag_agente.agente.grafo import executar_agente
 from srag_agente.agente.llm import (
@@ -31,7 +32,12 @@ from srag_agente.agente.llm import (
 )
 from srag_agente.agente.nos import Dependencias
 from srag_agente.agente.prompts import hash_prompts
-from srag_agente.auditoria.registro import STATUS_FINAIS, Auditoria, AuditoriaPostgres
+from srag_agente.auditoria.registro import (
+    STATUS_FINAIS,
+    Auditoria,
+    AuditoriaPostgres,
+    descrever_erro,
+)
 from srag_agente.auditoria.versao import versao_codigo
 from srag_agente.banco import conectar
 from srag_agente.config import Config
@@ -51,7 +57,7 @@ from srag_agente.guardrails.padroes import MASCARA, mascarar_pii
 from srag_agente.metricas.repositorio import DadosIndisponiveis, RepositorioGold
 from srag_agente.modelos import TextoRelatorio
 from srag_agente.rag.embeddings import Embedder, criar_embedder
-from srag_agente.relatorio.montar import ArquivosRelatorio, montar_dados, montar_relatorio
+from srag_agente.relatorio.montar import ArquivosRelatorio, escrever_relatorio, montar_dados
 
 log = logging.getLogger(__name__)
 
@@ -169,19 +175,8 @@ def _tokens_da_trilha(auditoria: Auditoria) -> tuple[int, int]:
     )
 
 
-def _descrever(erro: BaseException) -> str:
-    """Texto do erro para a auditoria. Do ValidationError, só campo e mensagem (sem `input`)."""
-    if isinstance(erro, ValidationError):
-        campos = "; ".join(
-            f"{'.'.join(map(str, e['loc'])) or '(raiz)'}: {e['msg']}"
-            for e in erro.errors(include_url=False, include_input=False, include_context=False)
-        )
-        return f"ValidationError ({erro.title}): {campos}"
-    return f"{type(erro).__name__}: {erro}"
-
-
 def _anotar_falha_da_auditoria(erro: BaseException, etapa: str, falha: Exception) -> None:
-    texto = mascarar_pii(f"A auditoria também falhou ao {etapa}: {_descrever(falha)}")[0]
+    texto = mascarar_pii(f"A auditoria também falhou ao {etapa}: {descrever_erro(falha)}")[0]
     erro.add_note(texto)
     log.error(texto)
 
@@ -192,7 +187,7 @@ def _encerrar_com_erro(auditoria: Auditoria, repo: FonteGold, cfg: Config,
     tokens_entrada, tokens_saida = _tokens_da_trilha(auditoria)
     data_referencia, total_casos = _referencia(repo, tolerar=Exception)
     try:
-        auditoria.registrar("nucleo", "decisao", erro=_descrever(erro))
+        auditoria.registrar("nucleo", "decisao", erro=descrever_erro(erro))
     except Exception as falha:
         _anotar_falha_da_auditoria(erro, "registrar o erro", falha)
     try:
@@ -243,6 +238,9 @@ def executar_relatorio(
         hash_prompts=hash_prompts(),
     )
     # Daqui até o encerramento, qualquer saída (erro, Ctrl+C) passa por _encerrar_com_erro.
+    # Ordem: relatório no disco -> encerramento -> arquivo da trilha. A execução só fica "ok"
+    # depois que o HTML e o Markdown existem (disco cheio ou pasta sem permissão viram "erro"),
+    # e o arquivo da trilha é gravado por último porque precisa do registro de encerramento.
     try:
         estado = executar_agente(deps, uf=uf, pergunta_extra=pergunta_extra,
                                  data_execucao=hoje, callbacks=componentes.callbacks)  # fmt: skip
@@ -250,23 +248,24 @@ def executar_relatorio(
         if status not in STATUS_FINAIS:
             raise RuntimeError(f"o grafo terminou sem situação final (status={status!r})")
         data_referencia, total_casos = _referencia(repo, tolerar=DadosIndisponiveis)
+        tokens_entrada, tokens_saida = estado["tokens_entrada"], estado["tokens_saida"]
+        custo = estimar_custo(tokens_entrada, tokens_saida, cfg)
+        dados = montar_dados(
+            evidencias=estado["evidencias"], id_execucao=id_execucao, status=status, uf=uf,
+            data_execucao=hoje, texto=estado["texto"], avisos=estado["avisos"],
+            violacoes=estado["violacoes"], auditoria=auditoria, provedor=componentes.provedor,
+            modelo=componentes.modelo, tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
+            custo_usd=custo, pergunta_extra=estado["pergunta_extra"],
+        )  # fmt: skip
+        arquivos = escrever_relatorio(dados, cfg.pasta_relatorios)
+        auditoria.finalizar_execucao(status=status, data_referencia=data_referencia,
+                                     tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
+                                     custo_usd=custo, total_casos=total_casos)  # fmt: skip
     except BaseException as erro:
         _encerrar_com_erro(auditoria, repo, cfg, erro)
         raise
 
-    tokens_entrada, tokens_saida = estado["tokens_entrada"], estado["tokens_saida"]
-    custo = estimar_custo(tokens_entrada, tokens_saida, cfg)
-    auditoria.finalizar_execucao(status=status, data_referencia=data_referencia,
-                                 tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
-                                 custo_usd=custo, total_casos=total_casos)  # fmt: skip
-    dados = montar_dados(
-        evidencias=estado["evidencias"], id_execucao=id_execucao, status=status, uf=uf,
-        data_execucao=hoje, texto=estado["texto"], avisos=estado["avisos"],
-        violacoes=estado["violacoes"], auditoria=auditoria, provedor=componentes.provedor,
-        modelo=componentes.modelo, tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
-        custo_usd=custo, pergunta_extra=estado["pergunta_extra"],
-    )  # fmt: skip
-    arquivos = montar_relatorio(dados, auditoria, cfg.pasta_relatorios)
+    auditoria.gravar_jsonl(arquivos.auditoria)
     log.info("Relatório %s em %s (situação: %s)", id_execucao, arquivos.pasta, status)
     return ResultadoExecucao(id_execucao=id_execucao, status=status, arquivos=arquivos,
                              tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,

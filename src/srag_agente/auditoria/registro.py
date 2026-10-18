@@ -23,6 +23,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.types.json import Jsonb
+from pydantic import ValidationError
 
 from srag_agente.guardrails.padroes import MASCARA, mascarar_pii
 
@@ -76,6 +77,21 @@ def resumir(valor: Any) -> Any:
     if len(texto) <= LIMITE_RESULTADO:
         return json.loads(texto)
     return {"resumo_truncado": texto[:LIMITE_RESULTADO], "tamanho_original": len(texto)}
+
+
+def descrever_erro(erro: BaseException) -> str:
+    """Texto de um erro para a trilha ou o terminal (sem mascarar: quem mostra mascara).
+
+    Do ValidationError do pydantic, só campo e mensagem: o `input` recebido pode ser a pergunta
+    crua do usuário ou um segredo.
+    """
+    if isinstance(erro, ValidationError):
+        campos = "; ".join(
+            f"{'.'.join(map(str, e['loc'])) or '(raiz)'}: {e['msg']}"
+            for e in erro.errors(include_url=False, include_input=False, include_context=False)
+        )
+        return f"ValidationError ({erro.title}): {campos}"
+    return f"{type(erro).__name__}: {erro}"
 
 
 def _cortar(texto: str | None) -> str | None:

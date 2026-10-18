@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from psycopg.conninfo import make_conninfo
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Papel = Literal["admin", "etl", "agente", "auditor"]
@@ -69,15 +69,18 @@ class Config(BaseSettings):
     openrouter_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     tavily_api_key: SecretStr | None = None
-    preco_entrada_usd_mtok: float = 0.40
-    preco_saida_usd_mtok: float = 1.60
+    # Preço zero vale (modelo gratuito); negativo, nan ou infinito estragariam o custo auditado.
+    preco_entrada_usd_mtok: float = Field(0.40, ge=0, allow_inf_nan=False)
+    preco_saida_usd_mtok: float = Field(1.60, ge=0, allow_inf_nan=False)
 
-    # Tetos de uma execução (guardrails.limites.Limites; mesmos padrões do spec §6).
-    max_chamadas_ferramenta: int = 12
-    max_tokens_execucao: int = 60_000
-    max_segundos_execucao: float = 300.0
-    max_voltas_cobertura: int = 2
-    max_tentativas_redacao: int = 2
+    # Tetos de uma execução (guardrails.limites.Limites; mesmos padrões do spec §6). Teto zero,
+    # negativo ou nan desligaria o guardrail sem aviso: é erro de configuração. A exceção é
+    # max_voltas_cobertura, em que zero quer dizer "não insiste" (o Limites aceita).
+    max_chamadas_ferramenta: int = Field(12, gt=0)
+    max_tokens_execucao: int = Field(60_000, gt=0)
+    max_segundos_execucao: float = Field(300.0, gt=0, allow_inf_nan=False)
+    max_voltas_cobertura: int = Field(2, ge=0)
+    max_tentativas_redacao: int = Field(2, gt=0)
 
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None

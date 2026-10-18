@@ -3,6 +3,7 @@
 A versão com Postgres de verdade está em tests/integracao/test_nucleo.py.
 """
 
+import json
 import logging
 import sys
 import types
@@ -12,11 +13,12 @@ import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 from srag_agente import nucleo
 from srag_agente.auditoria.registro import Auditoria
 from srag_agente.config import Config
+from srag_agente.guardrails.entrada import LIMITE_PERGUNTA
 from srag_agente.guardrails.limites import Limites
 from srag_agente.guardrails.padroes import MASCARA
 from srag_agente.nucleo import Componentes, executar_relatorio, limites_da_config
@@ -104,6 +106,12 @@ def test_pergunta_com_dado_pessoal_entra_mascarada_nos_parametros(cfg):
     _, auditoria = _rodar(cfg, pergunta_extra=f"meu cpf é {CPF}, como está a UTI?")
     pergunta = auditoria.execucao["parametros"]["pergunta_extra"]
     assert MASCARA in pergunta and "456" not in pergunta
+
+
+def test_pergunta_longa_entra_cortada_nos_parametros(cfg):
+    _, auditoria = _rodar(cfg, pergunta_extra="Como está a UTI? " + "x" * (LIMITE_PERGUNTA * 3))
+    pergunta = auditoria.execucao["parametros"]["pergunta_extra"]
+    assert pergunta.startswith("Como está a UTI?") and len(pergunta) == LIMITE_PERGUNTA
 
 
 def test_limites_da_config_chegam_as_dependencias(cfg, monkeypatch):
@@ -196,6 +204,21 @@ def test_falha_do_auditor_nao_esconde_o_erro_original(cfg, caplog):
     assert not auditoria.encerrada  # não houve como encerrar: não se finge que encerrou
 
 
+def test_falha_do_auditor_com_dado_pessoal_e_anotada_mascarada(cfg, caplog):
+    class CaiComCpf(Auditoria):
+        def _persistir_evento(self, evento):
+            if evento["no"] == "nucleo":
+                raise psycopg.OperationalError(f"linha rejeitada: {CPF}")
+            return {}
+
+    with caplog.at_level(logging.ERROR, logger="srag_agente.nucleo"), \
+         pytest.raises(RuntimeError, match="LLM caiu") as capturado:  # fmt: skip
+        _rodar(cfg, CaiComCpf(), _orquestrador_que_quebra(RuntimeError("LLM caiu")))
+    notas = "\n".join(capturado.value.__notes__)
+    assert "registrar o erro" in notas and MASCARA in notas
+    assert "456" not in notas and "456" not in caplog.text
+
+
 def test_auditor_que_cai_no_meio_da_execucao_continua_visivel(cfg):
     class CaiNoOrquestrador(Auditoria):
         def _persistir_evento(self, evento):
@@ -218,6 +241,67 @@ def test_situacao_desconhecida_do_grafo_vira_erro(cfg, monkeypatch):
     monkeypatch.setattr(nucleo, "executar_agente", sem_situacao_final)
     auditoria = Auditoria()
     with pytest.raises(RuntimeError, match="em_andamento"):
+        _rodar(cfg, auditoria)
+    assert auditoria.execucao["status"] == "erro"
+
+
+# --- I1: a trilha só diz "ok" depois que o relatório existe -----------------------------------
+@pytest.mark.parametrize(
+    "falha",
+    [OSError("disco cheio"), PermissionError("relatorios/ sem permissão"), KeyboardInterrupt()],
+    ids=["disco_cheio", "sem_permissao", "ctrl_c"],
+)
+def test_falha_ao_gravar_o_relatorio_encerra_como_erro(cfg, monkeypatch, falha):
+    def quebra(*_args, **_kwargs):
+        raise falha
+
+    monkeypatch.setattr(nucleo, "escrever_relatorio", quebra)
+    auditoria = Auditoria()
+    with pytest.raises(type(falha)):
+        _rodar(cfg, auditoria)
+    e = auditoria.execucao
+    assert e["status"] == "erro"  # nunca "ok" sem relatório gravado
+    # o consumo do agente (400/120) entra no encerramento de erro: o gasto não some
+    assert (e["tokens_entrada"], e["tokens_saida"]) == (400, 120) and e["custo_usd"] > 0
+    ultimo = auditoria.eventos[-1]
+    assert (ultimo["no"], ultimo["tipo"]) == ("nucleo", "decisao")
+    assert type(falha).__name__ in ultimo["erro"]
+
+
+def test_erro_no_calculo_do_custo_nao_deixa_a_execucao_em_andamento(cfg, monkeypatch):
+    original, chamadas = nucleo.estimar_custo, []
+
+    def quebra_na_primeira(*args):
+        chamadas.append(args)
+        if len(chamadas) == 1:  # o cálculo do sucesso; o do encerramento de erro funciona
+            raise ValueError("preço inválido")
+        return original(*args)
+
+    monkeypatch.setattr(nucleo, "estimar_custo", quebra_na_primeira)
+    auditoria = Auditoria()
+    with pytest.raises(ValueError, match="preço inválido"):
+        _rodar(cfg, auditoria)
+    assert auditoria.execucao["status"] == "erro"
+
+
+def test_trilha_gravada_no_arquivo_traz_o_encerramento(cfg):
+    resultado, _ = _rodar(cfg)
+    primeira = json.loads(resultado.arquivos.auditoria.read_text(encoding="utf-8").splitlines()[0])
+    assert primeira["tipo_registro"] == "execucao"
+    assert primeira["status"] == "ok" and "fim" in primeira
+
+
+def test_falha_ao_encerrar_depois_do_relatorio_vira_erro(cfg):
+    """O relatório foi escrito, mas o auditor caiu ao gravar o "ok": tenta encerrar como erro."""
+
+    class CaiNoFimOk(Auditoria):
+        def _persistir_fim(self, encerramento):
+            if encerramento["status"] == "ok":
+                raise psycopg.OperationalError("auditor caiu no encerramento")
+            return {}
+
+    auditoria = CaiNoFimOk()
+    with pytest.raises(psycopg.OperationalError, match="auditor caiu no encerramento"):
         _rodar(cfg, auditoria)
     assert auditoria.execucao["status"] == "erro"
 
@@ -245,18 +329,21 @@ def test_sem_chaves_do_langfuse_nao_ha_callback(cfg):
     assert nucleo.callbacks_observabilidade(cfg) == []
 
 
-def test_chaves_sem_o_pacote_avisam_e_seguem(cfg, monkeypatch, caplog):
-    cfg = cfg.model_copy(update={"langfuse_public_key": "pk", "langfuse_secret_key": "sk"})
+def test_chaves_sem_o_pacote_avisam_e_seguem(tmp_path, monkeypatch, caplog):
+    # chaves pelo Config de verdade (viram SecretStr), como chegam do .env
+    chaves = {"langfuse_public_key": "pk-lf-publica", "langfuse_secret_key": "sk-lf-secreta"}
+    cfg = Config(_env_file=None, pg_senha_admin="a", pg_senha_etl="e", pg_senha_agente="g",
+                 pg_senha_auditor="u", pasta_relatorios=tmp_path, **chaves)  # fmt: skip
+    assert isinstance(cfg.langfuse_secret_key, SecretStr)
     monkeypatch.setitem(sys.modules, "langfuse", None)  # import falha como se não instalado
     monkeypatch.setitem(sys.modules, "langfuse.langchain", None)
     with caplog.at_level(logging.WARNING):
         assert nucleo.callbacks_observabilidade(cfg) == []
     assert "observabilidade" in caplog.text
+    assert "sk-lf-secreta" not in caplog.text and "pk-lf-publica" not in caplog.text
 
 
 def test_langfuse_liga_com_mascara_de_dado_pessoal(cfg, monkeypatch):
-    from pydantic import SecretStr
-
     criados = {}
 
     class LangfuseFalso:

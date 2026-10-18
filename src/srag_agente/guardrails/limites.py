@@ -1,5 +1,6 @@
 """Limites de execução: evitam laço infinito, conta alta e execução sem fim."""
 
+import math
 from dataclasses import dataclass, fields
 
 
@@ -16,6 +17,8 @@ class Limites:
             valor = getattr(self, campo.name)
             if isinstance(valor, bool) or not isinstance(valor, int | float):
                 raise ValueError(f"{campo.name} precisa ser numérico, veio {valor!r}")
+            if not math.isfinite(valor):  # nan escapa de "< 0" e "== 0"; inf é "sem teto"
+                raise ValueError(f"{campo.name} precisa ser finito, veio {valor!r}")
             pode_ser_zero = campo.name == "max_voltas_cobertura"  # zero = não insiste
             if valor < 0 or (valor == 0 and not pode_ser_zero):
                 raise ValueError(f"{campo.name} inválido: {valor!r}")

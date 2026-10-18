@@ -194,6 +194,18 @@ def _hash_script(script: str) -> str:
 def montar_relatorio(
     dados: DadosRelatorio, auditoria: Auditoria, pasta_base: Path
 ) -> ArquivosRelatorio:
+    """Gráficos, HTML, Markdown e a trilha, de uma vez (trilha já encerrada)."""
+    arquivos = escrever_relatorio(dados, pasta_base)
+    auditoria.gravar_jsonl(arquivos.auditoria)
+    return arquivos
+
+
+def escrever_relatorio(dados: DadosRelatorio, pasta_base: Path) -> ArquivosRelatorio:
+    """Gráficos, HTML e Markdown. Não grava a trilha: `auditoria` é só o destino dela.
+
+    O núcleo grava o relatório antes de encerrar a execução e a trilha depois: assim a execução
+    só fica "ok" com o relatório no disco, e o arquivo da trilha traz o encerramento.
+    """
     pasta = pasta_base / f"{dados.data_execucao:%Y-%m-%d}_{dados.uf}_{str(dados.id_execucao)[:8]}"
     (pasta / "graficos").mkdir(parents=True, exist_ok=True)
     graficos: dict[str, dict[str, Markup]] = {}
@@ -226,5 +238,5 @@ def montar_relatorio(
         pasta=pasta,
         html=html,
         markdown=markdown,
-        auditoria=auditoria.gravar_jsonl(pasta / "auditoria.jsonl"),
+        auditoria=pasta / "auditoria.jsonl",
     )

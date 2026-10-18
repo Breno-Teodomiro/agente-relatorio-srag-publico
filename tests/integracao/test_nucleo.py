@@ -72,3 +72,28 @@ def test_erro_no_agente_fica_gravado_como_erro_com_os_tokens(cfg_teste, banco_ca
     assert status == "erro" and fim is not None
     assert (tokens_entrada, tokens_saida) == (100, 20)
     assert "TimeoutError" in erro
+
+
+def test_relatorio_que_nao_grava_fica_como_erro_no_banco(cfg_teste, banco_carregado, conn_etl,
+                                                         tmp_path):  # fmt: skip
+    """Pasta de relatórios sem permissão: o banco não pode dizer "ok" sem relatório no disco."""
+    somente_leitura = tmp_path / "relatorios"
+    somente_leitura.mkdir()
+    somente_leitura.chmod(0o500)
+    cfg = cfg_teste.model_copy(update={"pasta_relatorios": somente_leitura})
+    antes = conn_etl.execute("SELECT max(inicio) FROM auditoria.execucoes").fetchone()[0]
+    try:
+        with pytest.raises(PermissionError):
+            gerar_relatorio(cfg, hoje=HOJE, componentes=_componentes())
+    finally:
+        somente_leitura.chmod(0o700)
+    conn_etl.commit()  # nova transação: enxerga o que o auditor gravou
+    status, fim, tokens_entrada, erro = conn_etl.execute(
+        "SELECT e.status, e.fim, e.tokens_entrada, v.erro "
+        "FROM auditoria.execucoes AS e JOIN auditoria.eventos AS v USING (id_execucao) "
+        "WHERE (%s::timestamptz IS NULL OR e.inicio > %s) AND v.no = 'nucleo' "
+        "ORDER BY e.inicio DESC LIMIT 1", (antes, antes)).fetchone()  # fmt: skip
+    assert status == "erro" and fim is not None
+    assert tokens_entrada == 400  # o gasto do agente entra no encerramento de erro
+    assert "PermissionError" in erro
+    assert not list(somente_leitura.rglob("auditoria.jsonl"))
