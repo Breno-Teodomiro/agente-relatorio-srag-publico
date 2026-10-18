@@ -117,6 +117,25 @@ Situações possíveis: `ok`, `parcial` (faltou evidência ou estourou um teto; 
 Códigos de saída da CLI: `0` deu certo, `1` falha ao rodar (ex.: banco fora do ar), `2`
 configuração inválida, `130` Ctrl+C. Nenhuma mensagem de erro repete senha ou chave.
 
+### Tela (opcional)
+
+```bash
+make app          # abre http://127.0.0.1:8501 (instala o extra `app` na primeira vez)
+```
+
+Duas abas: **Relatório** (UF e pergunta complementar opcional; mostra a situação, o relatório
+completo com métricas, gráficos, notícias e trilha, e deixa baixar o `auditoria.jsonl`) e
+**Dicionário de dados** (pergunta ou nome de campo; devolve os 3 trechos mais próximos com a
+página e a origem: nome exato ou similaridade). A tela chama o mesmo núcleo da CLI, então valem
+as mesmas guardrails e a mesma auditoria. A aba Relatório gasta crédito de LLM como o
+`make relatorio`; a do dicionário não usa LLM. Pelo terminal, a consulta ao dicionário é
+`uv run srag dicionario "o que é VACINA_COV?"`.
+
+Segurança da tela: escuta só em `127.0.0.1` (não abre para a rede); o texto de LLM ou de notícia
+nunca entra como HTML da página (o relatório, já escapado, aparece num iframe isolado, e o
+dicionário como texto puro); chaves não aparecem e os erros chegam sem traceback e com dado
+pessoal mascarado.
+
 ### Alternativa: tudo por Docker
 
 A imagem ([`Dockerfile`](Dockerfile)) roda a CLI com usuário sem privilégio, sem capacidades do
@@ -207,8 +226,8 @@ graph TD;
 
 Depois do grafo, o código monta o relatório (HTML, Markdown, gráficos) e o anexo de auditoria
 ([`relatorio/montar.py`](src/srag_agente/relatorio/montar.py)). O ponto único de entrada é
-`nucleo.gerar_relatorio()` ([`nucleo.py`](src/srag_agente/nucleo.py)), usado pela CLI e pronto para
-uma tela futura.
+`nucleo.gerar_relatorio()` ([`nucleo.py`](src/srag_agente/nucleo.py)), usado pela CLI e pela tela
+([`app.py`](src/srag_agente/app.py)).
 
 ### Ferramentas fechadas
 
@@ -535,8 +554,7 @@ Cada ADR tem a seção "Limites conhecidos" completa. Resumo:
   RSS não é API documentada e pode mudar. O "tempo real" depende do relógio da máquina
   ([ADR 0007](docs/adr/0007-noticias-em-duas-janelas.md), [ADR 0009](docs/adr/0009-noticias-via-httpx-tavily-rss.md)).
 
-**Fora do escopo** (pontos de encaixe no [desenho](docs/projeto/specs/2026-10-14-agente-srag-design.md), seção 10): tela,
-ocupação real de UTI via CNES, multiagente, previsão de casos e deploy em nuvem.
+**Fora do escopo** (pontos de encaixe no [desenho](docs/projeto/specs/2026-10-14-agente-srag-design.md), seção 10): ocupação real de UTI via CNES, multiagente, previsão de casos e deploy em nuvem.
 
 ---
 

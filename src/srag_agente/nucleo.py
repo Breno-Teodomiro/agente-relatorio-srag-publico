@@ -1,4 +1,4 @@
-"""Ponto único de geração do relatório (CLI hoje; uma tela chamaria o mesmo).
+"""Ponto único de geração do relatório (CLI e tela chamam o mesmo).
 
 Regras do encerramento, valendo em sucesso e em erro:
 - toda execução aberta se encerra (status final + consumo + contagem da silver que ela viu),
@@ -273,7 +273,7 @@ def gerar_relatorio(
     hoje: date | None = None,
     componentes: Componentes | None = None,
 ) -> ResultadoExecucao:
-    if uf not in get_args(UF):  # a CLI já confere; uma tela futura chamaria direto
+    if uf not in get_args(UF):  # a CLI e a tela já conferem
         raise ValueError(f"UF inválida: {uf!r}")
     hoje = hoje or date.today()
     componentes = componentes or componentes_reais(cfg)

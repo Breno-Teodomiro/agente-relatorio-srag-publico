@@ -1,5 +1,5 @@
 .PHONY: instalar subir parar carga indexar avaliar-rag qualidade grafo relatorio testes lint \
-        diagrama docker-build docker-carga docker-indexar docker-relatorio tudo
+        diagrama app docker-build docker-carga docker-indexar docker-relatorio tudo
 
 UF ?= BR
 # Pergunta complementar opcional: make relatorio UF=SP PERGUNTA="Como está a UTI?"
@@ -73,6 +73,12 @@ docker-relatorio:
 	$(DOCKER) compose --profile app run --rm app relatorio --uf $(UF) $(COM_PERGUNTA)
 
 tudo: subir carga indexar relatorio
+
+# Tela local (relatório + dicionário). Só em 127.0.0.1: nunca aceita conexão de outra máquina.
+# O extra `app` não vem na instalação mínima; `uv run --extra app` o instala se faltar.
+app:
+	uv run --extra app streamlit run src/srag_agente/app.py --server.address 127.0.0.1 \
+	  --server.headless true --browser.gatherUsageStats false
 
 # Renderiza com mermaid-cli (npx + Chromium); -f ajusta a página ao desenho (proporção ~A4 paisagem). Sem Chromium do sistema, o puppeteer baixa o dele;
 # para usar um já instalado: PUPPETEER_EXECUTABLE_PATH=/caminho/do/chrome make diagrama

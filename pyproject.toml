@@ -22,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 observabilidade = ["langfuse>=3"]
+app = ["streamlit==1.66.0"]
 
 [project.scripts]
 srag = "srag_agente.cli:main"
