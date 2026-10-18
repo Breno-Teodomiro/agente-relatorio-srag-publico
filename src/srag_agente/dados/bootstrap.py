@@ -22,20 +22,27 @@ def _criar_banco_se_preciso(conn: psycopg.Connection, banco: str) -> None:
 
 
 def _comando_papel(
-    conn: psycopg.Connection, usuario: str, senha: str, existe: bool
+    conn: psycopg.Connection | None,
+    usuario: str,
+    senha: str,
+    existe: bool,
+    em_hash: bool = True,
 ) -> sql.Composed:
-    """Monta o CREATE/ALTER ROLE com a senha já em hash SCRAM, calculado aqui no cliente.
+    """Monta o CREATE/ALTER ROLE; por padrão com a senha já em hash SCRAM, calculado no cliente.
 
     Assim a senha em texto puro nunca trafega no comando, e não aparece em log do servidor,
     em `pg_stat_activity` nem em `pg_stat_statements`.
+    `em_hash=False` manda a senha como texto: só para provedor que recusa hash (o banco da
+    demonstração) e só sobre TLS; quem chama confere a conexão cifrada antes.
     """
-    hash_senha = conn.pgconn.encrypt_password(
-        senha.encode("utf-8"), usuario.encode("utf-8"), b"scram-sha-256"
-    ).decode("ascii")
+    if em_hash:
+        senha = conn.pgconn.encrypt_password(
+            senha.encode("utf-8"), usuario.encode("utf-8"), b"scram-sha-256"
+        ).decode("ascii")
     comando = (
         "ALTER ROLE {} WITH LOGIN PASSWORD {}" if existe else "CREATE ROLE {} LOGIN PASSWORD {}"
     )
-    return sql.SQL(comando).format(sql.Identifier(usuario), sql.Literal(hash_senha))
+    return sql.SQL(comando).format(sql.Identifier(usuario), sql.Literal(senha))
 
 
 def _criar_papeis(conn: psycopg.Connection, cfg: Config) -> None:

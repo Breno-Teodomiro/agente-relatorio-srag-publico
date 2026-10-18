@@ -396,3 +396,37 @@ def test_mascara_do_langfuse_usa_o_mesmo_mascaramento_da_auditoria():
     assert nucleo.mascara_observabilidade(data=entrada) == {
         f"cpf {MASCARA}": [f"pergunta {MASCARA}", MASCARA, 0.5, None], "uf": "BR",
     }  # fmt: skip
+
+
+# --- componentes_reais respeita a busca do dicionário --------------------------------------------
+def _sem_rede(monkeypatch, carregados: list):
+    """Troca o que `componentes_reais` monta por dublês; `carregados` anota o modelo carregado."""
+    modelo = types.SimpleNamespace(provedor="p", modelo="m")
+    monkeypatch.setattr(nucleo, "criar_modelos", lambda cfg: [modelo])
+    monkeypatch.setattr(nucleo, "modelo_com_ferramentas", lambda *a: None)
+    monkeypatch.setattr(nucleo, "modelo_estruturado", lambda *a: None)
+    monkeypatch.setattr(nucleo, "criar_redator", lambda m: None)
+    monkeypatch.setattr(nucleo, "criar_classificador", lambda m: None)
+    monkeypatch.setattr(nucleo, "callbacks_observabilidade", lambda cfg: [])
+
+    def criar(pasta):
+        carregados.append(pasta)
+        return embedder_falso
+
+    monkeypatch.setattr(nucleo, "criar_embedder", criar)
+
+
+def test_componentes_reais_no_modo_vetor_carrega_o_modelo(cfg, monkeypatch):
+    carregados: list = []
+    _sem_rede(monkeypatch, carregados)
+    componentes = nucleo.componentes_reais(cfg)
+    assert carregados == [cfg.pasta_cache_modelos]
+    assert componentes.embedder is embedder_falso
+
+
+def test_componentes_reais_no_modo_texto_nao_carrega_o_modelo(cfg, monkeypatch):
+    carregados: list = []
+    _sem_rede(monkeypatch, carregados)
+    componentes = nucleo.componentes_reais(cfg.model_copy(update={"busca_dicionario": "texto"}))
+    assert carregados == []
+    assert componentes.embedder is None

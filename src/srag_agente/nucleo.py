@@ -78,7 +78,7 @@ class Componentes:
     redator: Redator
     classificador: Classificador
     buscador: Buscador
-    embedder: Embedder
+    embedder: Embedder | None  # None: busca do dicionário por texto, sem carregar o modelo
     callbacks: list = field(default_factory=list)
 
 
@@ -137,6 +137,8 @@ def callbacks_observabilidade(cfg: Config) -> list:
 def componentes_reais(cfg: Config) -> Componentes:
     modelos = criar_modelos(cfg)  # sem chave de LLM: ConfiguracaoInvalida, antes de tudo
     tavily = cfg.tavily_api_key.get_secret_value() if cfg.tavily_api_key else None
+    # o modelo de embeddings pesa ~0,6 GB de memória: só carrega se a busca for por vetor
+    embedder = criar_embedder(cfg.pasta_cache_modelos) if cfg.busca_dicionario == "vetor" else None
     return Componentes(
         provedor=modelos[0].provedor,
         modelo=modelos[0].modelo,
@@ -144,7 +146,7 @@ def componentes_reais(cfg: Config) -> Componentes:
         redator=criar_redator(modelo_estruturado(modelos, TextoRelatorio)),
         classificador=criar_classificador(modelo_estruturado(modelos, ClassificacaoEscopo)),
         buscador=BuscadorNoticias(httpx.Client(), tavily or None),
-        embedder=criar_embedder(cfg.pasta_cache_modelos),
+        embedder=embedder,
         callbacks=callbacks_observabilidade(cfg),
     )
 
