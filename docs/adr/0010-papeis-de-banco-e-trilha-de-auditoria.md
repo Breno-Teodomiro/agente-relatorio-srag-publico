@@ -10,7 +10,7 @@ agente decidiu, com qual modelo, código e prompt.
 
 ## Decisão
 
-**Papéis** (`dados/sql/00_estrutura.sql`, `04_auditoria.sql`; o admin `postgres` só no bootstrap):
+**Papéis** (`src/srag_agente/dados/sql/00_estrutura.sql`, `04_auditoria.sql`; o admin `postgres` só no bootstrap):
 
 | Papel | Pode | Não pode |
 |---|---|---|

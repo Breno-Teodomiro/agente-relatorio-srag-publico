@@ -43,9 +43,19 @@ leitura, erro sem a chave da API, decisão de reserva **depois** dos filtros e t
 
 ## Limites conhecidos
 
-- O formato da autenticação `Bearer` não foi conferido contra a API real durante a
-  implementação (sem rede nos testes); conferir com uma chamada real e a chave do Breno na
-  verificação final (Task 19).
+- Os testes automatizados não usam a rede; a autenticação `Bearer` foi conferida contra a API
+  real numa execução de ponta a ponta (a trilha de auditoria registra `provedor: tavily`
+  nas buscas). Mudança futura no formato da API só aparece nessa execução, não na suíte.
+- O teto é de 4 chamadas a `buscar_noticias` por execução (uma por janela basta; o excedente é
+  recusado com mensagem ao orquestrador). O filtro de relevância exige o tema (síndrome
+  respiratória ou SRAG) e um termo de saúde pública e barra uma lista pequena e declarada de
+  domínios (redes sociais e sites financeiros, `DOMINIOS_BLOQUEADOS` em `noticias.py`). Passa
+  notícia estrangeira que fale de SRAG e casos, e sigla de outro assunto com termo de saúde em
+  domínio fora da lista. A trilha trunca o resultado das buscas em 2000 caracteres, então um
+  número que vem só da notícia não é auditável depois pela trilha.
+- A relevância das notícias depende do filtro local do buscador: a Tavily devolve resultados
+  fora de assunto (por exemplo, a sigla SRAG de outras áreas) e o filtro descarta o que não
+  trata de saúde pública.
 - O timeout é por leitura, não do tempo total do download.
 - O Google News RSS não é API documentada; pode mudar sem aviso.
 - Item sem data é aceito em qualquer janela (ADR 0007).

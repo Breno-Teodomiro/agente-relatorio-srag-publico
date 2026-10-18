@@ -10,7 +10,7 @@ atrasadas: sem corte, toda série termina numa queda que não aconteceu.
 
 ## Decisão
 
-- **Todo número do relatório vem do SQL** (views da camada `gold`, `dados/sql/03_gold.sql`), lido
+- **Todo número do relatório vem do SQL** (views da camada `gold`, `src/srag_agente/dados/sql/03_gold.sql`), lido
   por `metricas/repositorio.py` e montado em `metricas/catalogo.py`/`series.py`. O LLM só comenta.
   O guardrail de saída confere cada número citado contra as evidências (ADR 0005).
 - **"Hoje" = data de referência = `max(dt_sintomas)`** (`gold.referencia`), isto é, o máximo de

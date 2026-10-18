@@ -10,7 +10,7 @@ janela curta e recente, a maioria dos casos ainda está "sem desfecho", e a taxa
 ## Decisão
 
 - `mortalidade`, `uti` e `vacinacao` são calculadas sobre **todo o período da base** (temporada
-  até a data de referência), pela view `gold.indicadores` (`dados/sql/03_gold.sql`).
+  até a data de referência), pela view `gold.indicadores` (`src/srag_agente/dados/sql/03_gold.sql`).
 - O período (`periodo_inicio`, `periodo_fim`) sai junto de cada métrica no relatório.
 - Só a taxa de aumento usa janela curta (7 × 7 dias consolidados, ADR 0003).
 - Cada métrica devolve numerador, denominador e excluídos (vazio, ignorado, sem desfecho).

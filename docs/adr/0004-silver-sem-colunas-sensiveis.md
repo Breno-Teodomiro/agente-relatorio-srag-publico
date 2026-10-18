@@ -11,7 +11,7 @@ precisa dessas colunas.
 ## Decisão
 
 - A `raw` guarda o CSV como veio (só o papel `srag_etl` enxerga). A passagem raw → silver
-  (`dados/sql/01_silver.sql`) **não leva**: `NU_NOTIFIC`, `DT_NASC`, todos os municípios e
+  (`src/srag_agente/dados/sql/01_silver.sql`) **não leva**: `NU_NOTIFIC`, `DT_NASC`, todos os municípios e
   unidades, `CS_RACA`, `CS_ETINIA`, `CS_ESCOL_N`, `PAC_COCBO`, `PAC_DSCBO`, lotes de vacina,
   `TEM_CPF`, `POV_CT`, `ESTRANG`, `CS_SEXO`, sintomas e textos livres.
 - Fica: UF de notificação, faixa etária (idade vira faixa), datas de notificação, de início dos sintomas,
