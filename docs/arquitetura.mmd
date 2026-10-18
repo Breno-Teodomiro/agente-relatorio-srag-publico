@@ -1,0 +1,85 @@
+---
+title: Agente de relatório de SRAG — arquitetura conceitual
+config:
+  theme: base
+  themeVariables:
+    fontSize: 16px
+    lineColor: "#4a5568"
+---
+flowchart TB
+  subgraph AGENTE["Agente LangGraph · fluxo explícito e auditável"]
+    direction LR
+    GE["Guardrail de entrada<br/>escopo · injeção · PII"]
+    ORQ{{"Agente principal<br/>ORQUESTRADOR"}}
+    COB["Verificação de cobertura<br/>(código, sem LLM)"]
+    RED["Redator<br/>só comenta, não calcula"]
+    GS["Guardrail de saída<br/>números · citações · links · PII"]
+    LIM["Limites de execução<br/>chamadas · tokens · tempo · voltas"]
+  end
+
+  subgraph TOOLS["Ferramentas fechadas · sem SQL livre · motivo obrigatório"]
+    direction LR
+    T1["consultar_metricas"]
+    T2["consultar_serie"]
+    T3["consultar_distribuicao"]
+    T4["buscar_noticias"]
+    T5["consultar_dicionario"]
+  end
+
+  LLM(["LLM<br/>OpenRouter gpt-4.1-mini<br/>reserva: OpenAI"])
+  NEWS(["Fontes de notícias<br/>Tavily → Google News RSS"])
+
+  subgraph DADOS["Postgres 16 + pgvector · arquitetura medalhão"]
+    direction LR
+    CSV[("CSV Open DATASUS<br/>SRAG 2025")] -->|"COPY sem tratamento"| RAW[("raw<br/>dado bruto<br/>(município, DT_NASC, NU_NOTIFIC,<br/>raça e campos livres só aqui)")]
+    RAW -->|"limpeza + minimização LGPD"| SILVER[("silver")]
+    SILVER -->|"somente agregados"| GOLD[("gold · views<br/>única fonte dos números")]
+    DIC[("Dicionário de dados<br/>PDF DATASUS")] -->|"embeddings locais"| VET[("gold.dicionario_trechos<br/>pgvector")]
+  end
+
+  AUD[("Auditoria<br/>auditoria.execucoes / eventos<br/>+ auditoria.jsonl")]
+  REL["Relatório HTML + Markdown<br/>4 métricas · 2 gráficos · comentários<br/>supressão de células pequenas"]
+
+  U["Profissional de saúde<br/>srag relatorio --uf"]
+  GE --> ORQ
+  LIM -.-> ORQ
+  ORQ --> COB
+  COB -->|"faltou evidência"| ORQ
+  COB --> RED --> GS
+  GS -->|"reprovado: nova tentativa"| RED
+
+  U --> AGENTE
+  AGENTE -->|"aprovado ou revisão humana"| REL
+  AGENTE ==>|"o orquestrador escolhe a ferramenta"| TOOLS
+  AGENTE <-->|"tool calling · saída estruturada · classificador de escopo"| LLM
+  TOOLS -->|"metricas, serie, distribuicao: SQL fixo · srag_agente somente leitura em gold<br/>dicionario: busca vetorial"| DADOS
+  TOOLS -->|"buscar_noticias: HTTP · conteúdo tratado como dado, nunca como instrução"| NEWS
+  AGENTE -.->|"cada decisão + motivo (srag_auditor grava)"| AUD
+  TOOLS -.->|"cada chamada + motivo"| AUD
+
+  subgraph LEG["Critérios de avaliação (cores)"]
+    direction LR
+    L1["1 Arquitetura"]
+    L2["2 Governança e transparência"]
+    L3["3 Guardrails"]
+    L4["4 Dados sensíveis"]
+    L5["5 Clean code: nós, ferramentas e<br/>guardrails em módulos pequenos e testados"]
+  end
+
+  classDef arq fill:#dbe7f5,stroke:#2c5282,color:#1a202c
+  classDef gov fill:#e6efd9,stroke:#4a6b2a,color:#1a202c
+  classDef gua fill:#f8e3c5,stroke:#9c5a10,color:#1a202c
+  classDef sen fill:#f3d9d9,stroke:#9b2c2c,color:#1a202c
+  classDef cln fill:#e4e0ee,stroke:#553c9a,color:#1a202c
+  classDef neu fill:#f1f2f4,stroke:#4a5568,color:#1a202c
+
+  class ORQ,T1,T2,T3,T4,T5,COB,RED,LLM,NEWS,GOLD,VET,CSV,DIC,REL,L1 arq
+  class AUD,L2 gov
+  class GE,GS,LIM,L3 gua
+  class RAW,SILVER,L4 sen
+  class L5 cln
+  class U neu
+  style DADOS fill:#fbfbfc,stroke:#718096,color:#1a202c
+  style AGENTE fill:#fbfbfc,stroke:#718096,color:#1a202c
+  style TOOLS fill:#fbfbfc,stroke:#718096,color:#1a202c
+  style LEG fill:#ffffff,stroke:#a0aec0,color:#1a202c
