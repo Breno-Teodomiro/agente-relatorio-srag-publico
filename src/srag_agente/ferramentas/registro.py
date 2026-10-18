@@ -10,8 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from srag_agente.ferramentas.dicionario import TrechoDicionario
 from srag_agente.ferramentas.noticias import Janela, ResultadoBusca, noticia_relevante
-from srag_agente.guardrails.conteudo_externo import formatar_para_llm, limpar_texto, tem_injecao
-from srag_agente.guardrails.padroes import mascarar_pii
+from srag_agente.guardrails.conteudo_externo import (
+    formatar_para_llm,
+    limpar_texto,
+    tem_dado_pessoal,
+    tem_injecao,
+)
 from srag_agente.metricas.catalogo import ChaveMetrica, calcular_metrica
 from srag_agente.metricas.repositorio import DadosIndisponiveis
 from srag_agente.metricas.series import Dimensao, TipoSerie, calcular_distribuicao, calcular_serie
@@ -82,7 +86,7 @@ class ArgsNoticias(ArgumentosBase):
 
         A mensagem não repete o termo; a recusa conta no teto como qualquer chamada inválida.
         """
-        if tem_injecao(valor) or mascarar_pii(valor)[1]:
+        if tem_injecao(valor) or tem_dado_pessoal(valor):
             raise ValueError("o termo não pode conter dado pessoal nem instrução ao modelo")
         return valor
 

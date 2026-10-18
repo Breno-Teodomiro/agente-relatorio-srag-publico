@@ -231,6 +231,81 @@ def test_instrucao_do_ano_seguido_de_contagem_explica_as_duas_leituras(evidencia
     assert "contagem" in instrucao and "vírgula" in instrucao
 
 
+# ---- re-revisão: ano é ano, salvo em posição de quantidade (I1, M1, M2) ------------------------
+# Nas evidências, 2024, 2025 e 2026 são ANOS (séries e notícias) e 84 é contagem; 1938 não existe.
+@pytest.mark.parametrize(
+    "resumo",
+    [
+        "Em 2025 os casos subiram.",  # artigo entre o ano e o substantivo
+        "Em 2025 houve casos graves.",  # verbo
+        "Entre 2024 e 2025 os óbitos caíram.",
+        "Em 2025 as internações cresceram.",
+        "Em 2025 a 2026 os casos subiram.",  # preposição
+        "Na série de 2025 [1] os casos subiram.",  # citação
+        "Em 2025 84 casos entraram na série.",  # número: a contagem é o 84
+        "Os casos subiram em 2025.",
+        "De 2024 a 2025 os casos subiram.",
+        "Na SE 23 de 2025 os casos subiram.",
+        "O ano com mais casos foi 2025.",  # verbo de medida, mas a oração fala de ano
+        "Os anos com mais óbitos foram 2024 e 2025.",
+        "A referência foi 2025.",  # singular sem contagem na oração
+        "Os dados foram de 2024 a 2025.",  # plural com "de" e sem contagem na oração
+    ],
+)
+def test_ano_em_posicao_de_data_passa(evidencias, resumo):
+    assert _violacoes(evidencias, resumo_executivo=resumo) == []
+
+
+@pytest.mark.parametrize(
+    "resumo",
+    [
+        "Foram 2025 óbitos no período.",
+        "Foram 2026 internações em UTI.",
+        "O total de óbitos foi 2025.",
+        "O total de óbitos foi de 2025.",
+        "Óbitos: 2025.",
+        "Foram 2025 notificados.",  # verbo de medida no plural, sem substantivo da lista
+        "Foram 2025 ocorrências.",
+        "Foram 2025 novos e graves casos.",
+        "Em 2025 novos casos surgiram.",  # adjetivo da lista curta + contagem (limite declarado)
+        "As internações somaram 1938 no mês.",
+        "Neste ano, foram 2025 notificados.",  # "ano" de outra oração não salva
+    ],
+)
+def test_ano_em_posicao_de_quantidade_e_conferido_como_contagem(evidencias, resumo):
+    resultado = _verificar(texto_valido(resumo_executivo=resumo), evidencias)
+    assert _tem(resultado.violacoes, "numero_nao_conferido"), resultado.violacoes
+    (instrucao,) = resultado.instrucoes
+    assert "contagem" in instrucao and "não aparece nas evidências" not in instrucao
+    # coerente com as duas posições (antes e depois do número) e com a regra do prompt
+    assert "posição de quantidade" in instrucao and "'Óbitos:'" in instrucao
+    assert "vírgula" in instrucao and "ponto de milhar" in instrucao
+
+
+@pytest.mark.parametrize(
+    "texto,esperado",
+    [
+        ("Em 2025 os casos subiram.", []),
+        ("Em 2025 84 casos.", [84.0]),
+        ("Foram 2025 notificados.", [2025.0]),
+        ("Óbitos: 2025.", [2025.0]),
+        ("O ano com mais casos foi 2025.", []),
+    ],
+)
+def test_extracao_le_ano_so_em_posicao_de_quantidade(texto, esperado):
+    assert [n.valor for n in extrair_numeros(texto)] == esperado
+
+
+@pytest.mark.parametrize(
+    "resumo", ["As internações somaram 1938 no mês.", "As internações somaram 1.938 no mês."]
+)
+def test_contagem_de_quatro_algarismos_confere_como_contagem(evidencias, resumo):
+    """M2: "somaram 1938" é contagem; antes era lido como ano e a instrução mandava apagá-lo."""
+    extra = Evidencia(ferramenta="consultar_metricas", argumentos={},
+                      dados={"chave": "internacoes_extra", "casos": 1938})  # fmt: skip
+    assert _violacoes([*evidencias, extra], resumo_executivo=resumo) == []
+
+
 @pytest.mark.parametrize(
     "resumo,ok",
     [

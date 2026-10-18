@@ -354,8 +354,9 @@ class NosAgente:
         trilha também guarda só tipos (o do erro e o da causa), nunca a mensagem: com
         function_calling ela traz os `arguments` crus, e o campo `erro` aparece no relatório. Os
         tokens que o provedor informou na tentativa mal formada entram no total da execução (o
-        custo e a soma que o teto de tokens confere); se ele não informou, a tentativa conta 0
-        (limite declarado no ADR 0010).
+        custo registrado na trilha); se ele não informou, a tentativa conta 0 (limite declarado
+        no ADR 0010). O laço de redação não confere o teto de tokens (`rota_saida` olha só o
+        status): ele é limitado pelo número máximo de tentativas de redação.
 
         Se a ÚLTIMA tentativa der ErroRedacao, a execução vai a revisão humana sem texto: o
         relatório sai igual ao de um texto reprovado (que fica retido), só sem o hash dele na

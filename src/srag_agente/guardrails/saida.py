@@ -22,9 +22,14 @@ Barra (violação → nova redação → revisão humana):
   barram, porque não há casa decimal a conferir; de 2 a 4 ("três casos") é valor suprimido;
 - número derivado (diferença, soma, razão, "pontos") só passa se coincidir com um número das
   evidências: a tolerância é só a de arredondamento na casa exibida;
-- ano e data que não aparecem nas evidências; inteiro com cara de ano seguido de substantivo de
-  contagem ("Foram 2025 óbitos") é contagem e confere só com contagem (sem vírgula, "Em 2025
-  casos..." também é lido assim; a instrução pede a vírgula);
+- ano e data que não aparecem nas evidências. Inteiro de 1900 a 2100 sem ponto é ano, salvo em
+  posição de quantidade, quando é contagem e confere só com contagem: (a) substantivo de contagem
+  colado depois dele ou depois de até 2 adjetivos de uma lista curta ("2025 óbitos", "2025 novos
+  e graves casos"); (b) rótulo de contagem antes ("Óbitos: 2025") ou verbo de medida antes, numa
+  oração que não fala de "ano(s)" ("foram 2025", "somaram 1938"; no singular ou com "de", só se
+  a oração fala de contagem ou total: "o total de óbitos foi 2025"). Artigo, preposição, verbo,
+  outro número ou [n] entre o ano e a contagem deixam o ano ser ano ("Em 2025 os casos",
+  "Em 2025 84 casos", "SE 23 de 2025");
 - citação inexistente, notícia de uma janela usada em seção da outra, notícia com data fora da
   busca que a trouxe; link que não é exatamente uma das URLs devolvidas (com ou sem esquema);
 - recomendação clínica, marcação HTML e instrução dirigida a modelo.
@@ -50,7 +55,12 @@ descrito como "nos últimos 30 dias", que é outra janela); contagem por extenso
 junto de substantivo de contagem ("três em RR", "dezenas de casos" e "meia dúzia" passam), e
 "um caso" só conta quando há supressão nos dados; fração em palavras só junto de "do/da/dos/das" +
 contagem; domínio sem esquema nem ``www`` só é reconhecido nas terminações da lista ``_TLDS``; a
-lista de termos clínicos não cobre paráfrase.
+lista de termos clínicos não cobre paráfrase. Ano x contagem é decidido pela posição, não pelo
+sentido: ano legítimo colado à contagem sem vírgula ("Em 2025 casos foram...", "Em 2025 novos
+casos...") e ano depois de verbo de medida no plural numa oração sem "ano" ("Os destaques foram
+2024 e 2025") barram, e a instrução pede a vírgula; contagem de 4 algarismos fora dessas posições
+e sem ponto de milhar ("1938 internaram-se", "somaram ao todo 1938") é lida como ano e só passa se
+o ano estiver nas evidências. O prompt pede ano como data ("em 2025,") e milhar com ponto.
 """
 
 import contextlib
@@ -142,6 +152,27 @@ _SUBSTANTIVO_CONTAGEM = (
 )
 # Depois do número: substantivo de contagem, com no máximo uma palavra no meio ("2 novos casos").
 _SEGUE_CONTAGEM = re.compile(rf"\s+(?:[\w-]+\s+)?{_SUBSTANTIVO_CONTAGEM}\b", re.IGNORECASE)
+# Inteiro com cara de ano em posição de quantidade (ver `_ano_como_contagem`). (a) Depois dele:
+# o substantivo colado ou depois de até 2 adjetivos desta lista curta ("2025 novos e graves
+# casos"); artigo, preposição, verbo, número e [n] no meio deixam o ano ser ano.
+_ADJETIVO_CONTAGEM = (
+    r"(?:nov[oa]s|mais|graves|outr[oa]s|confirmad[oa]s|notificad[oa]s|registrad[oa]s|suspeitos)"
+)
+_CONTAGEM_DEPOIS = re.compile(
+    rf"\s*(?:{_ADJETIVO_CONTAGEM}(?:\s*,\s*|\s+e\s+|\s+)){{0,2}}{_SUBSTANTIVO_CONTAGEM}\b",
+    re.IGNORECASE,
+)
+# (b) Antes dele, na mesma oração: rótulo de contagem ("Óbitos: 2025") ou verbo de medida.
+_ROTULO_CONTAGEM = re.compile(rf"\b(?:{_SUBSTANTIVO_CONTAGEM}|total)\s*:\s*$", re.IGNORECASE)
+_VERBO_MEDIDA = re.compile(
+    r"\b(?:(?P<plural>foram|somaram|totalizaram|atingiram|chegaram\s+a)"
+    r"|foi|somou|totalizou|atingiu|chegou\s+a)"
+    r"\s+(?P<de>de\s+)?(?:cerca\s+de\s+|aproximadamente\s+|quase\s+)?$",
+    re.IGNORECASE,
+)
+_FALA_DE_CONTAGEM = re.compile(rf"\b(?:{_SUBSTANTIVO_CONTAGEM}|total)\b", re.IGNORECASE)
+_FALA_DE_ANO = re.compile(r"\banos?\b", re.IGNORECASE)
+_FIM_DE_ORACAO = re.compile(r"[.;!?,]\s|[()]")
 _EXTENSO_PEQUENO = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "três": 3, "tres": 3, "quatro": 4}
 _PALAVRA_NUMERO = (
     r"(?:um|uma|dois|duas|tr[êe]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze"
@@ -393,13 +424,33 @@ def _limpar_para_numeros(texto: str) -> str:
     return _apagar_padrao(_datas_do_texto(texto)[0], _CONTEXTOS_FIXOS)
 
 
+def _ano_como_contagem(texto: str, numero: NumeroCitado) -> bool:
+    """Inteiro com cara de ano (1900-2100) em posição de quantidade é contagem, não ano.
+
+    (a) contagem logo depois ("2025 óbitos", "2025 novos casos"); (b) rótulo de contagem logo
+    antes ("Óbitos: 2025") ou verbo de medida logo antes, numa oração que não fala de "ano(s)":
+    no plural sem "de" basta o verbo ("foram 2025", "somaram 1938"); no singular ou com "de",
+    a oração tem de falar de contagem ou de total ("o total de óbitos foi 2025").
+    """
+    if _CONTAGEM_DEPOIS.match(texto, numero.fim):
+        return True
+    oracao = _FIM_DE_ORACAO.split(texto[: numero.inicio])[-1]
+    if _ROTULO_CONTAGEM.search(oracao):
+        return True
+    verbo = _VERBO_MEDIDA.search(oracao)
+    if verbo is None or _FALA_DE_ANO.search(oracao):
+        return False
+    direto_no_plural = verbo.group("plural") is not None and verbo.group("de") is None
+    return direto_no_plural or bool(_FALA_DE_CONTAGEM.search(oracao, 0, verbo.start()))
+
+
 def extrair_numeros(texto: str) -> list[NumeroCitado]:
     """Números citados num texto (sem anos, datas, links, citações [n] nem rótulos "<5").
 
-    Inteiro com cara de ano seguido de contagem ("2025 óbitos") é número, não ano.
+    Inteiro com cara de ano em posição de quantidade ("2025 óbitos", "foram 2025") é número.
     """
     limpo = _limpar_para_numeros(_normalizar(texto))
-    return [n for n, ano in _tokens(limpo) if not ano or _SEGUE_CONTAGEM.match(limpo, n.fim)]
+    return [n for n, ano in _tokens(limpo) if not ano or _ano_como_contagem(limpo, n)]
 
 
 # ---- o que as evidências permitem --------------------------------------------------------------
@@ -576,9 +627,11 @@ def _host_e_caminho(endereco: str) -> tuple[str, str]:
 
 
 def _instrucao_ano_contagem(numero: NumeroCitado) -> str:
-    return (f"'{numero.bruto}' seguido de casos, óbitos etc. é lido como contagem e não está no "
-            "JSON. Se é o ano, separe-o com vírgula ('Em 2025, os casos...'); se é contagem, use "
-            "só uma contagem do JSON ou remova o número.")  # fmt: skip
+    return (f"'{numero.bruto}' está em posição de quantidade (antes de casos, óbitos etc., ou "
+            "depois de 'foram', 'somaram', 'o total ... foi' ou 'Óbitos:') e é lido como "
+            "contagem, que não está no JSON. Se é o ano, escreva-o como data, com vírgula "
+            "('Em 2025, os casos...'); se é contagem, use só uma contagem do JSON, com ponto de "
+            "milhar, ou remova o número.")  # fmt: skip
 
 
 def _trecho(texto: str) -> str:
@@ -637,10 +690,9 @@ class _Secao:
         texto = _limpar_para_numeros(_apagar_rotulos_dos_dados(frase, p))
         texto = self._proporcoes(texto, p.fracoes | perc_citadas)
         for numero, ano in _tokens(texto):
-            # "Foram 2025 óbitos": inteiro com cara de ano seguido de contagem é contagem; o ano
-            # das evidências não o salva.
-            contagem_com_cara_de_ano = ano and _SEGUE_CONTAGEM.match(texto, numero.fim)
-            if contagem_com_cara_de_ano:
+            # "Foram 2025 óbitos": inteiro com cara de ano em posição de quantidade é contagem;
+            # o ano das evidências não o salva.
+            if ano and _ano_como_contagem(texto, numero):
                 if not _perto(numero, p.contagens | cont_citadas):
                     self._nao_conferido(numero.bruto, numero, _instrucao_ano_contagem(numero))
             elif ano:

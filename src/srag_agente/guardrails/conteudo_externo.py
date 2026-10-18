@@ -15,7 +15,7 @@ import json
 import re
 from urllib.parse import urlparse
 
-from srag_agente.guardrails.padroes import contem_injecao, normalizar_unicode
+from srag_agente.guardrails.padroes import contem_injecao, mascarar_pii, normalizar_unicode
 
 LIMITE_TRECHO = 500
 LIMITE_URL = 2048
@@ -65,6 +65,11 @@ def limpar_texto(texto: str, limite: int | None = LIMITE_TRECHO) -> str:
     """Texto limpo, cortado em ``limite`` caracteres (``None``: sem corte)."""
     desfeito = normalizar_unicode(_desescapar(texto or ""))
     return _neutralizar(_TAG.sub(" ", desfeito))[:limite]
+
+
+def tem_dado_pessoal(texto: str) -> bool:
+    """Procura dado pessoal no texto cru e com as entidades HTML desfeitas ("123&#46;456&#46;…")."""
+    return bool(mascarar_pii(texto or "")[1] or mascarar_pii(limpar_texto(texto, limite=None))[1])
 
 
 def tem_injecao(texto: str) -> bool:
