@@ -1,7 +1,11 @@
 """Dublês de teste: substituem LLM, notícias e embeddings sem custo nem rede."""
 
 import hashlib
+from datetime import date, timedelta
 
+from srag_agente.ferramentas.dicionario import TrechoDicionario
+from srag_agente.ferramentas.noticias import Noticia, ResultadoBusca
+from srag_agente.metricas.repositorio import DadosIndisponiveis, Referencia
 from srag_agente.rag.embeddings import DIMENSAO
 
 
@@ -14,13 +18,7 @@ def embedder_falso(textos: list[str]) -> list[list[float]]:
     return vetores
 
 
-# --- Task 9: dublês das ferramentas (repositório, buscador, dicionário) ---
-from datetime import date, timedelta  # noqa: E402
-
-from srag_agente.ferramentas.dicionario import TrechoDicionario  # noqa: E402
-from srag_agente.ferramentas.noticias import Noticia, ResultadoBusca  # noqa: E402
-from srag_agente.metricas.repositorio import DadosIndisponiveis, Referencia  # noqa: E402
-
+# --- dublês das ferramentas (repositório, buscador, dicionário) ---
 HOJE = date(2026, 10, 14)
 REF = date(2025, 6, 25)
 

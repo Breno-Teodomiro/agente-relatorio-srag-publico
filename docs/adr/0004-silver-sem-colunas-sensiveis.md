@@ -38,3 +38,9 @@ precisa dessas colunas.
   `DT_SIN_PRI` e `NU_NOTIFIC`); a proteção é o papel do banco, não o número em si. O agente nem
   o vê: a gold só tem agregados.
 - A raw continua no banco local com tudo; quem protege é o `REVOKE` do schema (ADR 0010).
+- Seis colunas da silver não são lidas por nenhuma view da gold (`dt_notificacao`,
+  `dt_internacao`, `dt_entrada_uti`, `dt_evolucao`, `hospitalizado`, `suporte_ventilatorio`).
+  Pelo critério de minimização poderiam sair; ficam porque `dt_notificacao` alimenta a janela de
+  datas válidas (`silver.limites`) e as demais são datas e indicadores não sensíveis que as
+  métricas futuras usariam. Remover exige mexer na silver, na gold e nos testes (risco de
+  regressão); a lista completa e o uso de cada coluna estão em `docs/DICIONARIO_SILVER.md`.
