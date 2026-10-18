@@ -21,15 +21,15 @@ continua presa a `127.0.0.1` e o banco local continua igual.
 | Peça | Escolha |
 |---|---|
 | Aplicação | Streamlit Community Cloud, entrada `demo/streamlit_app.py` (põe `src/` no caminho de importação, sem instalar o pacote), dependências em `demo/requirements.txt` gerado do `uv.lock` por `make demo-requisitos`; o CI confere que o arquivo está em dia |
-| Banco | Postgres gerenciado gratuito (Neon) com `pgvector`, conexão **direta** (host sem `-pooler`) e TLS obrigatório |
-| Conexão | as mesmas variáveis do projeto (`PG_HOST`, `PG_PORTA`, `PG_BANCO`, senha por papel), mais `PG_SSLMODE`, `PG_SSLROOTCERT`, `PG_CONNECT_TIMEOUT` e `PG_USUARIO_ADMIN`. Não há URL de conexão: o usuário de cada papel continua fixado no código, e uma credencial colada no lugar errado não troca o papel. Sem os campos novos, a conexão local é a de sempre |
+| Banco | Postgres gerenciado gratuito (Neon; 1 GB por projeto, segundo a documentação do provedor) com `pgvector`, conexão **direta** (host sem `-pooler`) e TLS obrigatório |
+| Conexão | as mesmas variáveis do projeto (`PG_HOST`, `PG_PORTA`, `PG_BANCO`, senha por papel), mais `PG_SSLMODE` (`verify-full`), `PG_SSLROOTCERT` (o arquivo de certificados do sistema, `/etc/ssl/certs/ca-certificates.crt` no Debian/Ubuntu; o valor `system` falha com a libpq do driver), `PG_CONNECT_TIMEOUT` e `PG_USUARIO_ADMIN`. Não há URL de conexão: o usuário de cada papel continua fixado no código, e uma credencial colada no lugar errado não troca o papel. Sem os campos novos, a conexão local é a de sempre |
 | Dados na nuvem | só as tabelas `gold.referencia`, `casos_diarios`, `indicadores`, `janelas_aumento`, `distribuicao` (o resultado das views locais, com os mesmos nomes), `gold.dicionario_trechos`, `gold.pacote_demo` (proveniência) e o esquema `auditoria`. Nenhum objeto de `raw` ou `silver` |
 | Pacote | `uv run srag demo exportar [--saida demo/pacote]` lê a gold local **com o papel do agente** (que não alcança `raw`, `silver` nem `auditoria`), num retrato só (`REPEATABLE READ READ ONLY`), e grava um CSV por tabela com lista fechada de colunas (`src/srag_agente/demo/__init__.py`) e um `manifesto.json` com o sha256 de cada arquivo. Coluna nova na gold faz a exportação falhar; nome de coluna proibido (regra do ADR 0004) ou valor fora do domínio esperado reprova o pacote. O pacote não vai para o Git |
-| Carga | `uv run srag demo carregar --env-arquivo .env.demo --alvo <host> [--pacote demo/pacote] [--senha-em-texto] [--trocar-senhas]`. O `--env-arquivo` é obrigatório (o `.env` local nunca é a fonte) e o `--alvo` tem de ser igual ao `PG_HOST` do arquivo. Recusa host local, TLS fraco, banco que tenha `raw` ou `silver` e tabela da gold com colunas diferentes da lista, sem apagar nada. O pacote é conferido de novo (sha256, colunas, dado pessoal). Tudo roda numa transação do dono do banco e, antes do `COMMIT`, confere linhas por tabela, catálogo e atributos dos papéis. Nada do pacote é executado como SQL: o DDL é fixo no código (`src/srag_agente/demo/sql/`) e os dados entram por `COPY` |
+| Carga | `uv run srag demo carregar --env-arquivo .env.demo --alvo <host> [--pacote demo/pacote] [--senha-em-texto | --senha-em-hash] [--trocar-senhas] [--aceitar-tls-sem-verificacao]`. A senha em texto é o padrão e só sai com `PG_SSLMODE=verify-full`, ou com `--aceitar-tls-sem-verificacao`. O `--env-arquivo` é obrigatório (o `.env` local nunca é a fonte) e o `--alvo` tem de ser igual ao `PG_HOST` do arquivo. Recusa host local, TLS fraco, banco que tenha `raw` ou `silver` e tabela da gold com colunas diferentes da lista, sem apagar nada. O pacote é conferido de novo (sha256, colunas, dado pessoal). Tudo roda numa transação do dono do banco e, antes do `COMMIT`, confere linhas por tabela, catálogo e atributos dos papéis. Nada do pacote é executado como SQL: o DDL é fixo no código (`src/srag_agente/demo/sql/`) e os dados entram por `COPY` |
 | Papéis | `srag_agente` e `srag_auditor` criados **por SQL** pela carga (no Neon, papel criado pelo painel herda privilégios de administrador), com os mesmos privilégios do ADR 0010; o papel de carga local (`srag_etl`) não existe no banco gerenciado. A senha só é enviada quando o papel não existe ou com `--trocar-senhas`. A carga confere que nenhum dos dois tem poder de administrador nem participa de outro papel |
 | Prova de permissões | `uv run srag demo conferir --env-arquivo .env.demo --alvo <host>` tenta, com as credenciais da tela, o que cada papel não pode fazer e confere a recusa do banco, sem escrever nada. O mesmo código roda nos testes de integração contra um banco local cujo dono não é superusuário |
 | Teto diário | limites em `auditoria.limites_demo`, semeados por SQL versionado (`src/srag_agente/demo/sql/02_teto_demo.sql`: mudar o limite é mudar o arquivo e carregar de novo). Valores iniciais: 10 relatórios, 40 buscas de notícia e US$ 1,00 de gasto estimado por dia (política, não medida). A tela confere os três dentro da trava global, antes de gerar, com o dia contado de meia-noite a meia-noite no horário de Brasília pelo relógio do banco. Um gatilho no banco da demonstração recusa a execução além do limite de relatórios mesmo com dois processos (trava consultiva de transação). A recusa acontece antes de qualquer chamada ao modelo |
-| Gasto | além do teto diário, limite de gasto configurado na chave do provedor de LLM dedicada à demonstração. A tela recusa abrir com `OPENAI_API_KEY` presente: a reserva automática escaparia do limite da chave principal |
+| Gasto | além do teto diário, limite de gasto configurado na chave do provedor de LLM dedicada à demonstração. **A demonstração só funciona com a reserva do provedor de LLM desligada:** a tela recusa abrir com `OPENAI_API_KEY` presente (a reserva automática escaparia do limite da chave dedicada) e exige o OpenRouter com a chave definida |
 | Pergunta complementar | **desligada na demonstração.** Texto livre de visitante anônimo não vai ao modelo externo nem à trilha; a tela explica o motivo no lugar do campo. Localmente, continua disponível |
 | Busca do dicionário | `BUSCA_DICIONARIO=texto` na demonstração: nome exato e busca de texto completo do Postgres, sem carregar o modelo de embeddings. O padrão local continua `vetor` |
 | Segredos | só nos *secrets* da plataforma (agente, auditor, chave de LLM e, opcional, da Tavily) e no `.env.demo` local de quem carrega (que tem também a senha do dono). A tela lê os *secrets* e repassa ao `Config` só as chaves que são campos dele |
@@ -42,9 +42,12 @@ só para o log do servidor) se qualquer um destes falhar:
 1. `PG_HOST` remoto e `PG_SSLMODE` em `require`, `verify-ca` ou `verify-full`;
 2. nenhuma credencial de dono nem de carga (`PG_SENHA_ADMIN`, `PG_SENHA_ETL`), nenhuma
    `OPENAI_API_KEY`, nenhuma chave do Langfuse; provedor OpenRouter com chave definida;
-3. opções efetivas do Streamlit: sem detalhe de erro, proteção XSRF e CORS ligadas, barra de
-   ferramentas só de visualização, sem estatística de uso, sem arquivos estáticos, sem recarga de
-   código;
+3. opções efetivas do Streamlit (`st.get_option`): XSRF ligado, CORS ligado, `client.toolbarMode`
+   igual a `viewer`, `server.enableStaticServing` desligado e `client.showErrorDetails` exatamente
+   `"none"`. A própria tela força este último valor antes de conferir, porque o valor legado `False`
+   que o Cloud impõe equivale a `stacktrace` e entregaria o traceback ao navegador. `runOnSave`,
+   `gatherUsageStats` e `fastReruns` não são conferidos: a plataforma os força e eles não protegem
+   a página;
 4. o banco tem o gatilho do teto e a linha de limites.
 
 Valem também: teto diário na tela e no banco, teto por sessão (`MAX_RELATORIOS_SESSAO`), limite de
@@ -96,21 +99,42 @@ CLI.
 - Contagens pequenas continuam legíveis para quem tiver a credencial do agente (ADR 0010, limite 3).
 - A trilha de auditoria no banco gerenciado não tem limite de tamanho por evento; o crescimento por
   dia fica limitado pelo teto de relatórios. Não há purga automática.
-- Hibernação do app e do banco gratuitos: a primeira visita depois de um período sem uso demora.
+- Hibernação do app e do banco gratuitos: a primeira visita depois de um período sem uso demora (o app hiberna depois de 12 h sem tráfego, segundo a documentação oficial da plataforma).
+- O gasto por relatório é uma **estimativa**: a barreira final é o limite de crédito da chave dedicada do provedor, porque o redator pode fazer até 3 tentativas sem que os tokens delas sejam conferidos antes.
+- O texto da senha no `CREATE ROLE` vai por conexão TLS verificada; a carga recusa `sslmode` fraco para enviar senha, a não ser com `--aceitar-tls-sem-verificacao`. Quem rodar o comando fora da CLI vê host e usuário no erro bruto do driver (a CLI os esconde).
 
-## Pendente de confirmação no primeiro deploy
+## Confirmado e pendente
 
-Afirmações sobre a plataforma que a documentação dela não garante. Cada uma tem como conferir e o
-que fazer se não valer.
+**Provado numa carga real no banco gerenciado (medido):**
+
+- `PG_SSLMODE=verify-full` com `PG_SSLROOTCERT=/etc/ssl/certs/ca-certificates.crt` (arquivo de
+  certificados do sistema) conecta; `PG_SSLROOTCERT=system` **falha** com a libpq do driver
+  (`certificate verify failed`);
+- o dono do banco **pode** instalar `CREATE EXTENSION vector`;
+- papéis criados por SQL ficam sem poderes extras, e a conferência dá todas as linhas `ok`;
+- `pg_stat_statements` não estava instalada nesse banco.
+
+**Segundo a documentação oficial da plataforma e do provedor (não medido aqui):**
+
+- *secrets* de nível raiz também viram variáveis de ambiente (tabelas aninhadas não);
+- limite de memória publicado por app: de 690 MB (mínimo) a 2,7 GB (máximo), podendo mudar sem aviso;
+- as dependências são lidas primeiro da pasta do arquivo principal (por isso `demo/requirements.txt`);
+- o app hiberna depois de 12 h sem tráfego;
+- repositório público gera app público; o subdomínio `*.streamlit.app` é editável (6 a 63 caracteres);
+- o disco local não é garantido persistente;
+- o plano gratuito do banco é de 1 GB por projeto.
+
+**Pendente do primeiro deploy** (a documentação não garante). Cada ponto tem como conferir e o que
+fazer se não valer.
 
 | Ponto | Como conferir | Se não valer |
 |---|---|---|
-| A plataforma usa `demo/requirements.txt` (procurado primeiro na pasta da entrada) e instala a versão fixada do Streamlit | log de build do app | último recurso: fixar o Streamlit na lista principal do `pyproject.toml` |
+| A plataforma usa `demo/requirements.txt` e instala a versão fixada do Streamlit | log de build do app | último recurso: fixar o Streamlit na lista principal do `pyproject.toml` |
 | A plataforma respeita ou sobrescreve `server.address = "127.0.0.1"` do `.streamlit/config.toml` | o app abre ou não; log de execução | tirar `address` do `config.toml` (o `make app` já passa `--server.address 127.0.0.1`, e a tela local continua recusando outro endereço) |
+| Rede de saída do contêiner para a porta 5432 do banco e para o provedor de LLM | a tela abre e o relatório gera | trocar de provedor de banco ou de plataforma |
 | Memória real do processo | linha `memória (partida)` e `memória (depois do relatório)` no log do app, com RSS e limite do contêiner | se até o modo `texto` passar do limite, esconder a aba Dicionário na demonstração |
-| `git` existe no contêiner (versão do código gravada na auditoria) | coluna `versao_codigo` da execução em `auditoria.execucoes` | aceitar `desconhecida` ou fornecer `SRAG_VERSAO_CODIGO` (depende de a plataforma expor *secrets* como variável de ambiente, também não confirmado) |
-| `verify-full` com `sslrootcert=system` acha os certificados do sistema | a carga conecta | `PG_SSLMODE=require` (cifrado, sem verificar o servidor) |
-| O dono do banco gerenciado pode criar a extensão `vector` e rodar os `REVOKE`/`ALTER ROLE` da carga | a carga termina sem erro | rodar o comando recusado no editor SQL do provedor como dono e registrar |
+| `git` existe no contêiner (versão do código gravada na auditoria) | coluna `versao_codigo` da execução em `auditoria.execucoes` | aceitar `desconhecida` ou fornecer `SRAG_VERSAO_CODIGO` (segundo a documentação, *secrets* de nível raiz viram variáveis de ambiente; conferir no primeiro deploy) |
+| Tempo para o app acordar depois da hibernação | cronometrar a primeira visita | ajustar o aviso do topo da tela |
 
 ## Riscos aceitos
 
@@ -124,6 +148,8 @@ demonstração são revogadas ao fim do período de avaliação.
 | Células pequenas legíveis com a credencial do agente | o microdado de origem é público; a barreira é a credencial, que só existe nos *secrets* |
 | Demonstração embutida em site de terceiro | o teto diário limita o custo |
 | Hibernação | custo zero; o aviso do topo da tela diz que a primeira visita pode demorar |
+| Gasto real acima do estimado | a estimativa por relatório não conta as até 3 tentativas do redator nem chamada sem resposta; a barreira final é o limite de crédito da chave dedicada, e o dano máximo é esse crédito |
+| Texto da senha em `CREATE ROLE` na estatística do servidor | vai por TLS verificado, só na criação ou na troca; visível só a quem administra o projeto no provedor; a carga recusa `sslmode` fraco, salvo `--aceitar-tls-sem-verificacao` |
 
 ## Como conferir
 

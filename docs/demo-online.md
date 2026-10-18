@@ -43,7 +43,7 @@ nome exato do campo e busca de texto completo do Postgres), para caber na memór
 | Para | Precisa de |
 |---|---|
 | gerar o pacote | o projeto rodando localmente: `uv`, Docker com Compose, `make` e o zip da base (passos 1 a 3 do [Início rápido](../README.md#início-rápido)) |
-| o banco | conta gratuita num Postgres gerenciado com `pgvector` e TLS (o Neon atende) |
+| o banco | conta gratuita num Postgres gerenciado com `pgvector` e TLS (o Neon atende; o plano gratuito é de 1 GB por projeto, segundo a documentação do provedor) |
 | a tela | conta gratuita no [Streamlit Community Cloud](https://streamlit.io/cloud), ligada à sua conta do GitHub, e um fork deste repositório |
 | o relatório | uma chave do OpenRouter **dedicada à demonstração**, com limite de gasto (passo 6) |
 | notícias pela Tavily | chave da Tavily (opcional: sem ela, o agente usa o Google News RSS) |
@@ -107,7 +107,7 @@ O [`.env.demo.example`](../.env.demo.example) explica cada campo. Em resumo:
 |---|---|
 | `PG_HOST`, `PG_PORTA`, `PG_BANCO` | host direto, porta e banco do passo 3 |
 | `PG_USUARIO_ADMIN`, `PG_SENHA_ADMIN` | o dono do banco e a senha dele (só a carga usa; a tela nunca recebe) |
-| `PG_SSLMODE`, `PG_SSLROOTCERT` | `verify-full` e `system` (verifica o certificado do servidor). Se a conexão falhar por certificado, `require` |
+| `PG_SSLMODE`, `PG_SSLROOTCERT` | `verify-full` e `/etc/ssl/certs/ca-certificates.crt` (verifica o certificado do servidor; é o caminho do Debian/Ubuntu, use o do seu SO se for outro). O valor `system` não funcionou com a libpq do driver. Se a conexão falhar por certificado, `require` |
 | `PG_CONNECT_TIMEOUT` | segundos de espera da conexão (o banco gratuito suspende quando ocioso e demora a acordar) |
 | `PG_SENHA_AGENTE`, `PG_SENHA_AUDITOR` | duas senhas novas, uma por papel, geradas como abaixo |
 
@@ -145,14 +145,17 @@ carga. Os alvos do `make` chamam `uv run srag demo carregar --env-arquivo .env.d
   tabela);
 - pacote adulterado (sha256 diferente do manifesto) ou com coluna fora da lista.
 
-**O que ela faz, numa transação só** (falhou, nada muda): cria a extensão `vector`, cria os papéis
+**O que ela faz, numa transação só** (falhou, nada muda): cria a extensão `vector` (o dono do banco gerenciado pode instalá-la; provado numa carga real), cria os papéis
 `srag_agente` e `srag_auditor` se faltarem, cria as tabelas da gold e da auditoria, troca o conteúdo
 da gold pelo do pacote, aplica o teto diário e registra o pacote em `gold.pacote_demo`. Antes do
 `COMMIT` confere linhas por tabela, que não há objeto fora de `gold` e `auditoria` e que nenhum dos
 dois papéis tem poder de administrador. Recarregar não reenvia senha nem apaga a trilha.
 
-`--senha-em-texto` existe porque o Neon não aceita senha em hash: ela vai em texto, protegida pelo
-TLS, só quando o papel ainda não existe. Para trocar as senhas dos papéis depois:
+`--senha-em-texto` é o padrão (a saída é `--senha-em-hash`, só para provedor que aceite hash) porque o
+Neon não aceita senha em hash: ela vai em texto, protegida pelo TLS verificado, só quando o papel
+ainda não existe. A carga **recusa** enviar senha em texto com `PG_SSLMODE` diferente de
+`verify-full`, a não ser com `--aceitar-tls-sem-verificacao` (por sua conta e risco: quem se pusesse
+no meio leria a senha). Para trocar as senhas dos papéis depois:
 
 ```bash
 uv run srag demo carregar --env-arquivo .env.demo --alvo seu-host-direto.exemplo.com \
@@ -165,7 +168,10 @@ a trilha como auditor, ler a gold como auditor. Também confere o catálogo e o 
 escreve nada. Cada linha sai `[ok]` ou `[FALHOU]`, e o comando termina com código 0 só se todas
 passarem.
 
-Opcional, no editor SQL do provedor, depois da primeira carga (se a extensão existir no projeto):
+Opcional, no editor SQL do provedor, depois da primeira carga (a extensão `pg_stat_statements` não
+estava instalada no banco da carga real; se também não estiver no seu, o comando dá erro e não há o
+que conferir). O texto do `CREATE ROLE` leva a senha, e quem rodar o comando de carga fora da CLI vê
+host e usuário no erro bruto do driver:
 
 ```sql
 SELECT query FROM pg_stat_statements WHERE query ILIKE '%password%';
@@ -181,9 +187,12 @@ código:
 1. Crie no OpenRouter uma chave **só para a demonstração**, separada da que você usa localmente.
 2. Defina um limite de crédito para ela, no valor que você aceita perder num dia ruim. Se o provedor
    não oferecer limite por chave, mantenha na conta só esse crédito.
-3. Não ponha `OPENAI_API_KEY` nos *secrets*: a reserva automática escaparia do limite da chave
-   principal. A tela recusa abrir se ela estiver lá.
+3. **A demonstração só funciona com a reserva do provedor de LLM desligada.** Não ponha
+   `OPENAI_API_KEY` nos *secrets*: a reserva automática escaparia do limite da chave dedicada. A tela
+   recusa abrir se ela estiver lá, e também se o provedor não for o OpenRouter com a chave definida.
 4. Se usar a Tavily, confira no painel dela a cota do plano.
+5. O gasto por relatório é uma **estimativa**, e a barreira final é o limite de crédito da chave: o
+   redator pode fazer até 3 tentativas sem que os tokens delas sejam conferidos antes.
 
 ## 7. Criar o app na plataforma
 
@@ -198,7 +207,19 @@ No Streamlit Community Cloud, crie um app a partir do seu fork:
 
 A entrada `demo/streamlit_app.py` põe `src/` no caminho de importação e chama a mesma tela do
 `make app`. As dependências vêm de `demo/requirements.txt`, gerado do `uv.lock` por
-`make demo-requisitos` (o CI confere que está em dia).
+`make demo-requisitos` (o CI confere que está em dia): segundo a documentação oficial da plataforma,
+as dependências são lidas primeiro da pasta do arquivo principal, por isso o arquivo fica em `demo/`.
+
+O que a plataforma publica, **segundo a documentação oficial** (não medido aqui):
+
+- repositório público gera app público, e o subdomínio `*.streamlit.app` é editável (6 a 63
+  caracteres);
+- o limite de memória publicado por app vai de 690 MB (mínimo) a 2,7 GB (máximo) e pode mudar sem
+  aviso;
+- o app hiberna depois de 12 h sem tráfego;
+- o disco local não é garantido persistente (os relatórios ficam na pasta temporária e são
+  descartáveis);
+- *secrets* de nível raiz também viram variáveis de ambiente; tabelas aninhadas não.
 
 **Bloco de *secrets*** (TOML; todo valor entre aspas duplas). Os valores abaixo são exemplos falsos:
 troque pelos seus. Use **exatamente** estes campos:
@@ -210,7 +231,7 @@ PG_HOST = "seu-host-direto.exemplo.com"
 PG_PORTA = "5432"
 PG_BANCO = "nome-do-seu-banco"
 PG_SSLMODE = "verify-full"
-PG_SSLROOTCERT = "system"
+PG_SSLROOTCERT = "/etc/ssl/certs/ca-certificates.crt"
 PG_CONNECT_TIMEOUT = "15"
 PG_SENHA_AGENTE = "troque-pela-senha-do-agente"
 PG_SENHA_AUDITOR = "troque-pela-senha-do-auditor"
@@ -222,8 +243,14 @@ TAVILY_API_KEY = "troque-pela-chave-da-tavily"
 - `PG_SSLMODE` e `PG_SSLROOTCERT` iguais aos do `.env.demo` que funcionou na carga.
 - **Nunca** ponha `PG_SENHA_ADMIN`, `PG_SENHA_ETL`, `OPENAI_API_KEY` nem chaves do Langfuse: a tela
   confere e não abre se alguma estiver presente.
-- A tela só lê do bloco as chaves que são campos da configuração do projeto
-  ([`config.py`](../src/srag_agente/config.py)); o resto é ignorado.
+- A tela só lê do bloco as chaves de nível raiz que são campos da configuração do projeto
+  ([`config.py`](../src/srag_agente/config.py)); tabela aninhada e o resto são ignorados.
+- Na partida, a tela exige estas opções do Streamlit (`st.get_option`): XSRF ligado, CORS ligado,
+  `client.toolbarMode` igual a `viewer` e `server.enableStaticServing` desligado. O
+  `client.showErrorDetails` tem de ser exatamente `"none"`: a própria tela força esse valor antes de
+  conferir, porque o valor legado `False` do Cloud equivale a `stacktrace` e entregaria o traceback
+  ao navegador. `runOnSave`, `gatherUsageStats` e `fastReruns` não são conferidos (a plataforma os
+  força).
 
 Na partida, a tela confere o ambiente e o banco. Se algo faltar, o visitante vê só "A demonstração
 está indisponível no momento", e o motivo vai para o log do app (visível para quem administra o app
@@ -335,14 +362,15 @@ DELETE FROM auditoria.execucoes WHERE inicio < now() - interval '30 days';
 | a carga recusa o host | host local ou `PG_SSLMODE` fora de `require`/`verify-ca`/`verify-full` | aponte para o host do provedor e use TLS |
 | a carga diz que o banco tem `raw`/`silver` | o `.env.demo` aponta para um banco com as camadas locais | confira o host e o banco; a demonstração usa um banco só dela |
 | a carga recusa por esquema divergente | a tabela já existe no banco remoto com outras colunas | compare as colunas no editor SQL; se o banco for só da demonstração, apague a tabela à mão e carregue de novo |
-| falha de certificado na conexão | o driver não achou os certificados do sistema | `PG_SSLMODE=require` no `.env.demo` e nos *secrets* |
+| falha de certificado na conexão (`certificate verify failed`) | `PG_SSLROOTCERT=system` (não funciona com a libpq do driver) ou caminho do arquivo de certificados inexistente no sistema | use `PG_SSLROOTCERT=/etc/ssl/certs/ca-certificates.crt` (ou o caminho do seu SO); só em último caso `PG_SSLMODE=require`, sem verificar o servidor, e a carga exigirá `--aceitar-tls-sem-verificacao` para enviar senha |
 | erro ao criar a extensão `vector` ou ao aplicar permissão | o dono do banco gerenciado não pode rodar aquele comando | rode o comando recusado no editor SQL do provedor como dono e carregue de novo |
 | `demo-conferir` com linha `[FALHOU]` | papel com privilégio a mais (por exemplo, criado pelo painel) ou carga incompleta | não publique; corrija e rode de novo. Papel criado pelo painel: apague-o e deixe a carga criar |
+| "A demonstração está indisponível no momento" com a linha de log citando `client.toolbarMode`, `server.enableXsrfProtection`, `server.enableCORS` ou `server.enableStaticServing` | a plataforma ou o `.streamlit/config.toml` do fork mudou a opção | volte a opção ao valor exigido (XSRF e CORS ligados, `toolbarMode = "viewer"`, arquivos estáticos desligados) |
 | build do app falha | arquivo de dependências diferente do esperado | leia o log de build; confira que `demo/requirements.txt` está em dia (`make demo-requisitos`) |
 | a tela diz que só roda em `127.0.0.1` | `DEMO_ONLINE` ausente ou falso nos *secrets* | confira `DEMO_ONLINE = "1"` |
 | o app não responde e o log mostra o servidor só em `127.0.0.1` | a plataforma respeitou o `address` do `.streamlit/config.toml` | tire a linha `address` do `config.toml` no seu fork (o `make app` local já passa o endereço na linha de comando) |
 | "A demonstração está indisponível no momento" | alguma conferência da partida falhou | leia a linha `demonstração recusada na partida` no log do app: ela diz qual variável ou opção, sem o valor |
-| primeira visita demora | o app ou o banco gratuitos estavam hibernando | espere; se passar do `PG_CONNECT_TIMEOUT`, aumente o valor |
+| primeira visita demora | o app (hiberna após 12 h sem tráfego, segundo a documentação da plataforma) ou o banco gratuito estavam hibernando | espere; se passar do `PG_CONNECT_TIMEOUT`, aumente o valor |
 | botão "Gerar relatório" desabilitado | teto do dia ou da sessão atingido, ou o banco não respondeu à conferência do uso | veja a seção dos tetos; renova à meia-noite (horário de Brasília) |
 | o app reinicia sozinho | falta de memória | confira as linhas de memória no log; mantenha `BUSCA_DICIONARIO = "texto"` |
 | versão do código `desconhecida` na trilha | sem `git` no contêiner da plataforma | limite conhecido do ADR 0013 |

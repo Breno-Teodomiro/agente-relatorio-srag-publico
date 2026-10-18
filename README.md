@@ -115,7 +115,12 @@ Os tetos diários ficam numa tabela do banco semeada por SQL versionado
 ([`02_teto_demo.sql`](src/srag_agente/demo/sql/02_teto_demo.sql)); valores iniciais: 10 relatórios,
 40 buscas de notícia e US$ 1,00 de gasto estimado por dia. Na partida, a tela confere o ambiente
 (banco remoto com TLS, nenhuma credencial de dono, nenhuma chave de reserva sem limite, opções de
-segurança do Streamlit, gatilho do teto no banco) e não abre se algo faltar.
+segurança do Streamlit, gatilho do teto no banco) e não abre se algo faltar. As opções exigidas são
+XSRF e CORS ligados, `toolbarMode` igual a `viewer`, arquivos estáticos desligados e detalhe de erro
+exatamente `none` (a tela força este valor, porque o legado `False` da plataforma entregaria o
+traceback ao navegador). A demonstração só funciona com a reserva do provedor de LLM desligada: a
+tela recusa abrir com `OPENAI_API_KEY` presente. O TLS do banco usa `verify-full` com
+`PG_SSLROOTCERT=/etc/ssl/certs/ca-certificates.crt` (o valor `system` falhou com a libpq do driver).
 
 O pacote de dados sai da gold local pelo papel do agente, com lista fechada de colunas, e é
 carregado por uma CLI que recusa o banco errado. Decisão, controles e riscos aceitos no
@@ -762,14 +767,16 @@ Cada ADR tem a seção "Limites conhecidos" completa. Resumo:
   dicionário e o relatório de exemplo. Não há limite por IP: atrás do proxy da plataforma o IP não é
   confiável e é dado pessoal. O teto por sessão é contornável recarregando a página.
 - O gatilho do banco conta só relatórios; buscas de notícia e gasto estimado são conferidos pela
-  tela, que roda num processo só. O gasto é estimado; a última barreira é o limite na chave do
-  provedor de LLM.
+  tela, que roda num processo só. O gasto é uma estimativa (o redator pode fazer até 3 tentativas sem
+  conferir tokens); a última barreira é o limite de crédito da chave do provedor de LLM.
 - A busca do dicionário sem modelo é menos precisa em perguntas em linguagem natural, e a pergunta
   complementar fica desligada.
-- O banco gerenciado não aceita senha em hash: a dos papéis vai em texto sobre TLS, só na criação.
+- O banco gerenciado não aceita senha em hash: a dos papéis vai em texto sobre TLS verificado, só na
+  criação; a carga recusa `sslmode` fraco para isso, salvo `--aceitar-tls-sem-verificacao`.
 - App e banco gratuitos hibernam sem uso: a primeira visita demora.
 - Pontos que só o primeiro deploy confirma (arquivo de dependências usado pela plataforma, endereço
-  do servidor, memória real, `git` no contêiner) estão listados no ADR 0013, com o que fazer se não
+  do servidor, rede de saída para o banco e o provedor de LLM, memória real, tempo para acordar,
+  `git` no contêiner) estão listados no ADR 0013, com o que fazer se não
   valerem.
 
 **Execução e cadeia de fornecimento**

@@ -87,8 +87,9 @@ class CargaConfirmada(Exception):  # noqa: N818 (não é defeito: a carga entrou
 MENSAGEM_TLS_SEM_VERIFICACAO = (
     "A senha dos papéis iria em texto com PG_SSLMODE diferente de verify-full: o certificado do "
     "servidor não seria verificado e quem se pusesse no meio leria a senha. Use "
-    "PG_SSLMODE=verify-full (com PG_SSLROOTCERT=system) ou, ciente do risco, "
-    "--aceitar-tls-sem-verificacao."
+    "PG_SSLMODE=verify-full com PG_SSLROOTCERT apontando para o arquivo de certificados do "
+    "sistema (ex.: /etc/ssl/certs/ca-certificates.crt; o valor 'system' não funcionou com a "
+    "libpq do driver) ou, ciente do risco, --aceitar-tls-sem-verificacao."
 )
 
 

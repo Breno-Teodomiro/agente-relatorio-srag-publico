@@ -86,7 +86,8 @@ As views da gold rodam com o privilégio do dono: o agente lê o agregado sem le
    banco.** A `gold` guarda contagens pequenas; o microdado de origem já é público no OpenDATASUS.
    Quem tem `srag_agente` e SQL livre vê essas contagens.
 4. **O mascaramento de PII cobre documento, telefone e e-mail; não cobre nome nem município.** A
-   pergunta do usuário vai ao classificador (OpenRouter) e fica nos parâmetros da auditoria. O
+   pergunta do usuário vai ao classificador (OpenRouter) e fica nos parâmetros da auditoria (na demonstração online o campo de pergunta complementar fica
+   desligado e o texto livre nunca é gravado). O
    `termo` de busca de notícias, que vai a Tavily e Google, é recusado se tiver PII ou instrução.
 5. **GitHub Actions e imagens Docker são fixadas por tag, não por SHA.** Uma tag republicada
    chegaria ao CI sem aviso; fixar por digest fica como melhoria futura.
