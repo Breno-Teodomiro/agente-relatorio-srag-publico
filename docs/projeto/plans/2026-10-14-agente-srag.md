@@ -1,7 +1,5 @@
 # Agente de Relatório SRAG — Plano de Implementação
 
-> **Plano de implementação:** executar tarefa a tarefa; os passos usam caixas de seleção (`- [ ]`) para acompanhamento.
-
 **Goal:** Agente LangGraph que gera um relatório de SRAG (4 métricas, 2 gráficos, comentários embasados em notícias) a partir da base do Open DATASUS, com guardrails, auditoria e tratamento de dados sensíveis.
 
 **Architecture:** ETL em SQL versionado (raw → silver → gold) num Postgres 16 + pgvector no Docker. O agente é um `StateGraph` com orquestrador LLM e 5 ferramentas fechadas (sem SQL livre). O usuário do agente só lê a `gold`. Os números saem do SQL; o LLM escreve os comentários, que passam por guardrails determinísticos. Cada passo é gravado em `auditoria.*` e num JSONL anexo ao relatório HTML/Markdown.
@@ -6640,7 +6638,7 @@ git commit -m "docs: diagrama conceitual da arquitetura (Mermaid + PDF)"
 
 ### Task 18: Documentação, decisões e relatório de exemplo real
 
-> Texto longo para leitura humana → o README é redigido à parte; os ADRs e o dicionário da silver podem ser feitos direto.
+> O README é texto longo para leitura humana: redigir com cuidado e revisar. Os ADRs e o dicionário da silver podem ser feitos direto.
 
 **Files:**
 - Create: `docs/adr/0001-arquitetura-orquestrador-ferramentas-fechadas.md` … `docs/adr/0008-metricas-acumuladas-no-periodo.md`, `docs/DICIONARIO_SILVER.md`, `README.md`
@@ -6684,7 +6682,7 @@ make carga && make indexar && make qualidade && make grafo
 
 Expected: `docs/QUALIDADE_DADOS.md` mostra as regras com contagens (incluindo as datas de internação nos anos 1695/2202); `docs/grafo_langgraph.mmd` atualizado.
 
-- [ ] **Step 4: Relatório de exemplo REAL (precisa das chaves no `.env`; parar se faltarem)**
+- [ ] **Step 4: Relatório de exemplo REAL (precisa das chaves no `.env`; parar e pedir ao responsável se faltarem)**
 
 ```bash
 make relatorio
@@ -6756,7 +6754,7 @@ docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /rep
 
 Expected: `ok` e gitleaks sem vazamentos em todo o histórico.
 
-- [ ] **Step 3: Revisão independente da branch inteira** — revisor independente revisa o repositório contra o spec e os 5 critérios de avaliação. Corrigir o que for confirmado (`receiving-code-review`), rodar `make testes` de novo e dar push.
+- [ ] **Step 3: Revisão independente da branch inteira** — uma pessoa que não escreveu o código revisa o repositório contra o spec e os 5 critérios de avaliação. Corrigir o que for confirmado, rodar `make testes` de novo e dar push.
 
 - [ ] **Step 4: CI verde no último commit**
 
@@ -6775,4 +6773,4 @@ curl -s -o /dev/null -w "%{http_code}\n" https://github.com/Breno-Teodomiro/agen
 
 Expected: `200` sem login (acesso anônimo).
 
-- [ ] **Step 6: Entrega** — o Breno confere o README no GitHub (anônimo), e **ele** envia o link na plataforma da Indicium (envio único). Fechar a etapa: docs + memória.
+- [ ] **Step 6: Entrega** — o Breno confere o README no GitHub (anônimo), e **ele** envia o link na plataforma da Indicium (envio único). Fechar a etapa: documentação atualizada.

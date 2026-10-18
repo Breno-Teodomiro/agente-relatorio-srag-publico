@@ -246,10 +246,9 @@ def test_instrucao_do_ano_seguido_de_contagem_explica_as_duas_leituras(evidencia
         "Os casos subiram em 2025.",
         "De 2024 a 2025 os casos subiram.",
         "Na SE 23 de 2025 os casos subiram.",
-        "O ano com mais casos foi 2025.",  # verbo de medida, mas a oração fala de ano
+        "O ano com mais casos foi 2025.",  # o sujeito é "o ano com mais ..."
         "Os anos com mais óbitos foram 2024 e 2025.",
-        "A referência foi 2025.",  # singular sem contagem na oração
-        "Os dados foram de 2024 a 2025.",  # plural com "de" e sem contagem na oração
+        "Os dados foram de 2024 a 2025.",  # intervalo: cada ponta é ano
     ],
 )
 def test_ano_em_posicao_de_data_passa(evidencias, resumo):
@@ -277,8 +276,8 @@ def test_ano_em_posicao_de_quantidade_e_conferido_como_contagem(evidencias, resu
     assert _tem(resultado.violacoes, "numero_nao_conferido"), resultado.violacoes
     (instrucao,) = resultado.instrucoes
     assert "contagem" in instrucao and "não aparece nas evidências" not in instrucao
-    # coerente com as duas posições (antes e depois do número) e com a regra do prompt
-    assert "posição de quantidade" in instrucao and "'Óbitos:'" in instrucao
+    # coerente com a regra (fora de posição de data é contagem) e com a regra do prompt
+    assert "fora de posição de data" in instrucao and "'foi em <ano>'" in instrucao
     assert "vírgula" in instrucao and "ponto de milhar" in instrucao
 
 
@@ -304,6 +303,212 @@ def test_contagem_de_quatro_algarismos_confere_como_contagem(evidencias, resumo)
     extra = Evidencia(ferramenta="consultar_metricas", argumentos={},
                       dados={"chave": "internacoes_extra", "casos": 1938})  # fmt: skip
     assert _violacoes([*evidencias, extra], resumo_executivo=resumo) == []
+
+
+# ---- inversão (revisão independente): fora de posição de data, é contagem ---------------------
+# As listas de lista fechada de verbos e rótulos deixavam passar contagem inventada igual a um ano
+# das evidências (2024, 2025, 2026). Agora o padrão é CONTAGEM; ano só em posição de data.
+CONTAGEM_IGUAL_A_ANO = [
+    "Foram internados 2025.",
+    "Foram registrados 2025.",
+    "SP registrou 2025.",
+    "SP teve 2025.",
+    "Houve 2025.",
+    "A UF somou 2025.",
+    "A UF acumula 2025.",
+    "O número chegou a 2025.",
+    "A contagem foi 2025.",
+    "Os casos são 2025.",
+    "Foram mais de 2025.",
+    "Foram ao todo 2025.",
+    "Foram pelo menos 2025.",
+    "Foram um total de 2025.",
+    "Os óbitos alcançaram 2025.",
+    "Os casos subiram para 2025.",
+    "Os casos passaram de 70 para 2025.",  # "70 para 2025" não é intervalo de anos
+    "O total de óbitos, segundo o SIVEP, foi 2025.",
+    "O total de óbitos (SIVEP) foi 2025.",
+    "Os óbitos, em SP, foram de 2025.",  # "foram de" não é "casos de"
+    "Ao longo do ano os óbitos somaram 2025.",  # "ano" longe do número não salva
+    "No último ano os óbitos foram 2025.",
+    "Óbitos em SP: 2025.",
+    "Óbitos (SP): 2025.",
+    "Óbitos — 2025.",
+    "Total de casos = 2025.",
+    "UTI: 2025.",
+    "Os óbitos foram 80 e as internações 2026.",
+    "SP teve 84 casos e RJ 2025.",
+    "2025 (32,2%) dos casos.",
+    "SP: 2025 (32,2%).",
+    "Totalizando 2025.",
+    "2025 leitos ocupados.",
+    "2025 atendimentos.",
+    "2025 ocorrências.",
+    # casos que quebram, além da lista da revisão
+    "Os óbitos ficaram em 2025.",  # "em" depois de verbo de patamar
+    "Os casos fecharam em 2025.",
+    "Os óbitos se mantiveram em 2025.",
+    "Os casos subiram até 2025.",  # "até" só vale depois de nome de período
+    "SP teve mais casos que 2024.",  # comparação sem outro ano na oração
+    "Em 2025, SP teve mais casos que 2024.",  # o ano está em OUTRA oração
+    "Em 2025 casos foram notificados.",  # contagem colada depois do ano
+    "Em 2025 novos casos surgiram.",
+    "No ano de 2025 óbitos foram notificados.",
+    "Foram 2025 novos e graves casos.",
+    "O ano em que os óbitos foram 2025.",  # "o ano" sujeito, mas sem "com mais/de maior"
+    "Os óbitos ficaram [1] em 2025.",  # a citação não esconde o verbo de patamar
+    "SP teve 2025 o ano passado.",  # "ano" depois só vale com "foi/é o ano"
+    "Em 2025 e 2026 casos.",  # a ponta do intervalo colada na contagem é contagem
+    "Em 2025: 2026.",
+]
+ANO_EM_POSICAO_DE_DATA = [
+    "Em 2025 os casos subiram.",
+    "Em 2025, os casos subiram.",
+    "De 2024 a 2025 os casos subiram.",
+    "De 2025 a 2025 os casos subiram.",
+    "Na SE 23 de 2025 os casos subiram.",
+    "Na SE 23/2025 os casos subiram.",
+    "Na temporada 2025 os casos subiram.",
+    "Em janeiro de 2025 os casos subiram.",
+    "O ano de 2025 teve mais casos que 2024.",  # comparação com um ano da mesma oração
+    "Dados até 25/06/2025.",
+    "O ano com mais casos foi 2025.",
+    "Casos em 2025: 84.",
+    "A alta foi de 2025 para 2026.",
+    "Os destaques foram 2024 e 2025.",
+    "Os períodos analisados foram 2024 e 2025.",
+    "O pico de óbitos foi em 2025.",
+    # casos que quebram, além da lista da revisão
+    "Os casos de 2025 foram consolidados.",
+    "A partir de 2025, os casos subiram.",
+    "Os dados vão até 2025.",
+    "Até 2025, os casos subiram.",
+    "Na temporada 2024/2025 os casos subiram.",
+    "De 2024\u20132025 os casos subiram.",  # traço tipográfico entre os anos
+    "Em junho/2025 os casos subiram.",
+    "Em 2025 houve mais casos que em 2024.",
+    "Em 2025 houve mais casos que 2024.",
+    "Foram 2025 e 2026 os anos com mais casos.",
+    "2025 foi o ano com mais boletins.",
+    "Os casos subiram em 2025 [1].",
+    "Os casos subiram [1] em 2025.",
+    "Durante 2025 e desde 2024 os casos subiram.",
+    "Os óbitos de 2025 e de 2026 foram consolidados.",
+]
+
+
+@pytest.mark.parametrize("resumo", CONTAGEM_IGUAL_A_ANO)
+def test_inteiro_com_cara_de_ano_fora_de_posicao_de_data_e_contagem(evidencias, resumo):
+    resultado = _verificar(texto_valido(resumo_executivo=resumo), evidencias)
+    assert _tem(resultado.violacoes, "numero_nao_conferido"), resultado.violacoes
+
+
+@pytest.mark.parametrize("resumo", ANO_EM_POSICAO_DE_DATA)
+def test_ano_em_posicao_de_data_passa_na_inversao(evidencias, resumo):
+    assert _violacoes(evidencias, resumo_executivo=resumo) == []
+
+
+@pytest.mark.parametrize(
+    "resumo", ["O pico foi 2025.", "A referência foi 2025.", "2025: casos em alta."]
+)
+def test_falso_positivo_declarado_ano_sem_preposicao_barra_e_instrui(evidencias, resumo):
+    """Limite aceito: sem preposição, o ano é lido como contagem; a instrução pede "em <ano>"."""
+    resultado = _verificar(texto_valido(resumo_executivo=resumo), evidencias)
+    assert _tem(resultado.violacoes, "numero_nao_conferido")
+    (instrucao,) = resultado.instrucoes
+    assert "'foi em <ano>'" in instrucao
+
+
+def test_ano_fora_das_evidencias_em_posicao_de_data_continua_barrado(evidencias):
+    for resumo in ("Desde 2019 os casos sobem.", "De 2019 a 2025 os casos subiram.",
+                   "Na SE 23/2019 os casos subiram."):  # fmt: skip
+        resultado = _verificar(texto_valido(resumo_executivo=resumo), evidencias)
+        assert resultado.violacoes == ["numero_nao_conferido: '2019' em resumo_executivo"], resumo
+
+
+@pytest.mark.parametrize("resumo", ["Na SE 23/2025 os casos subiram.", "Até a SE 23/2025."])
+def test_se_com_barra_nao_e_lida_como_mes(evidencias, resumo):
+    """SE 23/2025 é semana epidemiológica e ano, não o mês 23: não vira data_nao_conferida."""
+    assert _violacoes(evidencias, resumo_executivo=resumo) == []
+
+
+@pytest.mark.parametrize(
+    "resumo,prefixo",
+    [
+        ("Dados até 13/2025.", "numero_nao_conferido"),  # 13 não é mês: é número a conferir
+        ("Dados até 12/2030.", "data_nao_conferida"),  # mês válido continua sendo data
+    ],
+)
+def test_mes_ano_com_barra_so_aceita_mes_valido(evidencias, resumo, prefixo):
+    assert _tem(_violacoes(evidencias, resumo_executivo=resumo), prefixo)
+
+
+def test_instrucao_do_ano_como_contagem_nao_traz_numero_fora_das_evidencias(evidencias):
+    resultado = _verificar(texto_valido(resumo_executivo="SP teve 2026."), evidencias)
+    (instrucao,) = resultado.instrucoes
+    # o único número é o próprio trecho citado: nem ano fixo de exemplo, nem milhar de exemplo
+    assert re.findall(r"\d+", instrucao) == ["2026"], instrucao
+    assert "'2026'" in instrucao and "<ano>" in instrucao
+    assert "ponto de milhar" in instrucao and "vírgula" in instrucao
+
+
+@pytest.mark.parametrize(
+    "texto,esperado",
+    [
+        ("Foram mais de 2025.", [2025.0]),
+        ("A alta foi de 2025 para 2026.", []),
+        ("Os destaques foram 2024 e 2025.", []),
+        ("Na SE 23/2025.", []),
+        ("SP teve 84 casos e RJ 2025.", [84.0, 2025.0]),
+        ("Os casos ficaram em 2025.", [2025.0]),
+        # a outra ponta tem casa decimal ou 5 algarismos: não é ano, e "foram de 2024" é contagem
+        ("Foram de 2024 a 2025,5.", [2024.0, 2025.5]),
+        ("Foram de 2024 a 20250.", [2024.0, 20250.0]),
+    ],
+)
+def test_extracao_segue_a_inversao(texto, esperado):
+    assert [n.valor for n in extrair_numeros(texto)] == esperado
+
+
+@pytest.mark.parametrize(
+    "texto,esperado",
+    [
+        # o verbo de patamar é uma "palavra" longa que atravessa o início da cauda: o pedaço dele
+        # não pode passar por palavra comum antes de "em"
+        ("Os óbitos mantiveram-se-" + "x" * 60 + " em 2025.", [2025.0]),
+        # a marca de data longe demais do número (fora da cauda) não conta
+        ("Em " + "x " * 40 + "2025.", [2025.0]),
+        ("Os casos de SP " + "e " * 20 + "subiram em 2025.", []),
+    ],
+)
+def test_marca_de_data_so_vale_inteira_e_perto_do_numero(texto, esperado):
+    assert [n.valor for n in extrair_numeros(texto)] == esperado
+
+
+def test_extracao_tem_custo_linear():
+    """A oração é procurada numa janela curta antes do número, não no prefixo inteiro."""
+    import time
+
+    texto = "foram 2025 " * 2000
+    inicio = time.perf_counter()
+    numeros = extrair_numeros(texto)
+    assert time.perf_counter() - inicio < 0.2
+    assert len(numeros) == 2000
+
+
+def test_conferencia_de_secao_longa_tem_custo_linear(evidencias):
+    """Os campos do texto têm teto de tamanho; a conferência da seção não depende dele."""
+    import time
+
+    from srag_agente.guardrails.saida import _conferir_secao, _permitidos
+
+    texto = "Os casos subiram 20,0% e foram 2025 " * 1000
+    permitidos = _permitidos(evidencias, [])
+    inicio = time.perf_counter()
+    violacoes, _, _ = _conferir_secao("resumo_executivo", texto, {}, permitidos, [])
+    assert time.perf_counter() - inicio < 1.0
+    assert _tem(violacoes, "numero_nao_conferido: '2025'")
+    assert not _tem(violacoes, "numero_nao_conferido: '20,0%'")
 
 
 @pytest.mark.parametrize(

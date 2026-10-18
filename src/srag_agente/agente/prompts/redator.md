@@ -11,9 +11,12 @@ Regras obrigatórias (o texto é conferido automaticamente e rejeitado se violar
 1. Só cite números que estejam no JSON (métricas, séries, distribuições ou notícias), sempre com
    algarismos. Percentual com vírgula e uma casa decimal (ex.: 7,9%); milhar com ponto
    (ex.: 53.476; 1.938, nunca 1938: sem o ponto, a contagem parece um ano).
-   Ano sempre como parte de data ou período, com vírgula quando abre a frase
-   ("Em 2025, os casos..."), nunca como quantidade: "foram 2025 casos", "Óbitos: 2025" e
-   "Em 2025 casos" são lidos como contagem e rejeitados.
+   Ano sempre como parte de data ou período, com preposição ("em <ano>", "de <ano> a <ano>",
+   "no ano de <ano>", "na SE <n> de <ano>") e com vírgula quando abre a frase
+   ("Em <ano>, os casos..."), nunca como quantidade: inteiro de 4 algarismos sem ponto fora
+   dessas posições é lido como contagem e rejeitado. Escreva "o pico foi em <ano>", não
+   "o pico foi <ano>"; "foram <ano> casos", "Óbitos: <ano>" e "Em <ano> casos" também são
+   rejeitados.
 2. As taxas no JSON são frações: 0.0796 significa 7,96%. Ao citar, arredonde para uma casa: 8,0%.
    Arredondar é a única conta permitida. Arredonde, não trunque: 0.2797 é 28,0%, nunca 27,9%.
 3. NUNCA calcule nem derive números: nada de diferença, soma, razão, média, "pontos

@@ -5,6 +5,7 @@ from srag_agente.guardrails.conteudo_externo import (
     formatar_para_llm,
     limpar_texto,
     sanitizar_texto_externo,
+    tem_dado_pessoal,
     url_segura,
 )
 
@@ -148,3 +149,33 @@ def test_formatar_para_llm_e_segura_mesmo_com_entrada_nao_sanitizada():
     assert saida.count("<noticia_externa") == 1
     assert "<system" not in saida and "</system" not in saida
     assert sum(linha.startswith("trecho:") for linha in saida.splitlines()) == 1
+
+
+# ---- dado pessoal no termo de busca e no texto externo ----------------------------------------
+# Os CPFs abaixo são sintéticos (dígitos verificadores de exemplo), nunca de uma pessoa.
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "SRAG 123.456.789-09",
+        "SRAG 123&#46;456&#46;789-09",  # entidade HTML
+        "SRAG 123<b>.</b>456.789-09",  # tag removida SEM espaço junta o número
+        "SRAG 123<!-- x -->.456.789-09",
+    ],
+)
+def test_tem_dado_pessoal_detecta_tambem_com_a_tag_removida_sem_espaco(texto):
+    assert tem_dado_pessoal(texto)
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "SRAG vacina COVID-19 2025",
+        "12/2025 SE 23",
+        "2024&#45;2025",
+        "H1N1 2024 2025 2026",
+        "100% 25/06/2025",
+        "SRAG <b>2025</b> boletim",
+    ],
+)
+def test_tem_dado_pessoal_aceita_termos_legitimos(texto):
+    assert not tem_dado_pessoal(texto)

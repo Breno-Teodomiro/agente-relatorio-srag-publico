@@ -22,14 +22,19 @@ Barra (violação → nova redação → revisão humana):
   barram, porque não há casa decimal a conferir; de 2 a 4 ("três casos") é valor suprimido;
 - número derivado (diferença, soma, razão, "pontos") só passa se coincidir com um número das
   evidências: a tolerância é só a de arredondamento na casa exibida;
-- ano e data que não aparecem nas evidências. Inteiro de 1900 a 2100 sem ponto é ano, salvo em
-  posição de quantidade, quando é contagem e confere só com contagem: (a) substantivo de contagem
-  colado depois dele ou depois de até 2 adjetivos de uma lista curta ("2025 óbitos", "2025 novos
-  e graves casos"); (b) rótulo de contagem antes ("Óbitos: 2025") ou verbo de medida antes, numa
-  oração que não fala de "ano(s)" ("foram 2025", "somaram 1938"; no singular ou com "de", só se
-  a oração fala de contagem ou total: "o total de óbitos foi 2025"). Artigo, preposição, verbo,
-  outro número ou [n] entre o ano e a contagem deixam o ano ser ano ("Em 2025 os casos",
-  "Em 2025 84 casos", "SE 23 de 2025");
+- ano e data que não aparecem nas evidências. Inteiro de 1900 a 2100 sem ponto de milhar é
+  CONTAGEM (falha fechada: confere só com contagem, e o ano das evidências não o salva), salvo
+  em posição de data, quando é ano e confere com os anos: marca de data perto, na mesma oração
+  ("Em 2025", "em 2025", "desde/durante/entre/após 2025", "ano de 2025", "temporada 2025",
+  "casos de 2025", "dados até 2025", "a partir de 2025", "SE 23 de 2025", "SE 23/2025",
+  "jun/2025"), ponta de intervalo ou lista de anos ("de 2024 a 2025", "2024 e 2025",
+  "2025 para 2026", "2024/2025"), o ano como sujeito ("O ano com mais casos foi 2025",
+  "2025 foi o ano...") e "que"/"contra" depois de outro ano da mesma oração ("O ano de 2025
+  teve mais casos que 2024"). Não são marca: "em" depois de verbo de patamar ("ficou em",
+  "fecharam em"), "de"/"até" depois de verbo ou de "mais", "total" etc. ("foram de 2025",
+  "mais de 2025", "subiram até 2025"), "para"/"a" sem ano na outra ponta ("passaram de 70 para
+  2025", "chegou a 2025"). Contagem colada depois desfaz a marca ("Em 2025 casos", "Em 2025
+  novos casos");
 - citação inexistente, notícia de uma janela usada em seção da outra, notícia com data fora da
   busca que a trouxe; link que não é exatamente uma das URLs devolvidas (com ou sem esquema);
 - recomendação clínica, marcação HTML e instrução dirigida a modelo.
@@ -56,11 +61,18 @@ junto de substantivo de contagem ("três em RR", "dezenas de casos" e "meia dúz
 "um caso" só conta quando há supressão nos dados; fração em palavras só junto de "do/da/dos/das" +
 contagem; domínio sem esquema nem ``www`` só é reconhecido nas terminações da lista ``_TLDS``; a
 lista de termos clínicos não cobre paráfrase. Ano x contagem é decidido pela posição, não pelo
-sentido: ano legítimo colado à contagem sem vírgula ("Em 2025 casos foram...", "Em 2025 novos
-casos...") e ano depois de verbo de medida no plural numa oração sem "ano" ("Os destaques foram
-2024 e 2025") barram, e a instrução pede a vírgula; contagem de 4 algarismos fora dessas posições
-e sem ponto de milhar ("1938 internaram-se", "somaram ao todo 1938") é lida como ano e só passa se
-o ano estiver nas evidências. O prompt pede ano como data ("em 2025,") e milhar com ponto.
+sentido, e a dúvida vai para contagem: (1) falso positivo aceito: ano sem preposição ("O pico
+foi 2025.", "A referência foi 2025.", "2025: casos em alta"), ano colado à contagem ("Em 2025
+casos foram...") e "que 2024" sem outro ano na oração barram; a instrução pede "foi em <ano>",
+a vírgula e o ponto de milhar, e a nova tentativa corrige; (2) passa como ano, se o ano estiver
+nas evidências: contagem igual a um ano das evidências escrita como ponta de intervalo ou lista
+de anos ("Os óbitos foram 2024 e 2025", "passaram de 2024 para 2025"), depois de "em" com verbo
+fora da lista de patamar ("os óbitos recuaram em 2025" é ano), depois de nome de período ou
+de contagem + "de" ("casos de 2025") e comparada com outro ano da mesma oração ("Em 2025 houve
+mais casos que 2024"); (3) a oração é procurada só nos 200 caracteres antes do número e a marca
+só nos 60 finais (custo linear): marca separada do número por mais que isso, ou por uma "palavra"
+de 60+ caracteres, não conta (barra). O prompt pede ano como data ("em <ano>,") e milhar com
+ponto.
 """
 
 import contextlib
@@ -114,7 +126,8 @@ _DATA_EXTENSO = re.compile(
 _MES_ANO_EXTENSO = re.compile(rf"\b{_MES}\s+(?:de\s+)?(\d{{4}})\b", re.IGNORECASE)
 _DATA_ISO = re.compile(r"\b(\d{4})-(\d{2})(?:-(\d{2}))?\b")
 _DATA_BARRA = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})\b")
-_MES_ANO_BARRA = re.compile(r"\b(\d{1,2})/(\d{4})\b")
+# Só mês válido: "SE 23/2025" é semana e ano (ver `_ANO_ANTES`), não o mês 23.
+_MES_ANO_BARRA = re.compile(r"\b(0?[1-9]|1[0-2])/(\d{4})\b")
 _DIA_MES_BARRA = re.compile(r"\b(\d{1,2})/(\d{1,2})\b")
 # Número seguido de percentual ou de milhar é número, nunca rótulo: "1 a 4%" e "menos de 5 mil".
 _NAO_E_ROTULO = r"(?![.,]\d)(?!\s*(?:%|por\s+cento\b|mil\b|milh|bilh))"
@@ -152,9 +165,9 @@ _SUBSTANTIVO_CONTAGEM = (
 )
 # Depois do número: substantivo de contagem, com no máximo uma palavra no meio ("2 novos casos").
 _SEGUE_CONTAGEM = re.compile(rf"\s+(?:[\w-]+\s+)?{_SUBSTANTIVO_CONTAGEM}\b", re.IGNORECASE)
-# Inteiro com cara de ano em posição de quantidade (ver `_ano_como_contagem`). (a) Depois dele:
-# o substantivo colado ou depois de até 2 adjetivos desta lista curta ("2025 novos e graves
-# casos"); artigo, preposição, verbo, número e [n] no meio deixam o ano ser ano.
+# Inteiro de 1900 a 2100 sem ponto de milhar é CONTAGEM, salvo em posição de data (ver
+# `_anos_de_verdade`). Contagem colada depois dele ou depois de até 2 adjetivos desta lista curta
+# ("Em 2025 casos", "2025 novos e graves casos") desfaz qualquer posição de data.
 _ADJETIVO_CONTAGEM = (
     r"(?:nov[oa]s|mais|graves|outr[oa]s|confirmad[oa]s|notificad[oa]s|registrad[oa]s|suspeitos)"
 )
@@ -162,17 +175,51 @@ _CONTAGEM_DEPOIS = re.compile(
     rf"\s*(?:{_ADJETIVO_CONTAGEM}(?:\s*,\s*|\s+e\s+|\s+)){{0,2}}{_SUBSTANTIVO_CONTAGEM}\b",
     re.IGNORECASE,
 )
-# (b) Antes dele, na mesma oração: rótulo de contagem ("Óbitos: 2025") ou verbo de medida.
-_ROTULO_CONTAGEM = re.compile(rf"\b(?:{_SUBSTANTIVO_CONTAGEM}|total)\s*:\s*$", re.IGNORECASE)
-_VERBO_MEDIDA = re.compile(
-    r"\b(?:(?P<plural>foram|somaram|totalizaram|atingiram|chegaram\s+a)"
-    r"|foi|somou|totalizou|atingiu|chegou\s+a)"
-    r"\s+(?P<de>de\s+)?(?:cerca\s+de\s+|aproximadamente\s+|quase\s+)?$",
+_CARA_DE_ANO = r"(?<![\w.,])(?:19\d\d|20\d\d|2100)(?!\d|[.,]\d)"
+# "em" de patamar ("ficou em", "fecharam em", "manteve-se em") introduz quantidade, não data.
+_PATAMAR = (
+    r"(?:fic|fech|estabiliz|mant|permanec|cheg|estim|calcul|contabiliz|totaliz|ating|alcan[çc])"
+    r"[\w-]*|est(?:á|ão|ava|avam|eve|iveram)|som(?:a|am|ou|aram|ando)|par(?:ou|aram)"
+)
+# "de"/"até" só são de data depois de nome de período ou de contagem ("casos de 2025", "dados até
+# 2025", "a partir de 2025"); depois de verbo ou de "mais", "total" etc. introduzem quantidade.
+_ANTES_DE_DE = (
+    r"anos?|temporadas?|s[ée]ries?|dados|boletim|boletins|relat[óo]rios?|semanas?|m[êe]s|meses"
+    r"|per[íi]odos?|semestres?|trimestres?|in[íi]cio|come[çc]o|meados|fim|final|virada|partir"
+    r"|antes|depois|longo|inverno|ver[ãa]o|outono|primavera|campanhas?|vai|v[ãa]o"
+    rf"|{_SUBSTANTIVO_CONTAGEM}"
+)
+_MES_ABREVIADO = "|".join([*_MESES, "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set",
+                           "out", "nov", "dez"])  # fmt: skip
+# Posição de data ANTES do número. (1) A oração inteira até o número (`match`, do início dela):
+# abre com "Em", "De", "Até" ou tem o ano por sujeito ("O ano com mais casos foi 2025").
+_ANO_NO_INICIO = re.compile(
+    r"\s*(?:em|de|at[ée]"
+    r"|os?\s+anos?\s+(?:com|de)\s+(?:mais|menos|maior|menor)\b\D{0,60}?\s(?:foi|foram|é|são|era|eram))"
+    r"\s*$",
     re.IGNORECASE,
 )
-_FALA_DE_CONTAGEM = re.compile(rf"\b(?:{_SUBSTANTIVO_CONTAGEM}|total)\b", re.IGNORECASE)
-_FALA_DE_ANO = re.compile(r"\banos?\b", re.IGNORECASE)
+# (2) O fim da oração, logo antes do número (`search` numa cauda curta que começa em palavra).
+_ANO_ANTES = re.compile(
+    rf"(?:(?:^|\s)(?!(?:{_PATAMAR})(?:\s|$))\S+\s+em"  # "subiram em 2025"; "ficaram em" não
+    rf"|\b(?:{_ANTES_DE_DE})\s+(?:de|at[ée])"
+    r"|\b(?:desde|durante|entre|ap[óo]s|anos?|temporadas?)"  # "Na temporada 2025"
+    r"|(?:\b(?-i:SE)|\bsemana(?:\s+epidemiol[óo]gica)?)\s*\d{1,2}\s*(?:de|/)"  # "SE 23 de"
+    rf"|\b(?:{_MES_ABREVIADO})\.?\s*/"  # "jun/2025"
+    rf"|{_CARA_DE_ANO}\s*(?:a|at[ée]|para|e|-|/)\s*(?:de|em)?"  # "2024 a 2025", "2024 e 2025"
+    r"|(?P<comparacao>(?:^|\s)(?:que|contra)))\s*$",  # só com outro ano na mesma oração
+    re.IGNORECASE,
+)
+_CAUDA = 60
+# Posição de data DEPOIS do número: a outra ponta do intervalo ou da lista, ou "foi o ano".
+_ANO_DEPOIS = re.compile(
+    rf"\s*(?:a|at[ée]|para|e|-|/)\s*(?:de\s+|em\s+)?{_CARA_DE_ANO}"
+    r"|\s+(?:foi|foram|é|são|era|eram)\s+(?:o|os|um)\s+anos?\b",
+    re.IGNORECASE,
+)
 _FIM_DE_ORACAO = re.compile(r"[.;!?,]\s|[()]")
+# Caracteres antes do número em que a oração é procurada: custo linear em textos longos.
+_JANELA = 200
 _EXTENSO_PEQUENO = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "três": 3, "tres": 3, "quatro": 4}
 _PALAVRA_NUMERO = (
     r"(?:um|uma|dois|duas|tr[êe]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze"
@@ -424,33 +471,54 @@ def _limpar_para_numeros(texto: str) -> str:
     return _apagar_padrao(_datas_do_texto(texto)[0], _CONTEXTOS_FIXOS)
 
 
-def _ano_como_contagem(texto: str, numero: NumeroCitado) -> bool:
-    """Inteiro com cara de ano (1900-2100) em posição de quantidade é contagem, não ano.
+def _anos_de_verdade(contexto: str, tokens: list[tuple[NumeroCitado, bool]]) -> set[int]:
+    """Início dos inteiros com cara de ano (1900-2100, sem ponto) que estão em posição de data.
 
-    (a) contagem logo depois ("2025 óbitos", "2025 novos casos"); (b) rótulo de contagem logo
-    antes ("Óbitos: 2025") ou verbo de medida logo antes, numa oração que não fala de "ano(s)":
-    no plural sem "de" basta o verbo ("foram 2025", "somaram 1938"); no singular ou com "de",
-    a oração tem de falar de contagem ou de total ("o total de óbitos foi 2025").
+    O padrão é contagem (falha fechada): ano só com marca de data perto, na mesma oração. Antes
+    dele, `_ANO_NO_INICIO` (a oração abre com "Em"/"De"/"Até" ou tem o ano por sujeito) e
+    `_ANO_ANTES` ("em", "desde", "ano de", "casos de", "SE 23 de", "jun/", a outra ponta de um
+    intervalo, "que" depois de outro ano da oração); depois dele, `_ANO_DEPOIS` ("2025 a 2026",
+    "2024 e 2025", "2025 foi o ano"). Contagem colada depois (`_CONTAGEM_DEPOIS`) desfaz a marca.
+    `contexto` é o texto normalizado com as mesmas posições dos tokens (as limpezas trocam trecho
+    por espaços), para que "SE 23" e datas apagadas ainda contem como marca. A oração é procurada
+    só nos `_JANELA` caracteres antes do número, e o fim dela só nos `_CAUDA` últimos: o custo é
+    linear no tamanho do texto.
     """
-    if _CONTAGEM_DEPOIS.match(texto, numero.fim):
-        return True
-    oracao = _FIM_DE_ORACAO.split(texto[: numero.inicio])[-1]
-    if _ROTULO_CONTAGEM.search(oracao):
-        return True
-    verbo = _VERBO_MEDIDA.search(oracao)
-    if verbo is None or _FALA_DE_ANO.search(oracao):
-        return False
-    direto_no_plural = verbo.group("plural") is not None and verbo.group("de") is None
-    return direto_no_plural or bool(_FALA_DE_CONTAGEM.search(oracao, 0, verbo.start()))
+    contexto = _apagar_padrao(contexto, CITACAO)  # "ficaram [1] em 2025" não esconde o verbo
+    anos: set[int] = set()
+    for numero, cara_de_ano in tokens:
+        if not cara_de_ano or _CONTAGEM_DEPOIS.match(contexto, numero.fim):
+            continue
+        if _ANO_DEPOIS.match(contexto, numero.fim):
+            anos.add(numero.inicio)
+            continue
+        inicio_janela = max(0, numero.inicio - _JANELA)
+        cortes = [a.end() for a in _FIM_DE_ORACAO.finditer(contexto, inicio_janela, numero.inicio)]
+        inicio_oracao = cortes[-1] if cortes else inicio_janela
+        oracao = contexto[inicio_oracao : numero.inicio]
+        cauda = oracao[-_CAUDA:]
+        if len(oracao) > _CAUDA:  # a cauda começa no espaço antes de uma palavra inteira
+            cauda = cauda[next((i for i, c in enumerate(cauda) if c.isspace()), len(cauda)) :]
+        marca = _ANO_ANTES.search(cauda)
+        outro_ano_na_oracao = any(a >= inicio_oracao for a in anos)
+        if _ANO_NO_INICIO.match(oracao) or (
+            marca and (marca.group("comparacao") is None or outro_ano_na_oracao)
+        ):
+            anos.add(numero.inicio)
+    return anos
 
 
 def extrair_numeros(texto: str) -> list[NumeroCitado]:
-    """Números citados num texto (sem anos, datas, links, citações [n] nem rótulos "<5").
+    """Números citados num texto (sem datas, links, citações [n], rótulos "<5" nem anos em
+    posição de data). Inteiro com cara de ano fora de posição de data ("foram 2025") é número.
 
-    Inteiro com cara de ano em posição de quantidade ("2025 óbitos", "foram 2025") é número.
+    Diferença de `_Secao.numeros`: sem evidências, não apaga as categorias dos dados ("60+") nem
+    as proporções ("1 em cada 10"), que lá são conferidas à parte.
     """
-    limpo = _limpar_para_numeros(_normalizar(texto))
-    return [n for n, ano in _tokens(limpo) if not ano or _ano_como_contagem(limpo, n)]
+    contexto = _normalizar(texto)
+    tokens = _tokens(_limpar_para_numeros(contexto))
+    anos = _anos_de_verdade(contexto, tokens)
+    return [n for n, _ in tokens if n.inicio not in anos]
 
 
 # ---- o que as evidências permitem --------------------------------------------------------------
@@ -627,11 +695,12 @@ def _host_e_caminho(endereco: str) -> tuple[str, str]:
 
 
 def _instrucao_ano_contagem(numero: NumeroCitado) -> str:
-    return (f"'{numero.bruto}' está em posição de quantidade (antes de casos, óbitos etc., ou "
-            "depois de 'foram', 'somaram', 'o total ... foi' ou 'Óbitos:') e é lido como "
-            "contagem, que não está no JSON. Se é o ano, escreva-o como data, com vírgula "
-            "('Em 2025, os casos...'); se é contagem, use só uma contagem do JSON, com ponto de "
-            "milhar, ou remova o número.")  # fmt: skip
+    """Sem ano nem contagem fixos: o único número é o próprio trecho citado, entre aspas."""
+    return (f"'{numero.bruto}' está fora de posição de data e é lido como contagem, que não está "
+            "no JSON. Se é o ano, escreva-o como data, com preposição: 'em <ano>', 'de <ano> a "
+            "<ano>', 'no ano de <ano>'; escreva 'foi em <ano>', nunca 'foi <ano>', e use vírgula "
+            "quando o ano abre a frase ('Em <ano>, os casos...'). Se é contagem, use só uma "
+            "contagem do JSON, com ponto de milhar, ou remova o número.")  # fmt: skip
 
 
 def _trecho(texto: str) -> str:
@@ -689,18 +758,21 @@ class _Secao:
         self._em_palavras(frase, p.fracoes | perc_citadas)
         texto = _limpar_para_numeros(_apagar_rotulos_dos_dados(frase, p))
         texto = self._proporcoes(texto, p.fracoes | perc_citadas)
-        for numero, ano in _tokens(texto):
-            # "Foram 2025 óbitos": inteiro com cara de ano em posição de quantidade é contagem;
-            # o ano das evidências não o salva.
-            if ano and _ano_como_contagem(texto, numero):
-                if not _perto(numero, p.contagens | cont_citadas):
-                    self._nao_conferido(numero.bruto, numero, _instrucao_ano_contagem(numero))
-            elif ano:
+        tokens = _tokens(texto)
+        anos = _anos_de_verdade(frase, tokens)
+        for numero, cara_de_ano in tokens:
+            if numero.inicio in anos:
                 if int(numero.valor) not in p.anos:
                     instrucao = f"o ano '{numero.bruto}' não aparece nas evidências: remova-o."
                     self._nao_conferido(numero.bruto, None, instrucao)
+            elif cara_de_ano:
+                # "SP teve 2025": fora de posição de data é contagem; o ano das evidências não
+                # o salva.
+                if not _perto(numero, p.contagens | cont_citadas):
+                    self._nao_conferido(numero.bruto, numero, _instrucao_ano_contagem(numero))
             elif numero.percentual:
-                self._percentual(numero, texto[: numero.inicio], perc_citadas)
+                antes = texto[max(0, numero.inicio - _JANELA) : numero.inicio]
+                self._percentual(numero, antes, perc_citadas)
             elif (0 < numero.valor < LIMIAR_SUPRESSAO and numero.valor.is_integer()
                   and numero.multiplicador == 1
                   and _SEGUE_CONTAGEM.match(texto, numero.fim)):  # fmt: skip

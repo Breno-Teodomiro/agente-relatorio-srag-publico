@@ -68,8 +68,16 @@ def limpar_texto(texto: str, limite: int | None = LIMITE_TRECHO) -> str:
 
 
 def tem_dado_pessoal(texto: str) -> bool:
-    """Procura dado pessoal no texto cru e com as entidades HTML desfeitas ("123&#46;456&#46;…")."""
-    return bool(mascarar_pii(texto or "")[1] or mascarar_pii(limpar_texto(texto, limite=None))[1])
+    """Procura dado pessoal no texto cru, com as entidades HTML desfeitas ("123&#46;456&#46;…") e
+    com as tags removidas com e sem espaço ("123<b>.</b>456…" só vira CPF sem o espaço), como
+    `tem_injecao`."""
+    desfeito = normalizar_unicode(_desescapar(texto or ""))
+    variantes = (
+        texto or "",
+        limpar_texto(texto, limite=None),
+        _neutralizar(_TAG.sub("", desfeito)),
+    )
+    return any(mascarar_pii(v)[1] for v in variantes)
 
 
 def tem_injecao(texto: str) -> bool:

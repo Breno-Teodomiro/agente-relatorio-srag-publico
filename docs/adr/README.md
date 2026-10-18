@@ -21,5 +21,6 @@ do RAG). Onde há medida, o ADR aponta o comando que mede (`make testes`, `make 
 | [0009](0009-noticias-via-httpx-tavily-rss.md) | Notícias por `httpx` direto (Tavily → Google News RSS), não `langchain-tavily` | guardrails · clean code |
 | [0010](0010-papeis-de-banco-e-trilha-de-auditoria.md) | Papéis de banco com privilégio mínimo e trilha de auditoria Postgres + JSONL | governança · dados sensíveis |
 | [0011](0011-supressao-de-celulas-pequenas.md) | Supressão `<5`, complementar `oculto` e por janelas publicadas, com limites declarados | dados sensíveis |
+| [0012](0012-demo-online-evolucao-prevista.md) | Demonstração online (Streamlit Community Cloud + Postgres gerenciado) fica como evolução prevista: desenho, riscos e critérios, sem implementação | arquitetura · dados sensíveis · governança |
 
 Fonte da verdade do desenho: [`docs/projeto/specs/2026-10-14-agente-srag-design.md`](../projeto/specs/2026-10-14-agente-srag-design.md).

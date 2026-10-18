@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 import pytest
@@ -136,10 +137,12 @@ def test_prompts_proibem_inferir_valor_suprimido():
 
 
 def test_prompt_do_redator_pede_ano_como_data_e_milhar_com_ponto():
-    """O guardrail lê "foram 2025 casos" e "somaram 1938" como contagem: o prompt evita os dois."""
+    """O guardrail lê inteiro de 4 algarismos fora de posição de data como contagem: o prompt pede
+    ano com preposição ("foi em <ano>") e milhar com ponto, sem ano fixo no exemplo."""
     prompt = carregar_prompt("redator")
-    assert "Em 2025, os casos" in prompt
+    assert "Em <ano>, os casos" in prompt and "foi em <ano>" in prompt
     assert "1.938" in prompt and "nunca como quantidade" in prompt
+    assert not re.search(r"\b20\d\d\b", prompt.split("2.", 1)[0])  # regra 1 sem ano fixo
 
 
 def test_noticia_vai_ao_redator_como_dado_e_nao_como_json_cru():
