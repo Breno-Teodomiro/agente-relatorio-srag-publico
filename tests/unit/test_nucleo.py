@@ -7,6 +7,7 @@ import json
 import logging
 import sys
 import types
+from dataclasses import replace
 
 import psycopg
 import pytest
@@ -16,7 +17,7 @@ from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel, SecretStr
 
 from srag_agente import nucleo
-from srag_agente.auditoria.registro import Auditoria
+from srag_agente.auditoria.registro import Auditoria, sem_pii
 from srag_agente.config import Config
 from srag_agente.guardrails.entrada import LIMITE_PERGUNTA
 from srag_agente.guardrails.limites import Limites
@@ -27,10 +28,12 @@ from tests.fakes import (
     HOJE,
     REF,
     BuscadorFalso,
+    BuscadorSemData,
     DicionarioFalso,
     RepositorioFalso,
     embedder_falso,
     texto_neutro,
+    texto_valido,
 )
 
 USO = {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
@@ -71,8 +74,8 @@ def _orquestrador_que_quebra(erro: BaseException):
 def _componentes(orquestrador=None) -> Componentes:
     return Componentes(provedor="falso", modelo="falso",
                        modelo_orquestrador=orquestrador or _orquestrador_ok(),
-                       redator=lambda contexto: (texto_neutro(), (200, 80)),
-                       classificador=lambda texto: (None, (0, 0)),
+                       redator=lambda contexto: (texto_neutro(), (200, 80), None),
+                       classificador=lambda texto: (None, (0, 0), None),
                        buscador=BuscadorFalso(), embedder=embedder_falso)  # fmt: skip
 
 
@@ -371,3 +374,25 @@ def test_langfuse_liga_com_mascara_de_dado_pessoal(cfg, monkeypatch):
     mascara = criados["mask"]
     dados = mascara(data={"pergunta_extra": f"cpf {CPF}", "mensagens": [f"tel {CPF}", 3]})
     assert "456" not in str(dados) and dados["mensagens"][1] == 3
+
+
+# --- revisão final da branch ------------------------------------------------------------------
+def test_aviso_de_noticia_sem_data_chega_ao_relatorio_gravado(cfg):
+    """I1 pelo efeito: o aviso do guardrail de saída aparece no Markdown e na trilha JSONL."""
+    componentes = replace(_componentes(), buscador=BuscadorSemData(),
+                          redator=lambda contexto: (texto_valido(), (200, 80), None))  # fmt: skip
+    resultado = executar_relatorio(
+        cfg, auditoria=Auditoria(), repo=RepositorioFalso(), dicionario=DicionarioFalso(),
+        componentes=componentes, uf="BR", pergunta_extra=None, hoje=HOJE,
+    )  # fmt: skip
+    assert resultado.status == "ok"
+    assert "noticia_sem_data" in resultado.arquivos.markdown.read_text(encoding="utf-8")
+    assert "noticia_sem_data" in resultado.arquivos.auditoria.read_text(encoding="utf-8")
+
+
+def test_mascara_do_langfuse_usa_o_mesmo_mascaramento_da_auditoria():
+    entrada = {f"cpf {CPF}": (f"pergunta {CPF}", 12345678909, 0.5, None), "uf": "BR"}
+    assert nucleo.mascara_observabilidade(data=entrada) == sem_pii(entrada)
+    assert nucleo.mascara_observabilidade(data=entrada) == {
+        f"cpf {MASCARA}": [f"pergunta {MASCARA}", MASCARA, 0.5, None], "uf": "BR",
+    }  # fmt: skip

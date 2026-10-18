@@ -4,9 +4,11 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
+from srag_agente.agente import llm
 from srag_agente.agente.cobertura import faltantes
 from srag_agente.agente.contexto import montar_contexto
 from srag_agente.agente.llm import (
+    LIMITE_NOME_MODELO,
     ConfiguracaoInvalida,
     ErroRedacao,
     criar_classificador,
@@ -14,12 +16,21 @@ from srag_agente.agente.llm import (
     criar_redator,
     estimar_custo,
     mensagem_do_redator,
+    modelo_da_resposta,
     uso_tokens,
 )
 from srag_agente.agente.prompts import carregar_prompt, hash_prompts
 from srag_agente.config import Config
+from srag_agente.guardrails import entrada
 from srag_agente.guardrails.entrada import ClassificacaoEscopo
-from tests.fakes import HOJE, evidencias_completas, texto_valido
+from tests.fakes import (
+    HOJE,
+    MODELO_RESERVA,
+    estruturado_com_reserva,
+    evidencias_completas,
+    resposta_crua,
+    texto_valido,
+)
 
 
 def test_cobertura_completa_nao_tem_faltantes():
@@ -98,8 +109,8 @@ def test_redator_devolve_texto_e_tokens():
         lambda _: {"raw": bruto, "parsed": texto_valido(), "parsing_error": None}
     )
     contexto = montar_contexto(evidencias_completas(), uf="BR", data_execucao=HOJE)
-    texto, uso = criar_redator(runnable)(contexto)
-    assert texto.cenario_atual and uso == (50, 10)
+    texto, uso, modelo = criar_redator(runnable)(contexto)
+    assert texto.cenario_atual and uso == (50, 10) and modelo is None
 
 
 def test_redator_com_saida_invalida_levanta_erro():
@@ -150,6 +161,53 @@ def test_classificador_recebe_a_pergunta_como_dado():
             "parsing_error": None,
         }
 
-    resultado, uso = criar_classificador(RunnableLambda(falso))("Como está a UTI?")
+    resultado, uso, _ = criar_classificador(RunnableLambda(falso))("Como está a UTI?")
     assert resultado.no_escopo and uso == (3, 1)
     assert visto[1].content == "<pergunta_usuario>Como está a UTI?</pergunta_usuario>"
+
+
+# ---- revisão final da branch: modelo que respondeu (I2) e limite único da pergunta (M4) -------
+
+
+def test_redator_devolve_o_modelo_da_reserva_quando_o_principal_falha():
+    contexto = montar_contexto(evidencias_completas(), uf="BR", data_execucao=HOJE)
+    texto, uso, modelo = criar_redator(estruturado_com_reserva(texto_valido()))(contexto)
+    assert texto.cenario_atual and uso == (50, 10)
+    assert modelo == MODELO_RESERVA
+
+
+def test_classificador_devolve_o_modelo_que_respondeu():
+    escopo = ClassificacaoEscopo(no_escopo=True, motivo="sobre UTI")
+    _, _, modelo = criar_classificador(estruturado_com_reserva(escopo))("Como está a UTI?")
+    assert modelo == MODELO_RESERVA
+
+
+@pytest.mark.parametrize(
+    "mensagem,esperado",
+    [
+        (resposta_crua(), MODELO_RESERVA),
+        (resposta_crua(modelo=None), None),  # provedor que não informa o modelo
+        (resposta_crua(modelo=""), None),
+        (resposta_crua(modelo="m" * 500), "m" * LIMITE_NOME_MODELO),
+        (AIMessage(content="", response_metadata={"model_name": 123}), None),
+        (None, None),  # include_raw sem a mensagem crua
+    ],
+)
+def test_modelo_da_resposta_tolera_ausencia(mensagem, esperado):
+    assert modelo_da_resposta(mensagem) == esperado
+
+
+def test_erro_de_redacao_carrega_o_modelo_que_respondeu():
+    falha = RunnableLambda(
+        lambda _: {"raw": resposta_crua(), "parsed": None, "parsing_error": ValueError("x")}
+    )
+    contexto = montar_contexto(evidencias_completas(), uf="BR", data_execucao=HOJE)
+    with pytest.raises(ErroRedacao) as erro:
+        criar_redator(falha)(contexto)
+    assert erro.value.modelo == MODELO_RESERVA
+    assert ErroRedacao("sem modelo").modelo is None
+
+
+def test_limite_da_pergunta_tem_uma_fonte_so():
+    # dois literais 500 em módulos diferentes são objetos distintos: `is` só passa com a importação
+    assert llm.LIMITE_PERGUNTA is entrada.LIMITE_PERGUNTA

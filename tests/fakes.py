@@ -143,6 +143,57 @@ class BuscadorFalso:
         )
 
 
+NOTICIA_SEM_DATA = NOTICIAS["cenario_atual"].model_copy(update={"data": None})
+
+
+class BuscadorSemData(BuscadorFalso):
+    """A fonte não informou a data da notícia do cenário atual (aceita em qualquer janela)."""
+
+    def buscar(self, termo, janela, inicio, fim):
+        resultado = super().buscar(termo, janela, inicio, fim)
+        if janela == "cenario_atual":
+            resultado.noticias = [NOTICIA_SEM_DATA]
+        return resultado
+
+
+# --- I2: troca silenciosa do modelo principal pela reserva ---
+MODELO_RESERVA = "gpt-4.1-mini-reserva"
+
+
+def _principal_fora_do_ar(_mensagens):
+    raise TimeoutError("principal fora do ar")
+
+
+def resposta_crua(modelo: str | None = MODELO_RESERVA, content: str = "", **campos):
+    """AIMessage como a do langchain_openai: o modelo que respondeu vem em `model_name`."""
+    from langchain_core.messages import AIMessage
+
+    metadados = {"model_name": modelo} if modelo is not None else {}
+    uso = {"input_tokens": 50, "output_tokens": 10, "total_tokens": 60}
+    return AIMessage(content=content, response_metadata=metadados, usage_metadata=uso, **campos)
+
+
+def estruturado_com_reserva(parsed, modelo: str | None = MODELO_RESERVA):
+    """Mesmo encadeamento de `modelo_estruturado` (include_raw + with_fallbacks): o principal
+    levanta erro e a reserva responde."""
+    from langchain_core.runnables import RunnableLambda
+
+    def reserva(_mensagens):
+        return {"raw": resposta_crua(modelo), "parsed": parsed, "parsing_error": None}
+
+    return RunnableLambda(_principal_fora_do_ar).with_fallbacks([RunnableLambda(reserva)])
+
+
+def orquestrador_com_reserva(*respostas):
+    """Orquestrador cujo principal falha sempre; a reserva devolve `respostas` em ordem."""
+    from langchain_core.runnables import RunnableLambda
+
+    fila = iter(respostas)
+    return RunnableLambda(_principal_fora_do_ar).with_fallbacks(
+        [RunnableLambda(lambda _mensagens: next(fila))]
+    )
+
+
 class DicionarioFalso:
     def __init__(self, trechos: list[TrechoDicionario] | None = None):
         self.trechos = trechos

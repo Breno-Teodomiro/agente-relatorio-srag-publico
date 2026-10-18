@@ -6,7 +6,8 @@ Regras da trilha, valendo nas três formas:
 - um evento só entra na memória depois de gravado (sem evento "fantasma" nem buraco na
   sequência quando o banco falha);
 - o conteúdo é sempre JSON válido e de tamanho limitado (`resumir`), sem dado pessoal
-  (CPF, cartão SUS, telefone, e-mail… mascarados em argumentos, resultado, motivo e erro).
+  (CPF, cartão SUS, telefone, e-mail… mascarados nos parâmetros da execução e em argumentos,
+  resultado, motivo e erro de cada evento).
 O banco repete essas regras por conta própria (04_auditoria.sql): o registro não é a única
 barreira.
 """
@@ -53,17 +54,22 @@ def _para_json(valor: Any) -> str:
     return json.dumps(_json_seguro(valor), ensure_ascii=False, default=str, allow_nan=False)
 
 
-def _sem_pii(valor: Any) -> Any:
-    """Mascara dado pessoal em textos, chaves e inteiros com cara de documento, em todo nível."""
-    if isinstance(valor, str):
-        return mascarar_pii(valor)[0]
-    if isinstance(valor, int) and not isinstance(valor, bool):
-        return MASCARA if mascarar_pii(str(valor))[1] else valor
+def sem_pii(valor: Any) -> Any:
+    """Mascara dado pessoal em textos, chaves e inteiros com cara de documento, em todo nível.
+
+    É o mascaramento único do projeto para estruturas: a trilha (`resumir`, parâmetros) e a
+    máscara do Langfuse (`nucleo.mascara_observabilidade`). Tupla vira lista; objeto
+    desconhecido (mensagem do LangChain…) vira texto, para não passar sem conferência.
+    """
     if isinstance(valor, dict):
-        return {_sem_pii(str(chave)): _sem_pii(v) for chave, v in valor.items()}
-    if isinstance(valor, list):
-        return [_sem_pii(v) for v in valor]
-    return valor
+        return {sem_pii(str(chave)): sem_pii(v) for chave, v in valor.items()}
+    if isinstance(valor, list | tuple):
+        return [sem_pii(v) for v in valor]
+    if valor is None or isinstance(valor, bool | float):
+        return valor
+    if isinstance(valor, int):  # CPF ou cartão SUS sem pontuação
+        return MASCARA if mascarar_pii(str(valor))[1] else valor
+    return mascarar_pii(valor if isinstance(valor, str) else str(valor))[0]
 
 
 def resumir(valor: Any) -> Any:
@@ -73,7 +79,7 @@ def resumir(valor: Any) -> Any:
     """
     if valor is None:
         return None
-    texto = _para_json(_sem_pii(json.loads(_para_json(valor))))
+    texto = _para_json(sem_pii(json.loads(_para_json(valor))))
     if len(texto) <= LIMITE_RESULTADO:
         return json.loads(texto)
     return {"resumo_truncado": texto[:LIMITE_RESULTADO], "tamanho_original": len(texto)}
@@ -94,9 +100,15 @@ def descrever_erro(erro: BaseException) -> str:
     return f"{type(erro).__name__}: {erro}"
 
 
-def _cortar(texto: str | None) -> str | None:
-    """Motivo e erro: mascarados e cortados, nessa ordem."""
-    return None if texto is None else mascarar_pii(texto)[0][:LIMITE_RESULTADO]
+def _cortar(texto: object) -> str | None:
+    """Motivo e erro: mascarados e cortados, nessa ordem.
+
+    O motivo pode vir cru do LLM (caminho de erro da ferramenta): o que não for texto vira texto
+    aqui, para não derrubar o nó (motivo=12345) nem passar sem mascarar.
+    """
+    if texto is None:
+        return None
+    return mascarar_pii(texto if isinstance(texto, str) else str(texto))[0][:LIMITE_RESULTADO]
 
 
 def _conferir_consumo(tokens_entrada: int, tokens_saida: int, custo_usd: float,
@@ -147,7 +159,8 @@ class Auditoria:
                 "status": "em_andamento",
                 "provedor": provedor,
                 "modelo": modelo,
-                "parametros": json.loads(_para_json(parametros)),
+                # o núcleo já mascara a pergunta antes de cortá-la; aqui é a segunda barreira
+                "parametros": sem_pii(json.loads(_para_json(parametros))),
                 "versao_codigo": versao_codigo,
                 "hash_prompts": hash_prompts,
             }

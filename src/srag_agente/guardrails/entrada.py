@@ -33,17 +33,26 @@ class ResultadoGuardrail(BaseModel):
     motivos: list[str] = []
     tokens_entrada: int = 0
     tokens_saida: int = 0
+    # Quem classificou (principal ou reserva), segundo o provedor; None se não informado.
+    modelo: str | None = None
     # A pergunta exatamente como foi conferida (normalizada); só existe quando aprovada. É ela
     # que deve seguir para o agente, e não o texto cru.
     pergunta: str | None = None
 
 
-Classificador = Callable[[str], tuple[ClassificacaoEscopo, tuple[int, int]]]
+# (classificação, (tokens de entrada, tokens de saída), modelo que respondeu ou None)
+Classificador = Callable[[str], tuple[ClassificacaoEscopo, tuple[int, int], str | None]]
 
 
-def _recusa(motivo: str, tokens: tuple[int, int] = (0, 0)) -> ResultadoGuardrail:
+def _recusa(
+    motivo: str, tokens: tuple[int, int] = (0, 0), modelo: str | None = None
+) -> ResultadoGuardrail:
     return ResultadoGuardrail(
-        aprovado=False, motivos=[motivo], tokens_entrada=tokens[0], tokens_saida=tokens[1]
+        aprovado=False,
+        motivos=[motivo],
+        tokens_entrada=tokens[0],
+        tokens_saida=tokens[1],
+        modelo=modelo,
     )
 
 
@@ -79,10 +88,12 @@ def verificar_entrada(pergunta: str | None, classificador: Classificador) -> Res
     if mascarar_pii(texto)[1] or mascarar_pii(limpar_texto(texto, limite=None))[1]:
         return _recusa("dado_pessoal")
     try:
-        classificacao, tokens_brutos = classificador(texto)
+        classificacao, tokens_brutos, modelo_bruto = classificador(texto)
     except Exception as erro:  # falha fechada; o texto da exceção pode repetir a pergunta
         return _recusa(f"classificador_indisponivel: {type(erro).__name__}")
     tokens = _tokens_validos(tokens_brutos)
+    # o nome do modelo só informa a auditoria: estranho ou ausente vira None, não recusa
+    modelo = modelo_bruto if isinstance(modelo_bruto, str) and modelo_bruto else None
     formato_ok = isinstance(classificacao, ClassificacaoEscopo) and isinstance(
         classificacao.no_escopo,
         bool,  # model_construct pula a validação
@@ -90,7 +101,12 @@ def verificar_entrada(pergunta: str | None, classificador: Classificador) -> Res
     if not formato_ok or tokens is None:
         return _recusa("classificador_indisponivel: resposta fora do formato")
     if not classificacao.no_escopo:
-        return _recusa(f"fora_do_escopo: {_motivo_publicavel(classificacao.motivo)}", tokens)
+        motivo = f"fora_do_escopo: {_motivo_publicavel(classificacao.motivo)}"
+        return _recusa(motivo, tokens, modelo)
     return ResultadoGuardrail(
-        aprovado=True, tokens_entrada=tokens[0], tokens_saida=tokens[1], pergunta=texto
+        aprovado=True,
+        tokens_entrada=tokens[0],
+        tokens_saida=tokens[1],
+        modelo=modelo,
+        pergunta=texto,
     )

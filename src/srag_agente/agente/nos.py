@@ -11,7 +11,13 @@ from langchain_core.runnables import Runnable
 from srag_agente.agente.cobertura import faltantes
 from srag_agente.agente.contexto import montar_contexto
 from srag_agente.agente.estado import EstadoAgente
-from srag_agente.agente.llm import ErroRedacao, Redator, pergunta_como_dado, uso_tokens
+from srag_agente.agente.llm import (
+    ErroRedacao,
+    Redator,
+    modelo_da_resposta,
+    pergunta_como_dado,
+    uso_tokens,
+)
 from srag_agente.agente.prompts import carregar_prompt
 from srag_agente.auditoria.registro import Auditoria
 from srag_agente.ferramentas.registro import ArgumentosInvalidos, Ferramenta, executar
@@ -31,11 +37,6 @@ ERRO_DESCONHECIDA = "Ferramenta desconhecida: use só as ferramentas disponívei
 
 def _ms(inicio: float) -> int:
     return int((perf_counter() - inicio) * 1000)
-
-
-def _texto(valor: object) -> str | None:
-    """Campo vindo do LLM só entra na auditoria como texto (motivo=12345 não derruba o nó)."""
-    return valor if isinstance(valor, str) else None
 
 
 @dataclass
@@ -130,7 +131,7 @@ class NosAgente:
             "orquestrador",
             "llm",
             resultado={
-                "modelo": resposta.response_metadata.get("model_name"),
+                "modelo": modelo_da_resposta(resposta),  # com a reserva, o nome dela
                 "ferramentas_planejadas": [
                     {"ferramenta": c["name"], "motivo": c["args"].get("motivo")}
                     for c in resposta.tool_calls
@@ -197,14 +198,15 @@ class NosAgente:
         except DadosIndisponiveis as exc:  # mensagem nossa: segue inteira ao orquestrador
             causa = exc
             erro = para_llm = f"Erro ao executar {nome}: {type(exc).__name__}: {exc}"
-            # os argumentos passaram na validação (campos e tipos do esquema)
-            motivo = _texto(argumentos.get("motivo"))
-            campos = {"ferramenta": nome, "argumentos": argumentos, "motivo": motivo}
+            # os argumentos passaram na validação (campos e tipos do esquema); motivo que não
+            # seja texto a própria auditoria converte e mascara
+            campos = {"ferramenta": nome, "argumentos": argumentos,
+                      "motivo": argumentos.get("motivo")}  # fmt: skip
         except Exception as exc:  # qualquer falha vira resposta para o orquestrador decidir
             causa = exc
             para_llm = f"Erro ao executar {nome}: {type(exc).__name__}."
             erro = f"Erro ao executar {nome}: {type(exc).__name__}: {exc}"
-            campos = {"ferramenta": nome, "motivo": _texto(argumentos.get("motivo"))}
+            campos = {"ferramenta": nome, "motivo": argumentos.get("motivo")}
         if causa is not None:
             self._registrar_falha(causa, duracao_ms=_ms(inicio), erro=erro, **campos)
             return para_llm, True, None
@@ -327,12 +329,12 @@ class NosAgente:
         )
         inicio = perf_counter()
         try:
-            texto, (tokens_entrada, tokens_saida) = self.d.redator(contexto)
+            texto, (tokens_entrada, tokens_saida), modelo = self.d.redator(contexto)
         except ErroRedacao as exc:
             self.d.auditoria.registrar(
                 "redator",
                 "llm",
-                resultado={"tentativa": tentativa},
+                resultado={"tentativa": tentativa, "modelo": exc.modelo},
                 duracao_ms=_ms(inicio),
                 erro=str(exc),  # sem corte: a auditoria mascara e só depois limita o tamanho
             )
@@ -347,7 +349,7 @@ class NosAgente:
         self.d.auditoria.registrar(
             "redator",
             "llm",
-            resultado={"tentativa": tentativa, "secoes": list(texto.secoes())},
+            resultado={"tentativa": tentativa, "modelo": modelo, "secoes": list(texto.secoes())},
             duracao_ms=_ms(inicio),
             tokens_entrada=tokens_entrada,
             tokens_saida=tokens_saida,
@@ -361,17 +363,24 @@ class NosAgente:
 
     # ---- 6. guardrail de saída ---------------------------------------------------------------
     def guardrail_saida(self, estado: EstadoAgente) -> dict:
+        """Confere o texto e decide a situação.
+
+        Os avisos (ex.: notícia sem data citada, ADR 0007) vão à auditoria em TODA tentativa, mas
+        ao estado (e daí ao relatório) só os do texto final: `avisos` acumula entre os nós, e o
+        de uma tentativa refeita se repetiria ou sobraria sem a citação que o gerou.
+        """
         texto = estado["texto"]
         if texto is None:
-            violacoes, pii = estado["violacoes"], []
+            violacoes, pii, avisos = estado["violacoes"], [], []
         else:
             resultado = verificar_saida(
                 texto, estado["evidencias"], numerar_noticias(estado["evidencias"])
             )
-            texto, violacoes, pii = (
+            texto, violacoes, pii, avisos = (
                 resultado.texto,
                 resultado.violacoes,
                 resultado.dados_pessoais_mascarados,
+                resultado.avisos,
             )
         if not violacoes:
             status = "parcial" if estado["cobertura_incompleta"] else "ok"
@@ -386,10 +395,14 @@ class NosAgente:
                 "aprovado": not violacoes,
                 "violacoes": violacoes,
                 "dados_pessoais_mascarados": pii,
+                "avisos": avisos,
                 "status": status,
             },
         )
-        return {"texto": texto, "violacoes": violacoes, "status": status}
+        atualizacao = {"texto": texto, "violacoes": violacoes, "status": status}
+        if status != "em_andamento":
+            atualizacao["avisos"] = avisos
+        return atualizacao
 
     def rota_saida(self, estado: EstadoAgente) -> Literal["redator", "fim"]:
         return "redator" if estado["status"] == "em_andamento" else "fim"

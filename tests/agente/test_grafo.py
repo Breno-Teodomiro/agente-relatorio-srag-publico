@@ -11,7 +11,12 @@ from langchain_openai.chat_models.base import _convert_message_to_dict
 from srag_agente.agente.contexto import montar_contexto
 from srag_agente.agente.estado import estado_inicial
 from srag_agente.agente.grafo import estrutura_mermaid, executar_agente
-from srag_agente.agente.llm import ErroRedacao, mensagem_do_redator
+from srag_agente.agente.llm import (
+    ErroRedacao,
+    criar_classificador,
+    criar_redator,
+    mensagem_do_redator,
+)
 from srag_agente.agente.nos import AVISO_COBERTURA, Dependencias, NosAgente
 from srag_agente.auditoria.registro import Auditoria
 from srag_agente.ferramentas.registro import Ferramenta
@@ -20,9 +25,14 @@ from srag_agente.guardrails.limites import Limites
 from tests.fakes import (
     CHAMADAS_COMPLETAS,
     HOJE,
+    MODELO_RESERVA,
     BuscadorFalso,
+    BuscadorSemData,
+    estruturado_com_reserva,
     evidencias_completas,
     ferramentas_falsas,
+    orquestrador_com_reserva,
+    resposta_crua,
     texto_neutro,
     texto_valido,
 )
@@ -103,13 +113,13 @@ def _redator(*textos):
     fila = list(textos)
 
     def redigir(contexto):
-        return (fila.pop(0) if len(fila) > 1 else fila[0]), (200, 80)
+        return (fila.pop(0) if len(fila) > 1 else fila[0]), (200, 80), None
 
     return redigir
 
 
 def _classificador(no_escopo=True):
-    return lambda texto: (ClassificacaoEscopo(no_escopo=no_escopo, motivo="teste"), (10, 2))
+    return lambda texto: (ClassificacaoEscopo(no_escopo=no_escopo, motivo="teste"), (10, 2), None)
 
 
 def _deps(orquestrador, redator=None, limites=None, classificador=None, relogio=None):
@@ -250,7 +260,7 @@ def test_redator_corrige_na_segunda_tentativa():
 
     def redator(contexto):
         recebidas.append(contexto.violacoes_anteriores)
-        return textos.pop(0), (200, 80)
+        return textos.pop(0), (200, 80), None
 
     deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator)
     estado = _rodar(deps)
@@ -266,7 +276,7 @@ def test_saida_fora_do_formato_do_redator_conta_como_tentativa_e_depois_corrige(
         anteriores.append(contexto.violacoes_anteriores)
         if len(anteriores) == 1:
             raise ErroRedacao("saída vazia")
-        return texto_valido(), (200, 80)
+        return texto_valido(), (200, 80), None
 
     deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator)
     estado = _rodar(deps)
@@ -317,7 +327,7 @@ def test_redator_do_grafo_le_as_noticias_pela_mensagem_do_redator_e_a_citacao_pa
 
     def redator(contexto):
         vistas.append(mensagem_do_redator(contexto))
-        return texto_valido(), (200, 80)  # cita [1] e [2]
+        return texto_valido(), (200, 80), None  # cita [1] e [2]
 
     deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator)
     estado = _rodar(deps)
@@ -553,7 +563,7 @@ def test_erro_do_redator_nao_vaza_saida_crua_nas_violacoes_nem_cpf_na_auditoria(
         recebidas.append(contexto.violacoes_anteriores)
         if len(recebidas) == 1:
             raise ErroRedacao("x" * 492 + " 123.456.789-09")
-        return texto_valido(), (200, 80)
+        return texto_valido(), (200, 80), None
 
     deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator)
     estado = _rodar(deps)
@@ -563,3 +573,96 @@ def test_erro_do_redator_nao_vaza_saida_crua_nas_violacoes_nem_cpf_na_auditoria(
     assert "xxx" not in violacao and "123.456" not in violacao
     trilha = json.dumps(deps.auditoria.eventos)
     assert "123.456" not in trilha and "x" * 50 in trilha  # o detalhe fica na auditoria
+
+
+# ---- revisão final da branch: avisos do guardrail de saída (I1) -------------------------------
+
+
+def _eventos_saida(deps):
+    return [e["resultado"] for e in deps.auditoria.eventos if e["no"] == "guardrail_saida"]
+
+
+def test_noticia_sem_data_citada_vira_aviso_no_estado_e_na_auditoria():
+    """ADR 0007: notícia sem data é aceita em qualquer janela, mas a citação deixa rastro."""
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"))
+    deps.ferramentas = ferramentas_falsas(buscador=BuscadorSemData())
+    estado = _rodar(deps)  # texto_valido() cita [2] (a notícia sem data) em cenario_atual
+    assert estado["status"] == "ok"
+    (aviso,) = [a for a in estado["avisos"] if a.startswith("noticia_sem_data")]
+    assert "[2]" in aviso and "cenario_atual" in aviso
+    (evento,) = _eventos_saida(deps)
+    assert evento["avisos"] == [aviso]
+
+
+def test_aviso_de_tentativa_reprovada_fica_na_auditoria_mas_nao_no_relatorio():
+    """Só os avisos do texto FINAL vão ao estado: o da tentativa refeita não é repetido nem
+    reaparece quando o texto novo já não cita a notícia sem data."""
+    reprovado = texto_valido(resumo_executivo="A mortalidade foi de 50,0%.")  # cita [2]
+    sem_citacao = texto_valido(cenario_atual="Não houve notícia recente.")
+    deps = _deps(
+        _orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), _redator(reprovado, sem_citacao)
+    )
+    deps.ferramentas = ferramentas_falsas(buscador=BuscadorSemData())
+    estado = _rodar(deps)
+    assert (estado["status"], estado["tentativas_redacao"]) == ("ok", 2)
+    assert not [a for a in estado["avisos"] if a.startswith("noticia_sem_data")]
+    primeira, segunda = _eventos_saida(deps)
+    assert primeira["avisos"] and primeira["avisos"][0].startswith("noticia_sem_data")
+    assert segunda["avisos"] == []
+
+
+def test_avisos_do_texto_final_reprovado_chegam_ao_estado():
+    reprovado = texto_valido(resumo_executivo="A mortalidade foi de 50,0%.")
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), _redator(reprovado))
+    deps.ferramentas = ferramentas_falsas(buscador=BuscadorSemData())
+    estado = _rodar(deps)
+    assert estado["status"] == "revisao_humana"
+    assert len([a for a in estado["avisos"] if a.startswith("noticia_sem_data")]) == 1
+
+
+# ---- revisão final da branch: modelo que respondeu em cada evento (I2) ------------------------
+
+
+def test_troca_para_a_reserva_fica_registrada_em_todo_evento_de_llm():
+    """O principal levanta erro e o with_fallbacks passa à reserva: a trilha diz quem respondeu."""
+    orquestrador = orquestrador_com_reserva(
+        resposta_crua(tool_calls=_chamadas(CHAMADAS_COMPLETAS)),
+        resposta_crua(content="EVIDENCIAS_COMPLETAS"),
+    )
+    deps = _deps(
+        orquestrador,
+        redator=criar_redator(estruturado_com_reserva(texto_valido())),
+        classificador=criar_classificador(
+            estruturado_com_reserva(ClassificacaoEscopo(no_escopo=True, motivo="sobre UTI"))
+        ),
+    )
+    estado = _rodar(deps, pergunta="Como está a UTI?")
+    assert estado["status"] == "ok"
+    eventos_llm = [e for e in deps.auditoria.eventos if e["tipo"] == "llm"]
+    assert {e["no"] for e in eventos_llm} == {"orquestrador", "redator"}
+    assert all(e["resultado"]["modelo"] == MODELO_RESERVA for e in eventos_llm)
+    (entrada,) = [e for e in deps.auditoria.eventos if e["no"] == "guardrail_entrada"]
+    assert entrada["resultado"]["modelo"] == MODELO_RESERVA
+
+
+def test_saida_fora_do_formato_registra_o_modelo_que_respondeu():
+    falha = RunnableLambda(
+        lambda _: {"raw": resposta_crua(), "parsed": None, "parsing_error": ValueError("x")}
+    )
+    deps = _deps(
+        _orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator=criar_redator(falha)
+    )
+    _rodar(deps)
+    redator = [e for e in deps.auditoria.eventos if e["no"] == "redator"]
+    assert redator and all(e["resultado"]["modelo"] == MODELO_RESERVA for e in redator)
+    assert all(e["erro"] for e in redator)
+
+
+def test_resposta_sem_nome_do_modelo_nao_quebra_e_registra_none():
+    deps = _deps(
+        _orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+        redator=criar_redator(estruturado_com_reserva(texto_valido(), modelo=None)),
+    )
+    assert _rodar(deps)["status"] == "ok"
+    eventos_llm = [e for e in deps.auditoria.eventos if e["tipo"] == "llm"]
+    assert eventos_llm and all(e["resultado"]["modelo"] is None for e in eventos_llm)

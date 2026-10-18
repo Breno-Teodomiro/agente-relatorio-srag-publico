@@ -24,8 +24,8 @@ def _componentes(orquestrador=None):
         AIMessage(content="EVIDENCIAS_COMPLETAS", usage_metadata=USO),
     ]))  # fmt: skip
     return Componentes(provedor="falso", modelo="falso", modelo_orquestrador=orquestrador,
-                       redator=lambda contexto: (texto_neutro(), (200, 80)),
-                       classificador=lambda texto: (None, (0, 0)),
+                       redator=lambda contexto: (texto_neutro(), (200, 80), None),
+                       classificador=lambda texto: (None, (0, 0), None),
                        buscador=BuscadorFalso(), embedder=embedder_falso)  # fmt: skip
 
 

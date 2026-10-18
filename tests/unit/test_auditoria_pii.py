@@ -4,7 +4,8 @@ O mascaramento roda em `resumir` (argumentos e resultado) e no corte de motivo/e
 corte por tamanho: um CPF na fronteira do corte não pode sobrar pela metade.
 """
 
-from srag_agente.auditoria.registro import LIMITE_RESULTADO, Auditoria, resumir
+from srag_agente.auditoria.registro import LIMITE_RESULTADO, Auditoria, resumir, sem_pii
+from srag_agente.guardrails.padroes import MASCARA
 
 CPF = "123.456.789-09"  # fictício
 
@@ -57,3 +58,40 @@ def test_valores_sem_dado_pessoal_nao_mudam():
     valor = {"valor": 0.322222222222222, "data": "2025-06-25", "uf": "BR", "casos": [10, 20],
              "url": "https://www.gov.br/saude/n2", "rotulo": "<5"}  # fmt: skip
     assert resumir(valor) == valor
+
+
+# ---- revisão final da branch: parâmetros da execução (M6) e mascaramento único (M4) ----------
+
+
+def test_parametros_da_execucao_sao_mascarados_nas_tres_formas(tmp_path):
+    """Defesa em profundidade: o núcleo já mascara a pergunta, mas o registro não depende dele."""
+    a = Auditoria()
+    a.iniciar_execucao(
+        provedor="p", modelo="m", versao_codigo="v", hash_prompts="h",
+        parametros={"uf": "BR", "data_execucao": "2026-10-14",
+                    "pergunta_extra": f"meu cpf é {CPF}", f"cpf {CPF}": 12345678909},
+    )  # fmt: skip
+    assert a.execucao["parametros"] == {
+        "uf": "BR", "data_execucao": "2026-10-14", "pergunta_extra": "meu cpf é [dado removido]",
+        "cpf [dado removido]": "[dado removido]",
+    }  # fmt: skip
+    texto = a.gravar_jsonl(tmp_path / "a.jsonl").read_text(encoding="utf-8")
+    assert "123.456" not in texto and "12345678909" not in texto
+
+
+def test_sem_pii_cobre_tupla_e_objeto_desconhecido():
+    """A mesma função serve à trilha e à máscara do Langfuse (que recebe objetos do LangChain)."""
+
+    class Mensagem:
+        def __str__(self) -> str:
+            return f"conteúdo com {CPF}"
+
+    assert sem_pii(("a", 12345678909, 0.5, None, True)) == ["a", MASCARA, 0.5, None, True]
+    assert sem_pii(Mensagem()) == f"conteúdo com {MASCARA}"
+
+
+def test_motivo_que_nao_e_texto_vira_texto_mascarado_e_nao_derruba_o_registro():
+    # motivo cru do LLM (caminho de erro da ferramenta) pode chegar como número
+    evento = _auditoria().registrar("ferramentas", "ferramenta", motivo=12345678909)
+    assert evento["motivo"] == MASCARA
+    assert _auditoria().registrar("ferramentas", "ferramenta", motivo=42)["motivo"] == "42"

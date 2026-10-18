@@ -14,11 +14,11 @@ from srag_agente.agente.prompts import carregar_prompt
 from srag_agente.config import Config
 from srag_agente.ferramentas.registro import Evidencia
 from srag_agente.guardrails.conteudo_externo import formatar_para_llm, limpar_texto
-from srag_agente.guardrails.entrada import ClassificacaoEscopo, Classificador
+from srag_agente.guardrails.entrada import LIMITE_PERGUNTA, ClassificacaoEscopo, Classificador
 from srag_agente.modelos import TextoRelatorio
 
 URL_OPENROUTER = "https://openrouter.ai/api/v1"
-LIMITE_PERGUNTA = 500
+LIMITE_NOME_MODELO = 100
 
 
 class ConfiguracaoInvalida(RuntimeError):  # noqa: N818 (nome do contrato da Task 12)
@@ -26,7 +26,14 @@ class ConfiguracaoInvalida(RuntimeError):  # noqa: N818 (nome do contrato da Tas
 
 
 class ErroRedacao(RuntimeError):  # noqa: N818 (nome do contrato da Task 12)
-    """O redator devolveu algo fora do formato estruturado."""
+    """O redator devolveu algo fora do formato estruturado.
+
+    `modelo` diz quem respondeu (principal ou reserva), quando o provedor informa.
+    """
+
+    def __init__(self, *args: object, modelo: str | None = None) -> None:
+        super().__init__(*args)
+        self.modelo = modelo
 
 
 @dataclass(frozen=True)
@@ -36,7 +43,8 @@ class ModeloConfigurado:
     chat: BaseChatModel
 
 
-Redator = Callable[[ContextoRedacao], tuple[TextoRelatorio, tuple[int, int]]]
+# (texto, (tokens de entrada, tokens de saída), modelo que respondeu ou None)
+Redator = Callable[[ContextoRedacao], tuple[TextoRelatorio, tuple[int, int], str | None]]
 
 
 def criar_modelos(cfg: Config) -> list[ModeloConfigurado]:
@@ -90,6 +98,17 @@ def uso_tokens(mensagem: BaseMessage | None) -> tuple[int, int]:
     return int(uso.get("input_tokens", 0)), int(uso.get("output_tokens", 0))
 
 
+def modelo_da_resposta(mensagem: BaseMessage | None) -> str | None:
+    """Quem respondeu, segundo o provedor (`model_name`); None se não informado.
+
+    Com `with_fallbacks`, a resposta da reserva traz o nome dela: é assim que a troca deixa de
+    ser silenciosa na auditoria. Só o nome entra (texto, cortado), nunca outro metadado.
+    """
+    metadados = getattr(mensagem, "response_metadata", None)
+    nome = metadados.get("model_name") if isinstance(metadados, dict) else None
+    return nome[:LIMITE_NOME_MODELO] if isinstance(nome, str) and nome else None
+
+
 def estimar_custo(tokens_entrada: int, tokens_saida: int, cfg: Config) -> float:
     return (
         tokens_entrada * cfg.preco_entrada_usd_mtok + tokens_saida * cfg.preco_saida_usd_mtok
@@ -128,14 +147,15 @@ def mensagem_do_redator(contexto: ContextoRedacao) -> str:
     return "\n".join(partes)
 
 
-def _extrair(saida: dict) -> tuple[object, tuple[int, int]]:
+def _extrair(saida: dict) -> tuple[object, tuple[int, int], str | None]:
+    modelo = modelo_da_resposta(saida.get("raw"))
     if saida.get("parsed") is None:
-        raise ErroRedacao(str(saida.get("parsing_error") or "saída vazia"))
-    return saida["parsed"], uso_tokens(saida.get("raw"))
+        raise ErroRedacao(str(saida.get("parsing_error") or "saída vazia"), modelo=modelo)
+    return saida["parsed"], uso_tokens(saida.get("raw")), modelo
 
 
 def criar_redator(estruturado: Runnable) -> Redator:
-    def redigir(contexto: ContextoRedacao) -> tuple[TextoRelatorio, tuple[int, int]]:
+    def redigir(contexto: ContextoRedacao) -> tuple[TextoRelatorio, tuple[int, int], str | None]:
         saida = estruturado.invoke(
             [SystemMessage(carregar_prompt("redator")), HumanMessage(mensagem_do_redator(contexto))]
         )
@@ -145,7 +165,7 @@ def criar_redator(estruturado: Runnable) -> Redator:
 
 
 def criar_classificador(estruturado: Runnable) -> Classificador:
-    def classificar(pergunta: str) -> tuple[ClassificacaoEscopo, tuple[int, int]]:
+    def classificar(pergunta: str) -> tuple[ClassificacaoEscopo, tuple[int, int], str | None]:
         saida = estruturado.invoke(
             [
                 SystemMessage(carregar_prompt("classificador")),

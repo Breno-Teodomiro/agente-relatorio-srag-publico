@@ -37,6 +37,7 @@ from srag_agente.auditoria.registro import (
     Auditoria,
     AuditoriaPostgres,
     descrever_erro,
+    sem_pii,
 )
 from srag_agente.auditoria.versao import versao_codigo
 from srag_agente.banco import conectar
@@ -53,7 +54,7 @@ from srag_agente.ferramentas.registro import (
 )
 from srag_agente.guardrails.entrada import LIMITE_PERGUNTA, ClassificacaoEscopo, Classificador
 from srag_agente.guardrails.limites import Limites
-from srag_agente.guardrails.padroes import MASCARA, mascarar_pii
+from srag_agente.guardrails.padroes import mascarar_pii
 from srag_agente.metricas.repositorio import DadosIndisponiveis, RepositorioGold
 from srag_agente.modelos import TextoRelatorio
 from srag_agente.rag.embeddings import Embedder, criar_embedder
@@ -64,7 +65,12 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class Componentes:
-    """Peças externas (LLM, notícias, embeddings). Os testes trocam por dublês."""
+    """Peças externas (LLM, notícias, embeddings). Os testes trocam por dublês.
+
+    `provedor` e `modelo` são os do principal configurado (vão para auditoria.execucoes e para o
+    relatório). Quem de fato respondeu cada chamada (principal ou reserva) fica no campo `modelo`
+    de cada evento da trilha.
+    """
 
     provedor: str
     modelo: str
@@ -97,25 +103,12 @@ def limites_da_config(cfg: Config) -> Limites:
 
 
 # --- Observabilidade (Langfuse, opcional) ---------------------------------------------------------
-def _mascarar(valor: Any) -> Any:
-    if isinstance(valor, dict):
-        return {_mascarar(str(chave)): _mascarar(v) for chave, v in valor.items()}
-    if isinstance(valor, list | tuple):
-        return [_mascarar(v) for v in valor]
-    if valor is None or isinstance(valor, bool | float):
-        return valor
-    if isinstance(valor, int):  # inteiro com cara de documento (CPF sem pontuação)
-        return MASCARA if mascarar_pii(str(valor))[1] else valor
-    # objeto desconhecido (mensagem do LangChain…) vira texto: não passa sem conferência
-    return mascarar_pii(valor if isinstance(valor, str) else str(valor))[0]
-
-
 def mascara_observabilidade(*, data: Any, **_: Any) -> Any:
     """Máscara do Langfuse: o que vai para fora passa pelo mesmo mascaramento da auditoria.
 
     Sem ela, a entrada do grafo (com a pergunta crua do usuário) iria inteira para o serviço.
     """
-    return _mascarar(data)
+    return sem_pii(data)
 
 
 def callbacks_observabilidade(cfg: Config) -> list:

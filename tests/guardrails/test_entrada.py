@@ -11,12 +11,12 @@ from srag_agente.guardrails.entrada import (
 from tests.guardrails.ofuscacao import largura_total
 
 
-def classificador(no_escopo: bool = True, motivo: str = "teste", tokens=(30, 5)):
+def classificador(no_escopo: bool = True, motivo: str = "teste", tokens=(30, 5), modelo="m-1"):
     vistos: list[str] = []
 
     def classificar(texto):
         vistos.append(texto)
-        return ClassificacaoEscopo(no_escopo=no_escopo, motivo=motivo), tokens
+        return ClassificacaoEscopo(no_escopo=no_escopo, motivo=motivo), tokens, modelo
 
     classificar.vistos = vistos
     return classificar
@@ -91,12 +91,13 @@ def _classificador_que_devolve(valor):
     [
         None,
         "sim",
-        ({"no_escopo": True, "motivo": "dict no lugar do modelo"}, (1, 1)),
-        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), None),
-        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), (-1, 5)),
-        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), ("10", 5)),
-        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), (True, 5)),
-        (ClassificacaoEscopo.model_construct(no_escopo="sim", motivo="ok"), (1, 1)),
+        ({"no_escopo": True, "motivo": "dict no lugar do modelo"}, (1, 1), None),
+        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), None, None),
+        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), (1, 1)),  # contrato antigo
+        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), (-1, 5), None),
+        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), ("10", 5), None),
+        (ClassificacaoEscopo(no_escopo=True, motivo="ok"), (True, 5), None),
+        (ClassificacaoEscopo.model_construct(no_escopo="sim", motivo="ok"), (1, 1), None),
     ],
 )
 def test_resposta_malformada_do_classificador_falha_fechado(resposta):
@@ -108,7 +109,7 @@ def test_resposta_malformada_do_classificador_falha_fechado(resposta):
 def test_validation_error_do_classificador_nao_vaza_o_input():
     def classificar(texto):
         # o LLM devolveu um motivo longo demais que repete a pergunta com CPF
-        return ClassificacaoEscopo(no_escopo=True, motivo="CPF 123.456.789-09 " * 40), (1, 1)
+        return ClassificacaoEscopo(no_escopo=True, motivo="CPF 123.456.789-09 " * 40), (1, 1), None
 
     with pytest.raises(ValidationError):
         classificar("x")
@@ -179,3 +180,20 @@ def test_pergunta_recusada_nao_e_devolvida():
     resultado = verificar_entrada("CPF 123.456.789-09?", classificador())
     assert resultado.pergunta is None
     assert "123.456" not in str(resultado.model_dump())
+
+
+# ---- revisão final da branch: o modelo que respondeu vai para a auditoria (I2) ----------------
+
+
+def test_modelo_que_respondeu_acompanha_a_aprovacao_e_a_recusa():
+    assert verificar_entrada("Como estão os casos?", classificador(modelo="reserva")).modelo == (
+        "reserva"
+    )
+    recusa = verificar_entrada("Qual remédio devo tomar?", classificador(False, modelo="reserva"))
+    assert not recusa.aprovado and recusa.modelo == "reserva"
+
+
+@pytest.mark.parametrize("modelo", [None, 123, "", ["m"]])
+def test_modelo_ausente_ou_estranho_nao_derruba_a_classificacao(modelo):
+    resultado = verificar_entrada("Como estão os casos?", classificador(modelo=modelo))
+    assert resultado.aprovado and resultado.modelo is None
