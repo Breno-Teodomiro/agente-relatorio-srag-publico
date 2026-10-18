@@ -1,0 +1,18 @@
+# Regras padrão do gitleaks + uma exceção estreita: os valores de MENTIRA que os testes usam.
+# Sem exceção por pasta: um segredo novo (ou real) em tests/, src/, docs/ ou .env* continua sendo
+# achado. Só passam os textos exatos abaixo, que não são credenciais.
+title = "Agente SRAG"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Chaves e e-mails falsos dos testes unitários"
+regexes = [
+  '''tvly-SEGREDO-123''',
+  '''sk-chave-que-nao-pode-vazar''',
+  '''sk-lf-secreta''',
+  '''segredo-que-nao-pode-vazar''',
+  '''[\w.+-]+@exemplo\.com(?:\.br)?''',
+  '''maria\.silva@example\.com''',
+]

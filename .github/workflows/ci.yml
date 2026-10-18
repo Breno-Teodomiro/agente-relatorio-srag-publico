@@ -34,6 +34,12 @@ jobs:
         with:
           python-version-file: .python-version
       - run: uv sync --all-extras --frozen
+      # Modelo de embeddings (fastembed) baixado uma vez; PASTA_CACHE_MODELOS padrão = .cache/modelos.
+      - uses: actions/cache@v4.2.3
+        with:
+          path: .cache/modelos
+          key: modelos-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: modelos-${{ runner.os }}-
       - run: uv run ruff check . && uv run ruff format --check .
       - run: uv run pytest --cov=srag_agente --cov-report=term-missing
 
@@ -49,3 +55,5 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Allowlist estreita dos segredos de mentira dos testes (mesmo arquivo do pre-commit).
+          GITLEAKS_CONFIG: .gitleaks.toml

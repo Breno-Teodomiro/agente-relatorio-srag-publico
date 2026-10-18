@@ -6702,7 +6702,7 @@ Copiar a pasta para o exemplo versionado:
 rm -rf relatorios/exemplo && cp -r "$(ls -d relatorios/2* | tail -1)" relatorios/exemplo
 ```
 
-Também gerar um exemplo com pergunta complementar fora do escopo, para mostrar o guardrail de entrada em ação, e guardar só o trecho do `auditoria.jsonl` correspondente em `docs/exemplos/guardrail_entrada.jsonl`:
+Também gerar um exemplo com pergunta complementar fora do escopo, para mostrar o guardrail de entrada em ação, cuja recusa fica no `auditoria.jsonl` da própria execução (o arquivo `docs/exemplos/guardrail_entrada.jsonl` foi descartado; os ataques de entrada são cobertos por `tests/e2e/test_ataques_entrada.py`):
 
 ```bash
 uv run srag relatorio --pergunta "Qual remédio devo tomar para gripe?"
