@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from psycopg.conninfo import make_conninfo
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Papel = Literal["admin", "etl", "agente", "auditor"]
@@ -51,10 +51,23 @@ class Config(BaseSettings):
     pg_host: str = "localhost"
     pg_porta: int = 5435
     pg_banco: str = "srag"
-    pg_senha_admin: SecretStr
-    pg_senha_etl: SecretStr
-    pg_senha_agente: SecretStr
-    pg_senha_auditor: SecretStr
+    # Banco remoto (demo): dono, TLS e espera da conexão. Sem valor, o DSN fica como o local.
+    pg_usuario_admin: str = "postgres"
+    pg_sslmode: (
+        Literal["disable", "allow", "prefer", "require", "verify-ca", "verify-full"] | None
+    ) = None
+    pg_sslrootcert: str | None = None
+    pg_connect_timeout: int | None = Field(None, gt=0)
+    # Senhas opcionais no tipo; `_senhas_exigidas` diz quais valem em cada modo.
+    pg_senha_admin: SecretStr | None = None
+    pg_senha_etl: SecretStr | None = None
+    pg_senha_agente: SecretStr | None = None
+    pg_senha_auditor: SecretStr | None = None
+
+    # Demonstração online: a tela só abre contra banco remoto com TLS e recebe só agente e auditor.
+    demo_online: bool = False
+    # "texto" busca o dicionário sem carregar o modelo de embeddings (memória da plataforma).
+    busca_dicionario: Literal["vetor", "texto"] = "vetor"
 
     arquivo_dados: Path = Path("dados/brutos/INFLUD25_DATASUS-Versao26-06-2025.zip")
     arquivo_dicionario: Path = Path("dados/referencia/Dicionario_de_Dados_SRAG_Hospitalizado.pdf")
@@ -95,20 +108,34 @@ class Config(BaseSettings):
     def _da_raiz(cls, caminho: Path) -> Path:
         return caminho if caminho.is_absolute() else RAIZ_PROJETO / caminho
 
+    @model_validator(mode="after")
+    def _senhas_exigidas(self) -> "Config":
+        # Local: as quatro, como sempre. Demo: só agente e auditor (a tela não recebe as outras).
+        papeis = (
+            ("agente", "auditor") if self.demo_online else ("admin", "etl", "agente", "auditor")
+        )
+        faltam = [f"pg_senha_{p}" for p in papeis if getattr(self, f"pg_senha_{p}") is None]
+        if faltam:
+            raise ValueError(f"faltam {', '.join(faltam)}")
+        return self
+
     def _senha(self, papel: Papel) -> str:
-        senhas = {
-            "admin": self.pg_senha_admin,
-            "etl": self.pg_senha_etl,
-            "agente": self.pg_senha_agente,
-            "auditor": self.pg_senha_auditor,
-        }
-        return senhas[papel].get_secret_value()
+        senha: SecretStr | None = getattr(self, f"pg_senha_{papel}")
+        if senha is None:  # só no modo demo, pedindo um papel que a demo não usa
+            from srag_agente.agente.llm import ConfiguracaoInvalida  # evita importação circular
+
+            raise ConfiguracaoInvalida(f"PG_SENHA_{papel.upper()} não definida")
+        return senha.get_secret_value()
 
     def dsn(self, papel: Papel, banco: str | None = None) -> str:
         return make_conninfo(
             host=self.pg_host,
             port=self.pg_porta,
             dbname=banco or self.pg_banco,
-            user=USUARIOS[papel],
+            user=self.pg_usuario_admin if papel == "admin" else USUARIOS[papel],
             password=self._senha(papel),
+            # None é descartado pelo make_conninfo: sem configurar, o DSN é o de sempre.
+            sslmode=self.pg_sslmode,
+            sslrootcert=self.pg_sslrootcert,
+            connect_timeout=self.pg_connect_timeout,
         )

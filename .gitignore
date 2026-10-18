@@ -10,6 +10,7 @@ Desafio Certificação AI Engineer.pdf
 .env
 .env.*
 !.env.example
+!.env.demo.example
 
 # Python
 __pycache__/
@@ -35,3 +36,6 @@ logs/
 .streamlit/secrets.toml
 *.pem
 *.key
+
+# Pacote de dados da demonstração (gerado por `make demo-exportar`, nunca versionar)
+demo/pacote/

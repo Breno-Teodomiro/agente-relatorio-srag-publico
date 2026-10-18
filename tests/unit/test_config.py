@@ -3,7 +3,17 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from srag_agente.agente.llm import ConfiguracaoInvalida
 from srag_agente.config import RAIZ_PROJETO, Config, raiz_do_projeto
+from srag_agente.demo import (
+    COLUNAS_PROIBIDAS,
+    FUSO_DEMO,
+    HOSTS_LOCAIS,
+    SQLSTATE_TETO,
+    SSLMODES_SEGUROS,
+    TABELAS_DEMO,
+    TRAVA_TETO,
+)
 
 SENHAS = {
     "PG_SENHA_ADMIN": "adm 1",
@@ -140,3 +150,143 @@ def test_zero_vale_onde_tem_sentido(cfg, monkeypatch, variavel, valor):
     # zero voltas = não insiste na cobertura (Limites aceita); preço zero = modelo gratuito
     monkeypatch.setenv(variavel, valor)
     assert getattr(Config(_env_file=None), variavel.lower()) == 0
+
+
+# --- Demo online: conexão remota, senhas por modo e contrato ----------------------------------
+def test_dsn_local_e_identico_ao_de_antes(cfg):
+    # valores fixos do DSN que o código montava antes dos campos de TLS/timeout/admin
+    esperado = {
+        "admin": "host=localhost port=5435 dbname=srag user=postgres password='adm 1'",
+        "etl": "host=localhost port=5435 dbname=srag user=srag_etl password='etl 1'",
+        "agente": "host=localhost port=5435 dbname=srag user=srag_agente password='agente 1'",
+        "auditor": "host=localhost port=5435 dbname=srag user=srag_auditor password='auditor 1'",
+    }
+    for papel, dsn in esperado.items():
+        assert cfg.dsn(papel) == dsn
+    assert cfg.dsn("etl", banco="srag_teste") == esperado["etl"].replace(
+        "dbname=srag ", "dbname=srag_teste "
+    )
+
+
+def test_padroes_da_conexao_remota_sao_os_locais(cfg):
+    assert cfg.pg_usuario_admin == "postgres"
+    assert cfg.pg_sslmode is None and cfg.pg_sslrootcert is None
+    assert cfg.pg_connect_timeout is None
+    assert cfg.demo_online is False
+    assert cfg.busca_dicionario == "vetor"
+
+
+def test_tls_e_timeout_so_aparecem_no_dsn_quando_definidos(monkeypatch, cfg):
+    monkeypatch.setenv("PG_SSLMODE", "verify-full")
+    monkeypatch.setenv("PG_SSLROOTCERT", "system")
+    monkeypatch.setenv("PG_CONNECT_TIMEOUT", "15")
+    dsn = Config(_env_file=None).dsn("agente")
+    assert "sslmode=verify-full" in dsn
+    assert "sslrootcert=system" in dsn
+    assert "connect_timeout=15" in dsn
+
+
+def test_so_o_que_foi_definido_entra_no_dsn(monkeypatch, cfg):
+    monkeypatch.setenv("PG_SSLMODE", "require")
+    dsn = Config(_env_file=None).dsn("agente")
+    assert "sslmode=require" in dsn
+    assert "sslrootcert" not in dsn and "connect_timeout" not in dsn
+
+
+@pytest.mark.parametrize(
+    "variavel,valor",
+    [("PG_SSLMODE", "qualquer"), ("PG_CONNECT_TIMEOUT", "0"), ("PG_CONNECT_TIMEOUT", "-3")],
+)
+def test_tls_ou_timeout_invalido_e_erro_de_configuracao(cfg, monkeypatch, variavel, valor):
+    monkeypatch.setenv(variavel, valor)
+    with pytest.raises(ValidationError) as erro:
+        Config(_env_file=None)
+    assert variavel.lower() in str(erro.value)
+
+
+def test_admin_configuravel_so_afeta_o_papel_admin(monkeypatch, cfg):
+    monkeypatch.setenv("PG_USUARIO_ADMIN", "neondb_owner")
+    c = Config(_env_file=None)
+    assert "user=neondb_owner" in c.dsn("admin")
+    assert "user=srag_agente" in c.dsn("agente")
+    assert "user=srag_etl" in c.dsn("etl")
+
+
+@pytest.mark.parametrize(
+    "faltando", ["PG_SENHA_ADMIN", "PG_SENHA_ETL", "PG_SENHA_AGENTE", "PG_SENHA_AUDITOR"]
+)
+def test_modo_local_exige_as_quatro_senhas(monkeypatch, faltando):
+    for chave, valor in SENHAS.items():
+        if chave != faltando:
+            monkeypatch.setenv(chave, valor)
+    with pytest.raises(ValidationError) as erro:
+        Config(_env_file=None)
+    assert faltando.lower() in str(erro.value)
+
+
+def test_modo_demo_exige_so_agente_e_auditor(monkeypatch):
+    monkeypatch.setenv("PG_SENHA_AGENTE", "agente 1")
+    monkeypatch.setenv("PG_SENHA_AUDITOR", "auditor 1")
+    c = Config(_env_file=None, demo_online=True)
+    assert "user=srag_agente" in c.dsn("agente")
+    assert "user=srag_auditor" in c.dsn("auditor")
+
+
+@pytest.mark.parametrize("faltando", ["PG_SENHA_AGENTE", "PG_SENHA_AUDITOR"])
+def test_modo_demo_sem_agente_ou_auditor_e_erro(monkeypatch, faltando):
+    for chave in ("PG_SENHA_AGENTE", "PG_SENHA_AUDITOR"):
+        if chave != faltando:
+            monkeypatch.setenv(chave, "x")
+    with pytest.raises(ValidationError) as erro:
+        Config(_env_file=None, demo_online=True)
+    assert faltando.lower() in str(erro.value)
+
+
+def test_modo_demo_nao_entrega_senha_de_papel_que_nao_tem(monkeypatch):
+    monkeypatch.setenv("PG_SENHA_AGENTE", "agente 1")
+    monkeypatch.setenv("PG_SENHA_AUDITOR", "auditor 1")
+    c = Config(_env_file=None, demo_online=True)
+    for papel in ("admin", "etl"):
+        with pytest.raises(ConfiguracaoInvalida) as erro:
+            c.dsn(papel)
+        assert f"PG_SENHA_{papel.upper()}" in str(erro.value)
+
+
+def test_erro_do_validador_de_senhas_nao_mostra_valor(monkeypatch):
+    monkeypatch.setenv("PG_SENHA_AGENTE", "segredo-que-nao-pode-vazar")
+    with pytest.raises(ValidationError) as erro:
+        Config(_env_file=None, demo_online=True)
+    assert "segredo-que" not in str(erro.value) + repr(erro.value)
+
+
+def test_busca_do_dicionario_so_aceita_vetor_ou_texto(cfg, monkeypatch):
+    monkeypatch.setenv("BUSCA_DICIONARIO", "texto")
+    assert Config(_env_file=None).busca_dicionario == "texto"
+    monkeypatch.setenv("BUSCA_DICIONARIO", "outra")
+    with pytest.raises(ValidationError):
+        Config(_env_file=None)
+
+
+def test_contrato_da_demo():
+    assert SQLSTATE_TETO == "SR429" and len(SQLSTATE_TETO) == 5
+    assert TRAVA_TETO == 7_350_302
+    assert FUSO_DEMO == "America/Sao_Paulo"
+    assert {"localhost", "127.0.0.1", "::1", "banco", "host.docker.internal"} == set(HOSTS_LOCAIS)
+    assert set(SSLMODES_SEGUROS) == {"require", "verify-ca", "verify-full"}
+    assert set(TABELAS_DEMO) == {
+        "referencia",
+        "casos_diarios",
+        "indicadores",
+        "janelas_aumento",
+        "distribuicao",
+        "dicionario_trechos",
+    }
+    assert {"nu_notific", "dt_nasc", "cs_raca", "id_municip"} <= set(COLUNAS_PROIBIDAS)
+
+
+def test_nenhuma_coluna_da_demo_e_proibida():
+    from fnmatch import fnmatchcase
+
+    for tabela, (colunas, _ordem) in TABELAS_DEMO.items():
+        for coluna in colunas:
+            assert not any(fnmatchcase(coluna, p) for p in COLUNAS_PROIBIDAS), (tabela, coluna)
