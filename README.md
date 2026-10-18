@@ -4,7 +4,7 @@ Agente em LangGraph que lê a base pública de Síndrome Respiratória Aguda Gra
 DATASUS e gera um relatório auditável, com métricas calculadas em SQL e comentários embasados em
 notícias buscadas na hora.
 
-[![CI](https://github.com/Breno-Teodomiro/agente-relatorio-srag/actions/workflows/ci.yml/badge.svg)](https://github.com/Breno-Teodomiro/agente-relatorio-srag/actions/workflows/ci.yml)
+[![CI](https://github.com/Breno-Teodomiro/agente-relatorio-srag-publico/actions/workflows/ci.yml/badge.svg)](https://github.com/Breno-Teodomiro/agente-relatorio-srag-publico/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.x-1C3C3C)
 ![Postgres 16 + pgvector](https://img.shields.io/badge/Postgres%2016-pgvector-4169E1?logo=postgresql&logoColor=white)

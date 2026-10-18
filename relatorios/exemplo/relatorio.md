@@ -72,7 +72,7 @@ As métricas apresentadas têm limitações importantes: a taxa de internação 
 
 ## Como este relatório foi gerado
 
-Modelo openrouter / openai/gpt-4.1-mini · 16.103 de entrada e 1.339 de saída · custo estimado US$ 0,0086 · código 321c1a6 · prompts 647377d812d1be21
+Modelo openrouter / openai/gpt-4.1-mini · 16.103 de entrada e 1.339 de saída · custo estimado US$ 0,0086 · código c4431ff · prompts 647377d812d1be21
 
 Os números das tabelas e dos gráficos vêm de SQL na camada gold. O texto foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais). A trilha de auditoria está em `auditoria.jsonl` e na tabela `auditoria.eventos`, com resultados longos truncados em 2.000 caracteres; as notícias citadas no texto (link, data e janela) ficam registradas no evento `guardrail_saida`. Nas referências, "fonte não verificada" indica que o domínio não está na lista de fontes reconhecidas do projeto e "sem data" que a notícia não informou data; em ambos os casos o conteúdo não foi checado pelo sistema.
 

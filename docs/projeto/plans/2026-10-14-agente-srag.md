@@ -6737,7 +6737,7 @@ git push
 - [ ] **Step 1: Reprodutibilidade do zero (pelo efeito)** — clonar o repositório numa pasta temporária, copiar só o `.env` e o zip, e seguir o README **ao pé da letra**:
 
 ```bash
-TMP=$(mktemp -d) && git clone git@github.com:Breno-Teodomiro/agente-relatorio-srag.git "$TMP/repo"
+TMP=$(mktemp -d) && git clone git@github.com:Breno-Teodomiro/agente-relatorio-srag-publico.git "$TMP/repo"
 cp .env "$TMP/repo/" && mkdir -p "$TMP/repo/dados/brutos" && cp dados/brutos/*.zip "$TMP/repo/dados/brutos/"
 cd "$TMP/repo" && docker compose down -v && make instalar && make subir && make carga \
   && make indexar && make relatorio && make testes
@@ -6767,8 +6767,8 @@ Expected: `"conclusion": "success"` no SHA do `git rev-parse HEAD`.
 - [ ] **Step 5: Tornar público — SÓ com o OK explícito do Breno**
 
 ```bash
-gh repo edit Breno-Teodomiro/agente-relatorio-srag --visibility public --accept-visibility-change-consequences
-curl -s -o /dev/null -w "%{http_code}\n" https://github.com/Breno-Teodomiro/agente-relatorio-srag
+gh repo edit Breno-Teodomiro/agente-relatorio-srag-publico --visibility public --accept-visibility-change-consequences
+curl -s -o /dev/null -w "%{http_code}\n" https://github.com/Breno-Teodomiro/agente-relatorio-srag-publico
 ```
 
 Expected: `200` sem login (acesso anônimo).
