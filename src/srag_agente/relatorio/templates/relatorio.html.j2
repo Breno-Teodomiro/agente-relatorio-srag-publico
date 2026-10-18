@@ -21,22 +21,34 @@ h2{font-size:1.15rem;margin:32px 0 12px;border-bottom:1px solid var(--borda);pad
 .faixa{border-left:4px solid var(--alerta);background:var(--cartao);padding:10px 14px;
 margin:12px 0;border-radius:6px}
 .faixa.perigo{border-color:var(--perigo)}
-.cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
 .cartao,details,figure{background:var(--cartao);border:1px solid var(--borda);border-radius:10px}
 .cartao{padding:14px}
 .valor{font-size:1.9rem;font-weight:650;color:var(--acento)}
 figure{margin:12px 0;padding:8px;overflow-x:auto}
-figure svg{max-width:100%;height:auto}
+figure svg{display:block;margin:0 auto;width:100%;max-width:640px;min-width:450px;height:auto}
+figure details{background:none;border:0;padding:4px 0}
 [data-tema="escuro"] .graf-claro,[data-tema="claro"] .graf-escuro{display:none}
 .tabela{overflow-x:auto}
+.tabela.larga table{min-width:640px}
+.tabela.larga td:nth-child(5){min-width:16rem}
+.dica{display:none}
 table{border-collapse:collapse;width:100%;font-size:.9rem}
 th,td{border-bottom:1px solid var(--borda);padding:6px 8px;text-align:left;vertical-align:top}
 td.num{text-align:right;font-variant-numeric:tabular-nums}
 details{padding:10px 14px}
 a{color:var(--acento)}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+clip:rect(0,0,0,0);white-space:nowrap;border:0}
+:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+button[aria-pressed="true"]{border-color:var(--acento)}
 button{background:var(--cartao);color:var(--texto);border:1px solid var(--borda);
 border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
 footer{margin-top:40px;color:var(--suave);font-size:.85rem}
+@media(max-width:700px){
+.dica{display:block;margin:0 0 6px}
+ol a{display:inline-block;min-height:44px;line-height:44px;padding:0 10px}
+}
 </style>
 </head>
 <body>
@@ -48,7 +60,7 @@ footer{margin-top:40px;color:var(--suave);font-size:.85rem}
       SIVEP-Gripe) · gerado em {{ d.data_execucao|data_br }} · situação:
       <strong>{{ rotulo_status }}</strong> · execução {{ (d.id_execucao|string)[:8] }}</div>
   </div>
-  <button type="button" id="tema">Alternar tema claro/escuro</button>
+  <button type="button" id="tema" aria-pressed="true">Tema escuro</button>
 </header>
 
 {% if d.status == "revisao_humana" %}
@@ -104,10 +116,22 @@ conferência automática:
 <h2>Evolução dos casos</h2>
 {% for tipo in ("diaria_30d", "mensal_12m") %}
 {% if graficos.get(tipo) %}
-<figure>
+<figure tabindex="0" role="region" aria-label="Gráfico de casos">
+  <p class="pequeno dica">Arraste o gráfico para o lado para ver tudo.</p>
   <div class="graf-escuro">{{ graficos[tipo]["escuro"] }}</div>
   <div class="graf-claro">{{ graficos[tipo]["claro"] }}</div>
-  <figcaption class="pequeno">{{ d.series[tipo].nota }}</figcaption>
+  {% set nota = d.series[tipo].nota %}
+  {% set corte = nota.find("Contagens de 1 a 4") %}
+  {% if corte > 0 %}
+  <figcaption class="pequeno">{{ nota[:corte]|trim }}
+    <details>
+      <summary>Como ler as células <code>&lt;5</code> e <code>oculto</code></summary>
+      <p>{{ nota[corte:] }}</p>
+    </details>
+  </figcaption>
+  {% else %}
+  <figcaption class="pequeno">{{ nota }}</figcaption>
+  {% endif %}
 </figure>
 {% endif %}
 {% endfor %}
@@ -115,11 +139,11 @@ conferência automática:
 {% if d.distribuicoes %}
 <h2>Perfil dos casos</h2>
 {% for dist in d.distribuicoes %}
-<div class="tabela"><table>
+<div class="tabela" tabindex="0" role="region" aria-label="Tabela: perfil dos casos"><table>
   <caption class="pequeno" style="text-align:left">Por {{ "agente causador" if
     dist.dimensao == "classificacao" else "faixa etária" }} · total {{ dist.total|inteiro }}
     <br>{{ dist.nota }}</caption>
-  <thead><tr><th>Categoria</th><th>Casos</th><th>%</th></tr></thead>
+  <thead><tr><th scope="col">Categoria</th><th scope="col">Casos</th><th scope="col">%</th></tr></thead>
   <tbody>
   {% for c in dist.categorias %}
     <tr><td>{{ c.categoria|categoria }}</td><td class="num">{{ c.casos|inteiro }}</td>
@@ -150,7 +174,7 @@ conferência automática:
 {% for n in d.noticias %}
   <li id="ref-{{ n.id }}" value="{{ n.id }}">{{ n.titulo }} — {{ n.fonte }}{% if n.data %},
     {{ n.data|data_br }}{% endif %} ·
-    <a href="{{ n.url|url_segura }}" rel="noopener noreferrer" target="_blank">abrir</a>
+    <a href="{{ n.url|url_segura }}" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
     <span class="pequeno">· {{ "período dos dados" if n.janela == "periodo_dos_dados" else
       "cenário atual" }}{% if n.confiavel %} · fonte reconhecida{% endif %}</span></li>
 {% endfor %}
@@ -173,9 +197,11 @@ conferência automática:
     foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais).
     A trilha completa está em <code>auditoria.jsonl</code> e na tabela
     <code>auditoria.eventos</code>.</p>
-  <div class="tabela"><table>
-    <thead><tr><th>#</th><th>Etapa</th><th>Tipo</th><th>Ferramenta</th>
-      <th>Motivo / resultado</th><th>ms</th></tr></thead>
+  <p class="pequeno dica">Arraste a tabela para o lado para ver todas as colunas.</p>
+  <div class="tabela larga" tabindex="0" role="region" aria-label="Tabela da trilha de auditoria"><table>
+    <caption class="sr-only">Trilha de auditoria da execução: etapas, ferramentas e resultados</caption>
+    <thead><tr><th scope="col">#</th><th scope="col">Etapa</th><th scope="col">Tipo</th><th scope="col">Ferramenta</th>
+      <th scope="col">Motivo / resultado</th><th scope="col">ms</th></tr></thead>
     <tbody>
     {% for e in d.eventos %}
       <tr><td class="num">{{ e.sequencia }}</td><td>{{ e.no }}</td><td>{{ e.tipo }}</td>

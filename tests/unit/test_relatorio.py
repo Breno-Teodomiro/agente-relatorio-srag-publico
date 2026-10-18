@@ -10,7 +10,7 @@ import pytest
 from srag_agente.auditoria.registro import Auditoria
 from srag_agente.modelos import NoticiaCitavel
 from srag_agente.relatorio.formatacao import data_br, inteiro, mes_br, pct, variacao
-from srag_agente.relatorio.graficos import _altura, grafico_diario, grafico_mensal
+from srag_agente.relatorio.graficos import TEMAS, _altura, grafico_diario, grafico_mensal
 from srag_agente.relatorio.markdown import md_texto
 from srag_agente.relatorio.montar import (
     AVISO_FIXO,
@@ -494,7 +494,10 @@ def test_supressao_aparece_no_html_e_no_markdown_com_as_notas(tmp_path, evidenci
     assert '<div class="valor">—</div>' in html and not re.search(r"(?<![\d,])0,0%", html)
     assert "&lt;5" in html and "Menos de 5 casos (&lt;5)" in html and "<5 de 800" in markdown
     assert "| — |" in markdown and "| <5 |" in markdown and "| oculto |" in markdown
-    assert nota_serie in htmllib.unescape(html) and nota_dist in htmllib.unescape(html)
+    pagina = htmllib.unescape(html)
+    corte = nota_serie.index("Contagens de 1 a 4")  # a nota longa fica recolhida em <details>
+    assert nota_serie[:corte].strip() in pagina and nota_serie[corte:] in pagina
+    assert nota_dist in pagina
     assert nota_serie in markdown and nota_dist in markdown
     assert "Oculto (supressão complementar)" in html
 
@@ -741,3 +744,44 @@ def test_citacao_de_noticia_inexistente_nao_herda_numero_de_outra(evidencias):
     dados = montar_dados(**{**_campos(evidencias), "texto": texto})
     assert dados.texto.resumo_executivo == "Ver [?] e [1]."
     assert [n.id for n in dados.noticias] == [1]
+
+
+def _luminancia(cor: str) -> float:
+    canais = [int(cor.lstrip("#")[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in canais]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def _razao(a: str, b: str) -> float:
+    claro, escuro = sorted((_luminancia(a), _luminancia(b)), reverse=True)
+    return (claro + 0.05) / (escuro + 0.05)
+
+
+@pytest.mark.parametrize("tema", ["escuro", "claro"])
+def test_barras_dos_graficos_tem_contraste_minimo_com_o_fundo(tema):
+    cores = TEMAS[tema]
+    assert _razao(cores["barra"], cores["fundo"]) >= 3  # WCAG 1.4.11: gráficos
+    assert _razao(cores["clara"], cores["fundo"]) >= 3  # "em consolidação" também
+
+
+@pytest.mark.parametrize("desenhar", [grafico_diario, grafico_mensal])
+def test_svg_nasce_estreito_para_o_texto_nao_encolher_no_celular(evidencias, desenhar):
+    tipo = "diaria_30d" if desenhar is grafico_diario else "mensal_12m"
+    svg = desenhar(_serie(evidencias, tipo), "escuro").decode("utf-8")
+    largura_pt = float(re.search(r'<svg[^>]* width="([\d.]+)pt"', svg).group(1))
+    assert largura_pt <= 450  # com ~545 pt o texto encolhia a 0,6 no celular (390 px)
+
+
+def test_html_acessivel_nas_tabelas_botao_e_links(completo):
+    html = completo.html.read_text(encoding="utf-8")
+    assert "<th>" not in html and html.count('<th scope="col">') >= 9
+    assert re.search(r"<caption[^>]*>\s*Trilha de auditoria", html)
+    assert 'id="tema"' in html and 'aria-pressed="' in html
+    assert ":focus-visible{outline:2px solid var(--acento)" in html
+    assert '<span class="sr-only"> (abre em nova aba)</span>' in html
+
+
+def test_html_recolhe_a_nota_longa_de_supressao_e_ajusta_o_celular(completo):
+    html = completo.html.read_text(encoding="utf-8")
+    assert "Como ler as células" in html and "<details" in html
+    assert "min-width:640px" in html and "figure svg{display:block;margin:0 auto" in html

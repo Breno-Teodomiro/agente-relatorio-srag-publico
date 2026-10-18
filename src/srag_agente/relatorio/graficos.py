@@ -42,13 +42,15 @@ Formato = Literal["svg", "png"]
 plt.rcParams["svg.fonttype"] = "none"  # texto continua texto no SVG (menor e acessível)
 plt.rcParams["svg.hashsalt"] = "srag-agente"  # ids de clip/hatch estáveis: mesmo dado, mesmo SVG
 
+# Fonte e largura pensadas para o celular: o SVG nasce com ~7 pol. e só encolhe um pouco (9 pol.
+# encolhia o texto a 0,6). "clara" (em consolidação) tem 3:1 com o fundo, mínimo WCAG para gráficos.
 TEMAS: dict[str, dict[str, str]] = {
     "escuro": {
         "fundo": "#24272e",
         "texto": "#d6d9de",
         "grade": "#3a3f48",
         "barra": "#6fa8dc",
-        "clara": "#3d5a73",
+        "clara": "#5b86ad",
         "nota": "#9aa0a8",
         "alerta": "#e8b07c",
     },
@@ -57,7 +59,7 @@ TEMAS: dict[str, dict[str, str]] = {
         "texto": "#2b2f36",
         "grade": "#e3e6ea",
         "barra": "#2f6db5",
-        "clara": "#a9c4e6",
+        "clara": "#6495cc",
         "nota": "#5f6670",
         "alerta": "#a8590f",
     },
@@ -79,14 +81,14 @@ def _altura(casos: int | str | None) -> float:
 
 def _figura(tema: Tema):
     cores = TEMAS[tema]
-    figura, eixo = plt.subplots(figsize=(9, 3.6), dpi=110)
+    figura, eixo = plt.subplots(figsize=(7, 4), dpi=110)
     figura.patch.set_facecolor(cores["fundo"])
     eixo.set_facecolor(cores["fundo"])
     for lado in ("top", "right"):
         eixo.spines[lado].set_visible(False)
     for lado in ("left", "bottom"):
         eixo.spines[lado].set_color(cores["grade"])
-    eixo.tick_params(colors=cores["texto"], labelsize=8)
+    eixo.tick_params(colors=cores["texto"], labelsize=10)
     eixo.yaxis.grid(True, color=cores["grade"], linewidth=0.6)
     eixo.set_axisbelow(True)
     return figura, eixo, cores
@@ -126,15 +128,15 @@ def _marcar_escondidas(eixo, pontos: list[dict], cores: dict[str, str]) -> list[
     return entradas
 
 
-def _legenda(eixo, itens: list, cores: dict[str, str]) -> None:
+def _legenda(eixo, itens: list, cores: dict[str, str], abaixo: float = -0.12) -> None:
     """Fora da área do gráfico: dentro dela a legenda cobriria as barras mais altas."""
     eixo.legend(
         handles=itens,
         frameon=False,
         labelcolor=cores["texto"],
-        fontsize=8,
+        fontsize=9,
         loc="upper center",
-        bbox_to_anchor=(0.5, -0.12),
+        bbox_to_anchor=(0.5, abaixo),
         ncol=2,
     )
 
@@ -185,7 +187,7 @@ def grafico_diario(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
     eixo.set_title(
         f"Casos diários de SRAG — 30 dias até {data_br(serie['data_referencia'])}",
         color=cores["texto"],
-        fontsize=10,
+        fontsize=11,
         loc="left",
     )
     _legenda(
@@ -219,7 +221,7 @@ def grafico_mensal(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
         labels=[
             "" if p["fora_da_base"] or p["casos"] in MARCAS else inteiro(p["casos"]) for p in pontos
         ],
-        fontsize=7,
+        fontsize=9,
         color=cores["texto"],
         padding=2,
     )
@@ -229,10 +231,11 @@ def grafico_mensal(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
             eixo.text(
                 indice,
                 0,
-                "fora do\nperíodo\nda base",
+                "fora do período da base",
+                rotation=90,  # na vertical: três linhas de 9 pt não cabem lado a lado em 12 meses
                 ha="center",
                 va="bottom",
-                fontsize=7,
+                fontsize=9,
                 color=cores["nota"],
             )
         elif ponto["casos"] in MARCAS:
@@ -242,12 +245,12 @@ def grafico_mensal(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
                 ponto["casos"],
                 ha="center",
                 va="bottom",
-                fontsize=7,
+                fontsize=9,
                 color=cores["alerta"],
             )
-    eixo.set_xticks(list(posicoes), [mes_br(p["rotulo"]) for p in pontos])
+    eixo.set_xticks(list(posicoes), [mes_br(p["rotulo"]) for p in pontos], rotation=45, ha="right")
     eixo.set_title(
-        "Casos mensais de SRAG — últimos 12 meses", color=cores["texto"], fontsize=10, loc="left"
+        "Casos mensais de SRAG — últimos 12 meses", color=cores["texto"], fontsize=11, loc="left"
     )
     _legenda(
         eixo,
@@ -257,5 +260,6 @@ def grafico_mensal(serie: dict, tema: Tema, formato: Formato = "svg") -> bytes:
             *marcas,
         ],
         cores,
+        abaixo=-0.2,  # abaixo dos meses inclinados
     )
     return _exportar(figura, formato, f"mensal-{tema}", "Barras de casos por mês.")

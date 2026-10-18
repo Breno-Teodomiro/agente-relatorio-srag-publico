@@ -71,9 +71,13 @@ SCRIPT_TEMA = """
   var raiz = document.documentElement;
   try { var salvo = localStorage.getItem("srag-tema"); if (salvo) raiz.dataset.tema = salvo; }
   catch (e) {}
-  document.getElementById("tema").addEventListener("click", function () {
+  var botao = document.getElementById("tema");
+  function marcar() { botao.setAttribute("aria-pressed", raiz.dataset.tema === "escuro"); }
+  marcar();
+  botao.addEventListener("click", function () {
     raiz.dataset.tema = raiz.dataset.tema === "escuro" ? "claro" : "escuro";
     try { localStorage.setItem("srag-tema", raiz.dataset.tema); } catch (e) {}
+    marcar();
   });
 })();
 """
