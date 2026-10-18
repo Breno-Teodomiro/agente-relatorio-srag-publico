@@ -34,6 +34,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --all-extras --frozen
+      # O requirements da demo online é gerado do uv.lock: se mudou, falta regerar e versionar.
+      - run: |
+          make demo-requisitos
+          git diff --exit-code -- demo/requirements.txt
       # Modelo de embeddings (fastembed) baixado uma vez; PASTA_CACHE_MODELOS padrão = .cache/modelos.
       - uses: actions/cache@v4.2.3
         with:

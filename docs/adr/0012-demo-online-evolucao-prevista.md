@@ -1,7 +1,8 @@
 # ADR 0012 — Demonstração online fica como evolução prevista
 
-- **Status:** aceita como **não implementar agora**; o desenho abaixo é proposta (registrada em
-  18/10/2026, spec §10, "deploy em nuvem")
+- **Status:** **substituída pelo [ADR 0013](0013-demonstracao-online.md)** (18/10/2026). Antes:
+  aceita como não implementar agora, com o desenho abaixo como proposta (spec §10, "deploy em
+  nuvem"). O texto abaixo fica como registro; o que vale é o ADR 0013
 
 ## Contexto
 

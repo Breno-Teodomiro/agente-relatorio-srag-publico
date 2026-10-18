@@ -1,5 +1,6 @@
 .PHONY: instalar subir parar carga indexar avaliar-rag qualidade grafo relatorio testes lint \
-        diagrama app docker-build docker-carga docker-indexar docker-relatorio tudo
+        diagrama app docker-build docker-carga docker-indexar docker-relatorio tudo \
+        demo-exportar demo-carregar demo-conferir demo-requisitos demo-pacote-limpar
 
 UF ?= BR
 # Pergunta complementar opcional: make relatorio UF=SP PERGUNTA="Como está a UTI?"
@@ -85,3 +86,29 @@ app:
 diagrama:
 	npx -y @mermaid-js/mermaid-cli@11.4.2 -p docs/puppeteer.config.json -w 1600 -H 1131 \
 	  -i docs/arquitetura.mmd -o docs/arquitetura.pdf -f -b white
+
+# --- Demonstração online (ver docs/demo-online.md e ADR 0013) -----------------------------------
+# Exporta os agregados da gold para demo/pacote (rodar depois de `make carga indexar`).
+demo-exportar:
+	uv run srag demo exportar
+
+# Carrega o pacote no banco remoto: make demo-carregar ALVO=ep-xxxx.regiao.aws.neon.tech
+# ALVO é o host que se pretende atingir; a CLI recusa se diferir do PG_HOST do .env.demo.
+# --senha-em-texto: o Neon recusa senha já em hash (SCRAM).
+demo-carregar:
+	$(if $(ALVO),,$(error informe o host do banco remoto: make demo-carregar ALVO=<host>))
+	uv run srag demo carregar --env-arquivo .env.demo --alvo $(ALVO) --senha-em-texto
+
+# Só lê: confere o banco remoto pelo efeito (permissões, linhas, ausência de dado pessoal).
+demo-conferir:
+	$(if $(ALVO),,$(error informe o host do banco remoto: make demo-conferir ALVO=<host>))
+	uv run srag demo conferir --env-arquivo .env.demo --alvo $(ALVO)
+
+# Dependências da plataforma de hospedagem, geradas do uv.lock: sem hashes (ela usa pip), sem dev
+# e sem o projeto (o código entra pelo sys.path de demo/streamlit_app.py). O CI confere que o
+# arquivo versionado bate com o uv.lock.
+demo-requisitos:
+	uv export --frozen --no-dev --extra app --no-hashes --no-emit-project -o demo/requirements.txt
+
+demo-pacote-limpar:
+	rm -rf demo/pacote

@@ -21,6 +21,7 @@ do RAG). Onde há medida, o ADR aponta o comando que mede (`make testes`, `make 
 | [0009](0009-noticias-via-httpx-tavily-rss.md) | Notícias por `httpx` direto (Tavily → Google News RSS), não `langchain-tavily` | guardrails · clean code |
 | [0010](0010-papeis-de-banco-e-trilha-de-auditoria.md) | Papéis de banco com privilégio mínimo e trilha de auditoria Postgres + JSONL | governança · dados sensíveis |
 | [0011](0011-supressao-de-celulas-pequenas.md) | Supressão `<5`, complementar `oculto` e por janelas publicadas, com limites declarados | dados sensíveis |
-| [0012](0012-demo-online-evolucao-prevista.md) | Demonstração online (Streamlit Community Cloud + Postgres gerenciado) fica como evolução prevista: desenho, riscos e critérios, sem implementação | arquitetura · dados sensíveis · governança |
+| [0012](0012-demo-online-evolucao-prevista.md) | **Substituída pelo 0013.** Demonstração online (Streamlit Community Cloud + Postgres gerenciado) ficava como evolução prevista: desenho, riscos e critérios, sem implementação | arquitetura · dados sensíveis · governança |
+| [0013](0013-demonstracao-online.md) | Demonstração online opcional (`DEMO_ONLINE=1`): só agregados da gold no banco gerenciado, pacote CSV com lista fechada de colunas, carga com travas contra o banco errado, teto diário na tela e no banco, pergunta complementar desligada, busca do dicionário sem modelo | arquitetura · governança · guardrails · dados sensíveis |
 
 Fonte da verdade do desenho: [`docs/projeto/specs/2026-10-14-agente-srag-design.md`](../projeto/specs/2026-10-14-agente-srag-design.md).

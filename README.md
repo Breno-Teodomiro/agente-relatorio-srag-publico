@@ -19,6 +19,7 @@ notícias buscadas na hora.
 
 - [Resumo e problema](#resumo-e-problema)
 - [Demonstração](#demonstração)
+- [Demonstração online](#demonstração-online)
 - [Arquitetura](#arquitetura)
 - [Início rápido](#início-rápido)
 - [Como funciona uma execução](#como-funciona-uma-execução)
@@ -87,6 +88,39 @@ dos gráficos não mudam, porque saem do SQL.
 **Tela local, aba Dicionário de dados**
 
 ![Tela local do agente na aba Dicionário de dados: pergunta sobre um campo da base e os três trechos mais próximos do dicionário oficial, cada um com a página e a origem da busca (nome exato ou similaridade)](docs/imagens/tela-dicionario.png)
+
+---
+
+## Demonstração online
+
+**Endereço:** <!-- LINK-DEMO --> a publicar.
+
+A demonstração online é **opcional e gratuita**: a mesma tela, publicada no Streamlit Community
+Cloud, lendo um Postgres gerenciado (Neon) que recebe só os agregados da gold. Ela tem **tetos
+diários** para todos os visitantes e roda em planos gratuitos, então pode estar **hibernando** (a
+primeira visita depois de um tempo sem uso demora) ou ter **atingido o teto do dia** (renova à
+meia-noite, horário de Brasília). Nesses casos, o relatório de exemplo acima mostra o resultado, e o
+caminho local continua sendo o principal ([Início rápido](#início-rápido)).
+
+| | Tela local (`make app`) | Demonstração online (`DEMO_ONLINE=1`) |
+|---|---|---|
+| Endereço | só `127.0.0.1` | URL pública da plataforma |
+| Banco | Postgres no Docker, com `raw`, `silver` e `gold` | Postgres gerenciado só com a gold materializada em tabelas e a `auditoria`; nada de `raw` nem `silver` |
+| Pergunta complementar | disponível | desligada: texto livre de visitante anônimo não vai ao modelo externo nem à trilha |
+| Busca do dicionário | nome exato + similaridade (embeddings) | nome exato + texto completo do Postgres, sem carregar o modelo (memória do plano gratuito) |
+| Gasto de LLM | crédito de quem roda | crédito do autor, com teto diário conferido pela tela e por um gatilho no banco, e limite na chave do provedor |
+| Configuração | `.env` | *secrets* da plataforma, só com as senhas do agente e do auditor |
+
+Os tetos diários ficam numa tabela do banco semeada por SQL versionado
+([`02_teto_demo.sql`](src/srag_agente/demo/sql/02_teto_demo.sql)); valores iniciais: 10 relatórios,
+40 buscas de notícia e US$ 1,00 de gasto estimado por dia. Na partida, a tela confere o ambiente
+(banco remoto com TLS, nenhuma credencial de dono, nenhuma chave de reserva sem limite, opções de
+segurança do Streamlit, gatilho do teto no banco) e não abre se algo faltar.
+
+O pacote de dados sai da gold local pelo papel do agente, com lista fechada de colunas, e é
+carregado por uma CLI que recusa o banco errado. Decisão, controles e riscos aceitos no
+[ADR 0013](docs/adr/0013-demonstracao-online.md); para subir a sua própria demonstração, siga
+[`docs/demo-online.md`](docs/demo-online.md).
 
 ---
 
@@ -233,7 +267,9 @@ de rede social ou de site de mercado financeiro.
 Embeddings locais com `fastembed` (ONNX, CPU, modelo multilíngue), sem chave nem custo, guardados no
 próprio Postgres (pgvector). A busca é híbrida: nome de campo citado em maiúsculas (`UTI`,
 `VACINA_COV`) vai primeiro por igualdade exata, e o resto completa por similaridade
-([ADR 0006](docs/adr/0006-embeddings-locais-onnx.md)).
+([ADR 0006](docs/adr/0006-embeddings-locais-onnx.md)). Com `BUSCA_DICIONARIO=texto` (o modo da
+demonstração online), o resto completa pela busca de texto completo do Postgres, sem carregar o
+modelo; `uv run python -m srag_agente.rag.avaliar --modo ambos` mede a diferença entre os dois.
 
 ### Stack
 
@@ -247,7 +283,7 @@ próprio Postgres (pgvector). A busca é híbrida: nome de campo citado em maiú
 | Notícias | `httpx` (Tavily) + `feedparser` (Google News RSS) |
 | RAG | `pymupdf` + `fastembed` + pgvector |
 | Relatório | `matplotlib` + Jinja2 → HTML autocontido + Markdown |
-| Tela (opcional) | Streamlit, só em `127.0.0.1` |
+| Tela (opcional) | Streamlit: local só em `127.0.0.1`; demonstração online no Streamlit Community Cloud + Neon ([ADR 0013](docs/adr/0013-demonstracao-online.md)) |
 | Qualidade | `ruff`, `pytest`, `pytest-cov`, `pre-commit`, `gitleaks`, GitHub Actions |
 | Observabilidade (opcional) | Langfuse |
 
@@ -265,6 +301,7 @@ próprio Postgres (pgvector). A busca é híbrida: nome de campo citado em maiú
 | notícias pela Tavily | chave da Tavily (opcional: sem ela, o agente usa o Google News RSS) |
 | primeira indexação do dicionário | acesso à internet (o modelo de embeddings é baixado uma vez para `.cache/modelos`) |
 | regenerar o PDF da arquitetura | Node.js com `npx` (só para `make diagrama`) |
+| publicar a sua demonstração online (opcional) | contas gratuitas num Postgres gerenciado com `pgvector` e no Streamlit Community Cloud: [`docs/demo-online.md`](docs/demo-online.md) |
 
 ### 1. Os dados
 
@@ -343,6 +380,9 @@ Os alvos do `make` chamam a CLI; ela também pode ser usada direto (`uv run srag
 | `uv run srag dicionario "o que é VACINA_COV?"` | consulta o dicionário de dados | não |
 | `uv run srag qualidade` | regenera [`docs/QUALIDADE_DADOS.md`](docs/QUALIDADE_DADOS.md) | não |
 | `uv run srag grafo` | regenera o Mermaid do grafo a partir do código | não |
+| `uv run srag demo exportar` | gold local → pacote da demonstração online (`demo/pacote/`, fora do Git) | não |
+| `uv run srag demo carregar --env-arquivo .env.demo --alvo <host>` | carrega o pacote no banco remoto da demonstração, numa transação só | não |
+| `uv run srag demo conferir --env-arquivo .env.demo --alvo <host>` | prova as permissões do banco remoto pelo efeito, sem escrever nada | não |
 
 **O que sai.** O terminal mostra a situação, os caminhos dos arquivos e o custo estimado. Os
 arquivos ficam em `relatorios/<AAAA-MM-DD>_<UF>_<8 primeiros caracteres do id>/` (pasta ignorada
@@ -375,7 +415,9 @@ gasta crédito de LLM; a do dicionário não usa LLM e não entra na auditoria.
 Proteções da tela:
 
 - escuta só em `127.0.0.1`; [`.streamlit/config.toml`](.streamlit/config.toml) fixa o endereço, e a
-  tela se recusa a rodar em outro;
+  tela se recusa a rodar em outro. A exceção é o modo `DEMO_ONLINE=1`, que só abre contra banco
+  remoto com TLS e troca essa regra pelos controles da [demonstração online](#demonstração-online)
+  ([ADR 0013](docs/adr/0013-demonstracao-online.md));
 - texto de LLM ou de notícia nunca entra como HTML da página: o relatório, já escapado, aparece num
   iframe de origem própria (URL `data:`), e o dicionário como texto puro;
 - erros sem traceback e com dado pessoal mascarado; chaves nunca aparecem;
@@ -593,7 +635,9 @@ auditoria guarda só agregados, nunca linhas da base.
 
 **Segredos e arquivos.** `.env` fora do Git (só o `.env.example` é versionado), senhas e chaves
 como `SecretStr`, `gitleaks` no pre-commit e no CI, zip e CSV fora do Git, banco publicado só em
-`127.0.0.1`. As senhas dos papéis são enviadas ao Postgres já em hash SCRAM.
+`127.0.0.1`. As senhas dos papéis são enviadas ao Postgres já em hash SCRAM (no banco gerenciado
+da demonstração online, que não aceita hash, vão em texto sobre TLS, só na criação do papel).
+O `.env.demo` da demonstração também fica fora do Git (só o `.env.demo.example` é versionado).
 
 ---
 
@@ -624,7 +668,7 @@ Sem o banco, `uv run pytest` roda só os testes que não tocam o Postgres e pula
 | `unit/` | catálogo de métricas, supressão, séries, validações, auditoria, mascaramento, montagem do relatório, CLI, tela |
 | `guardrails/` | cada regra de entrada, saída, conteúdo externo e limites, com casos de ataque |
 | `agente/` | rotas do grafo, cobertura, chamada inválida |
-| `integracao/` | Postgres real: carga, silver, gold conferida contra resultados calculados à parte ([`oraculo.py`](tests/dados/oraculo.py)), permissões dos papéis, auditoria no banco, RAG |
+| `integracao/` | Postgres real: carga, silver, gold conferida contra resultados calculados à parte ([`oraculo.py`](tests/dados/oraculo.py)), permissões dos papéis, auditoria no banco, RAG; carga, permissões e teto da demonstração online num banco local cujo dono não é superusuário |
 | `e2e/` | o fluxo inteiro com LLM e notícias falsos ([`fakes.py`](tests/fakes.py)): caminho feliz com números conferidos contra a gold, ataques de entrada, saída adversarial, injeção indireta, reserva de provedor, falhas de infraestrutura e supressão no relatório final |
 
 **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): a cada push na `main` e em pull
@@ -651,7 +695,8 @@ Desenho completo: [`docs/projeto/specs/2026-10-14-agente-srag-design.md`](docs/p
 | [0009](docs/adr/0009-noticias-via-httpx-tavily-rss.md) | Notícias por `httpx` direto (Tavily → Google News RSS); conteúdo externo é dado |
 | [0010](docs/adr/0010-papeis-de-banco-e-trilha-de-auditoria.md) | Papéis de banco com privilégio mínimo e trilha de auditoria Postgres + JSONL |
 | [0011](docs/adr/0011-supressao-de-celulas-pequenas.md) | Supressão `<5`, complementar `oculto` e por janelas publicadas, com limites declarados |
-| [0012](docs/adr/0012-demo-online-evolucao-prevista.md) | Demonstração online fica como evolução prevista, com desenho e critérios, fora desta entrega |
+| [0012](docs/adr/0012-demo-online-evolucao-prevista.md) | Substituída pelo 0013 (demonstração online como evolução prevista, com desenho e critérios) |
+| [0013](docs/adr/0013-demonstracao-online.md) | Demonstração online opcional: só agregados da gold no banco gerenciado, carga com travas, teto diário na tela e no banco, pergunta complementar desligada |
 
 ---
 
@@ -712,6 +757,21 @@ Cada ADR tem a seção "Limites conhecidos" completa. Resumo:
   relevância é lista de termos, não classificador. O Google News RSS não é API documentada e pode
   mudar. O "tempo real" depende do relógio da máquina.
 
+**Demonstração online** ([ADR 0013](docs/adr/0013-demonstracao-online.md))
+- Um único visitante pode esgotar o teto do dia; aí a geração para até a meia-noite e ficam o
+  dicionário e o relatório de exemplo. Não há limite por IP: atrás do proxy da plataforma o IP não é
+  confiável e é dado pessoal. O teto por sessão é contornável recarregando a página.
+- O gatilho do banco conta só relatórios; buscas de notícia e gasto estimado são conferidos pela
+  tela, que roda num processo só. O gasto é estimado; a última barreira é o limite na chave do
+  provedor de LLM.
+- A busca do dicionário sem modelo é menos precisa em perguntas em linguagem natural, e a pergunta
+  complementar fica desligada.
+- O banco gerenciado não aceita senha em hash: a dos papéis vai em texto sobre TLS, só na criação.
+- App e banco gratuitos hibernam sem uso: a primeira visita demora.
+- Pontos que só o primeiro deploy confirma (arquivo de dependências usado pela plataforma, endereço
+  do servidor, memória real, `git` no contêiner) estão listados no ADR 0013, com o que fazer se não
+  valerem.
+
 **Execução e cadeia de fornecimento**
 - *DNS rebinding* contra a porta local da tela (uma página maliciosa aberta no navegador tenta falar
   com ela): risco aceito. O impacto é custo de LLM, mitigado pela trava global, pelo teto por sessão
@@ -725,11 +785,16 @@ Cada ADR tem a seção "Limites conhecidos" completa. Resumo:
 ## Evoluções previstas
 
 > **Nada nesta seção está implementado.** São pontos de encaixe já pensados na arquitetura atual,
-> registrados para quem for continuar o projeto.
+> registrados para quem for continuar o projeto. A demonstração online, que estava prevista aqui,
+> foi entregue: ver [Demonstração online](#demonstração-online).
 
 | Evolução | Ponto de encaixe |
 |---|---|
-| **Demonstração online gratuita** | Streamlit Community Cloud + Postgres gerenciado gratuito (Neon, com pgvector), usando só os agregados da gold materializados: nada de raw nem silver na nuvem. Exige teto global diário de relatórios, limite de gasto configurado na chave do provedor de LLM, segredos nos *secrets* da plataforma (nunca no repositório) e subdomínio próprio por redirecionamento. Desenho, riscos e critérios no [ADR 0012](docs/adr/0012-demo-online-evolucao-prevista.md) |
+| Busca por vetores na demonstração online | trocar `BUSCA_DICIONARIO` para `vetor` nos *secrets* depois de medir a memória na própria plataforma (linhas de memória no log do app) e confirmar folga para o modelo de embeddings |
+| Pergunta complementar na demonstração online | ligar sem guardar o texto: na trilha, só o tamanho e a categoria da recusa, com a pergunta removida de todo campo derivado ([ADR 0013](docs/adr/0013-demonstracao-online.md)) |
+| Limite por visitante na demonstração | sinal extra por IP, só em memória e com HMAC, se a plataforma entregar o IP real do visitante; hoje fora porque o IP atrás do proxy não é confiável e é dado pessoal |
+| Volume da auditoria na demonstração | `CHECK` de tamanho por evento e de eventos por execução no banco, e purga periódica pelo dono do banco |
+| Endereço próprio da demonstração | subdomínio por redirecionamento para o endereço da plataforma |
 | Ocupação real de UTI | carga do cadastro de leitos do CNES + view nova + entrada no catálogo de métricas |
 | Multiagente | o orquestrador chamaria subgrafos especializados; as ferramentas ficam iguais |
 | Previsão de casos | ferramenta nova + view na gold; o número previsto seguiria a mesma regra: sai do código, não do LLM |
@@ -744,9 +809,10 @@ Cada ADR tem a seção "Limites conhecidos" completa. Resumo:
 .
 ├── src/srag_agente/
 │   ├── config.py           configuração única, lida do .env (senhas e chaves como SecretStr)
-│   ├── cli.py              srag carga | indexar | relatorio | dicionario | qualidade | grafo
+│   ├── cli.py              srag carga | indexar | relatorio | dicionario | qualidade | grafo | demo
 │   ├── nucleo.py           gerar_relatorio(): ponto único usado pela CLI e pela tela
-│   ├── app.py, tela.py     tela local Streamlit (só 127.0.0.1) e a lógica dela, testável sem Streamlit
+│   ├── app.py, tela.py     tela Streamlit (local só 127.0.0.1; modo demonstração) e a lógica dela, testável sem Streamlit
+│   ├── demo/               demonstração online: pacote, carga, conferência, teto diário e SQL do banco remoto
 │   ├── banco.py, erros.py  conexão por papel; mensagens de erro sem segredo nem traceback
 │   ├── modelos.py          formato estruturado do texto do redator e das notícias citáveis
 │   ├── dados/              carga da raw, transformação, SQL versionado (00 a 04)
@@ -762,14 +828,16 @@ Cada ADR tem a seção "Limites conhecidos" completa. Resumo:
 │   ├── arquitetura.pdf     diagrama conceitual (gerado de arquitetura.mmd)
 │   ├── grafo_langgraph.mmd grafo real, gerado do código
 │   ├── adr/                decisões de arquitetura
+│   ├── demo-online.md      roteiro para subir a própria demonstração online
 │   ├── projeto/            desenho (spec) e plano de execução
 │   ├── DICIONARIO_SILVER.md
 │   └── QUALIDADE_DADOS.md  gerado por make qualidade
 ├── dados/referencia/       dicionário de dados oficial (PDF público)
 ├── relatorios/exemplo/     relatório real versionado, para ver sem rodar
+├── demo/                   entrada da demonstração online na plataforma e as dependências dela
 ├── .github/workflows/      CI: lint, testes com Postgres e gitleaks
 ├── docker-compose.yml, Dockerfile, Makefile, pyproject.toml, uv.lock
-└── .env.example, .pre-commit-config.yaml, .gitleaks.toml, LICENSE
+└── .env.example, .env.demo.example, .pre-commit-config.yaml, .gitleaks.toml, LICENSE
 ```
 
 ---
