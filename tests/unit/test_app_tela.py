@@ -6,6 +6,10 @@ O `run_every` do fragmento não é simulado: o segundo `run()` faz o papel do re
 from pathlib import Path
 
 import pytest
+
+# `streamlit` é extra opcional (`app`): sem ele, este arquivo é pulado em vez de quebrar a coleta.
+pytest.importorskip("streamlit")
+
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 

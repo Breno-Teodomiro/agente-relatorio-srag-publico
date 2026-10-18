@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4.2.2
       - uses: astral-sh/setup-uv@v5.4.2
         with:
-          python-version-file: .python-version
+          python-version: "3.12"
       - run: uv sync --all-extras --frozen
       # Modelo de embeddings (fastembed) baixado uma vez; PASTA_CACHE_MODELOS padrão = .cache/modelos.
       - uses: actions/cache@v4.2.3

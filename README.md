@@ -270,17 +270,20 @@ próprio Postgres (pgvector). A busca é híbrida: nome de campo citado em maiú
 
 O zip da base **não está no repositório** (é grande e tem dado de saúde). Baixe no
 [Open DATASUS](https://dadosabertos.saude.gov.br/dataset/srag-2019-a-2026) a base de SRAG
-hospitalizado (SIVEP-Gripe) de 2025 e salve o arquivo exatamente em:
+hospitalizado (SIVEP-Gripe) de 2025 e salve o arquivo exatamente em (crie a pasta antes; ela não
+vem no clone porque os dados ficam fora do Git):
 
-```
-dados/brutos/INFLUD25_DATASUS-Versao26-06-2025.zip
+```bash
+mkdir -p dados/brutos
+# arquivo esperado:
+# dados/brutos/INFLUD25_DATASUS-Versao26-06-2025.zip
 ```
 
 O projeto foi construído e testado sobre essa versão do arquivo (sufixo `Versao26-06-2025`). O
 portal publica versões atualizadas ("banco vivo") com outros nomes e conteúdos: ao usar outra
 versão, os números do relatório mudam. Se o seu arquivo tiver outro nome, descomente e ajuste
-`ARQUIVO_DADOS` no `.env`. O zip precisa conter
-um único CSV. O dicionário de dados oficial (PDF público, usado pelo RAG) já vem versionado em
+`ARQUIVO_DADOS` no `.env`. O carregador espera um **zip com um único CSV**: se o portal entregar o
+CSV solto, compacte-o em um zip antes de apontar. O dicionário de dados oficial (PDF público, usado pelo RAG) já vem versionado em
 [`dados/referencia/`](dados/referencia/).
 
 ### 2. Configuração
@@ -607,6 +610,9 @@ mudam a cada execução. Os comandos abaixo medem.
 | `make avaliar-rag` | mede a busca no dicionário com o modelo real em dois conjuntos de perguntas, o original ([`perguntas_rag.json`](tests/dados/perguntas_rag.json)) e o de validação, escrito antes dos ajustes ([`perguntas_rag_validacao.json`](tests/dados/perguntas_rag_validacao.json)): acerto no 1º lugar e entre os 3 primeiros. Rodar logo depois de `make indexar` |
 | `make grafo` | regenera o Mermaid do grafo a partir do código |
 | `make diagrama` | regenera o PDF da arquitetura |
+
+Os testes da tela precisam do extra opcional `app`: instale com `make instalar` (que usa
+`uv sync --all-extras`). Com `uv sync` puro, o teste da tela é pulado, não falha.
 
 Sem o banco, `uv run pytest` roda só os testes que não tocam o Postgres e pula os demais com aviso;
 `make testes` usa `EXIGIR_BANCO=1`, e aí banco ausente é erro, não pulo.
