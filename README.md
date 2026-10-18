@@ -135,9 +135,12 @@ Segurança da tela: escuta só em `127.0.0.1` (não abre para a rede); o texto d
 nunca entra como HTML da página (o relatório, já escapado, aparece num iframe isolado, e o
 dicionário como texto puro); chaves não aparecem e os erros chegam sem traceback e com dado
 pessoal mascarado. O servidor limita o gasto: uma geração por vez (trava global; quem clica
-durante outra recebe aviso), no máximo 5 relatórios por sessão (`MAX_RELATORIOS_SESSAO`) e o
-último relatório fica na sessão, então consultar o dicionário não o apaga. `.streamlit/config.toml`
-fixa `127.0.0.1`, sem detalhe de erro, e a tela se recusa a rodar em outro endereço. As consultas ao
+durante outra recebe aviso, sem fila, e continua vendo o relatório da própria sessão), no máximo 5 relatórios por sessão (`MAX_RELATORIOS_SESSAO`) e o
+último relatório fica guardado no servidor (por sessão), então consultar o dicionário não o apaga
+e um segundo clique durante a geração não o perde: a tela avisa e, enquanto outra geração roda, se atualiza sozinha até o resultado chegar.
+O teto por sessão é contornável recarregando a página (nova sessão); quem segura o gasto
+simultâneo é a trava global, e a tela roda só em `127.0.0.1`. `.streamlit/config.toml`
+fixa `127.0.0.1`, sem detalhe de erro e o tema escuro, e a tela se recusa a rodar em outro endereço. As consultas ao
 dicionário não usam LLM e não ficam na auditoria (só os relatórios ficam).
 
 Risco aceito (dono: Breno): *DNS rebinding* contra a porta local, em que uma página maliciosa

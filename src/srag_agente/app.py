@@ -10,8 +10,9 @@ from typing import get_args
 
 import streamlit as st
 from pydantic import ValidationError
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-from srag_agente import nucleo
+from srag_agente import nucleo, tela
 from srag_agente.config import Config
 from srag_agente.erros import classificar, mensagem_configuracao
 from srag_agente.ferramentas.registro import UF
@@ -19,10 +20,11 @@ from srag_agente.guardrails.entrada import LIMITE_PERGUNTA
 from srag_agente.rag import consulta
 from srag_agente.rag.embeddings import criar_embedder
 from srag_agente.tela import (
+    ArmazemResultados,
+    FalhaTela,
     RelatorioEmAndamentoError,
     RelatorioTela,
     TetoDeRelatoriosError,
-    executar_controlado,
     gerar_para_tela,
     teto_atingido,
     url_isolada,
@@ -30,7 +32,7 @@ from srag_agente.tela import (
 
 ALTURA_RELATORIO = 1400
 ENDERECO_LOCAL = "127.0.0.1"
-CHAVE_ULTIMO = "ultimo_relatorio"  # sobrevive a reruns (ex.: consulta ao dicionário)
+ATUALIZA_A_CADA_S = 3  # a tela confere a trava enquanto outra execução gera (sem custo de LLM)
 
 
 @st.cache_resource
@@ -53,6 +55,16 @@ def _trava_geracao() -> threading.Lock:
     return threading.Lock()  # uma só para o servidor: um relatório por vez
 
 
+@st.cache_resource
+def _resultados() -> ArmazemResultados:
+    return ArmazemResultados()  # último resultado por sessão, no servidor
+
+
+def _sessao() -> str:
+    ctx = get_script_run_ctx()
+    return ctx.session_id if ctx else "sem-sessao"
+
+
 def _mostrar_erro(erro: Exception) -> None:
     st.error(classificar(erro)[1])  # sem traceback, sem input cru, dado pessoal mascarado
 
@@ -68,7 +80,11 @@ def _gerar(uf: str, pergunta: str) -> None:
     cfg = _config()
     try:
         with st.spinner("Gerando o relatório (consulta o banco, notícias e o modelo)..."):
-            st.session_state[CHAVE_ULTIMO] = executar_controlado(
+            # o resultado (ou a falha) é guardado no servidor, dentro da execução controlada: se o
+            # Streamlit interromper este script (novo clique), a escrita no session_state falharia
+            tela.executar_e_guardar(
+                _resultados(),
+                _sessao(),
                 _trava_geracao(),
                 st.session_state,
                 cfg.max_relatorios_sessao,
@@ -78,9 +94,31 @@ def _gerar(uf: str, pergunta: str) -> None:
         st.warning("Já há um relatório em geração.")
     except TetoDeRelatoriosError:
         st.warning(f"Limite de {cfg.max_relatorios_sessao} relatórios por sessão atingido.")
-    except Exception as erro:
-        st.session_state.pop(CHAVE_ULTIMO, None)
-        _mostrar_erro(erro)
+
+
+def _exibir_resultado() -> None:
+    valor = _resultados().ler(_sessao())
+    if isinstance(valor, FalhaTela):
+        st.error(valor.mensagem)
+    elif valor is not None:
+        try:
+            _mostrar_relatorio(valor)
+        except Exception as erro:  # iframe e download também ficam sob o tratamento limpo
+            _mostrar_erro(erro)
+
+
+def _painel_resultado() -> None:
+    """Mostra o resultado da sessão; enquanto a trava está ocupada, se atualiza sozinho."""
+    ocupado = _trava_geracao().locked()
+
+    def corpo() -> None:
+        if ocupado and not _trava_geracao().locked():
+            st.rerun()  # a geração terminou: redesenha a página inteira com o resultado
+        if ocupado:
+            st.info("Outro relatório está em geração; tente de novo ao terminar.")
+        _exibir_resultado()  # o da própria sessão, se houver
+
+    st.fragment(run_every=ATUALIZA_A_CADA_S if ocupado else None)(corpo)()
 
 
 def _aba_relatorio() -> None:
@@ -91,11 +129,7 @@ def _aba_relatorio() -> None:
         enviar = st.form_submit_button("Gerar relatório", disabled=esgotado)  # só complemento
     if enviar:
         _gerar(uf, pergunta)
-    if CHAVE_ULTIMO in st.session_state:
-        try:
-            _mostrar_relatorio(st.session_state[CHAVE_ULTIMO])
-        except Exception as erro:  # iframe e download também ficam sob o tratamento limpo
-            _mostrar_erro(erro)
+    _painel_resultado()
 
 
 def _aba_dicionario() -> None:

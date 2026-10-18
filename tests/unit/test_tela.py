@@ -1,6 +1,8 @@
 """Helpers da tela (sem Streamlit): geração pelo núcleo, nível da situação e leitura do HTML."""
 
+import gc
 import threading
+import weakref
 from pathlib import Path
 from uuid import uuid4
 
@@ -105,6 +107,132 @@ def test_teto_por_sessao_estoura_sem_executar_nem_prender_a_trava():
     assert executou == []
     assert trava.acquire(blocking=False)
     assert tela.teto_atingido(estado, 2) and not tela.teto_atingido(estado, 3)
+
+
+# --- resultado no servidor: sobrevive à execução interrompida pelo Streamlit ---
+
+
+def test_resultado_e_guardado_mesmo_se_o_chamador_original_for_interrompido():
+    trava, armazem = threading.Lock(), tela.ArmazemResultados(maximo=3)
+
+    class Parada(BaseException):  # como a StopException do Streamlit
+        pass
+
+    def guardar(valor):
+        armazem.guardar("s1", valor)
+        raise Parada  # a escrita "do chamador" é interrompida depois de guardada
+
+    with pytest.raises(Parada):
+        tela.executar_controlado(trava, {}, 5, lambda: "relatório", guardar=guardar)
+    assert armazem.ler("s1") == "relatório"
+    assert trava.acquire(blocking=False)  # a trava saiu mesmo com BaseException
+
+
+def test_libera_a_trava_com_baseexception_na_geracao():
+    trava = threading.Lock()
+
+    def interrompe():
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        tela.executar_controlado(trava, {}, 5, interrompe)
+    assert trava.acquire(blocking=False)
+
+
+def test_erro_da_geracao_tambem_e_guardado_para_a_tela():
+    trava, armazem = threading.Lock(), tela.ArmazemResultados(maximo=3)
+    erro = RuntimeError("banco fora")
+
+    def falha():
+        raise erro
+
+    with pytest.raises(RuntimeError):
+        tela.executar_controlado(trava, {}, 5, falha, guardar=lambda v: armazem.guardar("s1", v))
+    guardado = armazem.ler("s1")
+    assert isinstance(guardado, tela.FalhaTela)
+    assert "banco fora" in guardado.mensagem
+
+
+def test_trava_ocupada_ou_teto_nao_guardam_nada():
+    armazem = tela.ArmazemResultados(maximo=3)
+    trava = threading.Lock()
+    with trava, pytest.raises(tela.RelatorioEmAndamentoError):
+        tela.executar_controlado(trava, {}, 5, lambda: "x",
+                                 guardar=lambda v: armazem.guardar("s", v))  # fmt: skip
+    with pytest.raises(tela.TetoDeRelatoriosError):
+        tela.executar_controlado(trava, {tela.CHAVE_USADOS: 5}, 5, lambda: "x",
+                                 guardar=lambda v: armazem.guardar("s", v))  # fmt: skip
+    assert armazem.ler("s") is None
+
+
+def test_armazem_guarda_so_o_ultimo_por_sessao_e_descarta_as_mais_antigas():
+    armazem = tela.ArmazemResultados(maximo=2)
+    armazem.guardar("a", 1)
+    armazem.guardar("a", 2)  # substitui, não acumula
+    armazem.guardar("b", 3)
+    armazem.guardar("c", 4)  # estoura: sai a sessão mais antiga ("a")
+    assert [armazem.ler(s) for s in "abc"] == [None, 3, 4]
+
+
+def test_ler_renova_a_posicao_e_o_leitor_sobrevive_a_gravacoes_de_outras_sessoes():
+    armazem = tela.ArmazemResultados(maximo=3)
+    for sessao in ("leitor", "x", "y"):
+        armazem.guardar(sessao, sessao)
+    assert armazem.ler("leitor") == "leitor"  # renova: "x" passa a ser a mais antiga
+    armazem.guardar("z", "z")
+    armazem.guardar("w", "w")  # saem "x" e "y"
+    assert [armazem.ler(s) for s in ("leitor", "x", "y")] == ["leitor", None, None]
+
+
+def test_armazem_nao_guarda_a_excecao_nem_o_traceback():
+    armazem = tela.ArmazemResultados(maximo=2)
+
+    class Pergunta:  # variável local do frame que falhou: o traceback a manteria viva
+        pass
+
+    referencias = []
+
+    def falha():
+        pergunta = Pergunta()
+        referencias.append(weakref.ref(pergunta))
+        raise RuntimeError("banco fora")
+
+    try:
+        falha()
+    except RuntimeError as erro:
+        armazem.guardar("s", erro)
+    gc.collect()
+    assert referencias[0]() is None  # nada no armazém segura frames nem variáveis locais
+    valor = armazem.ler("s")
+    assert isinstance(valor, tela.FalhaTela) and not hasattr(valor, "__traceback__")
+
+
+# --- falha antes do `guardar` (spinner, contador): a tela não pode mostrar o relatório antigo ---
+
+
+class _EstadoQuebrado(dict):
+    def __setitem__(self, chave, valor):
+        raise RuntimeError("session_state fora")
+
+
+def test_falha_antes_de_executar_substitui_o_resultado_antigo_pela_falha():
+    armazem, trava = tela.ArmazemResultados(maximo=3), threading.Lock()
+    armazem.guardar("s", "relatório antigo")
+    tela.executar_e_guardar(armazem, "s", trava, _EstadoQuebrado(), 5, lambda: "novo")
+    valor = armazem.ler("s")
+    assert isinstance(valor, tela.FalhaTela)
+    assert trava.acquire(blocking=False)
+
+
+def test_executar_e_guardar_guarda_o_resultado_e_repassa_trava_e_teto():
+    armazem, trava = tela.ArmazemResultados(maximo=3), threading.Lock()
+    tela.executar_e_guardar(armazem, "s", trava, {}, 5, lambda: "ok")
+    assert armazem.ler("s") == "ok"
+    with trava, pytest.raises(tela.RelatorioEmAndamentoError):
+        tela.executar_e_guardar(armazem, "s", trava, {}, 5, lambda: "x")
+    with pytest.raises(tela.TetoDeRelatoriosError):
+        tela.executar_e_guardar(armazem, "s", trava, {tela.CHAVE_USADOS: 5}, 5, lambda: "x")
+    assert armazem.ler("s") == "ok"
 
 
 # --- regressão: a tela nunca injeta HTML cru na página ---

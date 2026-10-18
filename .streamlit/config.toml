@@ -1,4 +1,4 @@
-# Tela local: só 127.0.0.1, sem detalhe de erro nem barra de ferramentas (ver README, "Tela").
+# Tela local: só 127.0.0.1, sem detalhe de erro nem barra de ferramentas, tema escuro (ver README, "Tela").
 [server]
 address = "127.0.0.1"
 headless = true
@@ -13,3 +13,10 @@ gatherUsageStats = false
 [client]
 showErrorDetails = "none"
 toolbarMode = "viewer"
+
+[theme]
+base = "dark"
+backgroundColor = "#1e2227"
+secondaryBackgroundColor = "#2a3038"
+textColor = "#e4e7eb"
+primaryColor = "#6cb6ff"
