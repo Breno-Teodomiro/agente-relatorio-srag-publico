@@ -1,4 +1,4 @@
-"""`python -m srag_agente.dados`: carga completa, tudo ou nada."""
+"""`srag carga` (dados.carga.executar_carga): carga completa, tudo ou nada."""
 
 import threading
 import time
@@ -6,7 +6,7 @@ import time
 import pytest
 
 from srag_agente.banco import conectar
-from srag_agente.dados import __main__ as carga
+from srag_agente.dados import carga
 from srag_agente.dados.transformar import TRAVA_TRANSFORMACAO, transformar
 from tests.dados.amostra import escrever_csv
 

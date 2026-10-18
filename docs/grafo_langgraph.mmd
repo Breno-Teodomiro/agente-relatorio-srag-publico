@@ -1,0 +1,28 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	guardrail_entrada(guardrail_entrada)
+	orquestrador(orquestrador)
+	ferramentas(ferramentas)
+	verificar_cobertura(verificar_cobertura)
+	redator(redator)
+	guardrail_saida(guardrail_saida)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> guardrail_entrada;
+	ferramentas -.-> orquestrador;
+	ferramentas -.-> verificar_cobertura;
+	guardrail_entrada --> orquestrador;
+	guardrail_saida -. &nbsp;fim&nbsp; .-> __end__;
+	guardrail_saida -.-> redator;
+	orquestrador -.-> ferramentas;
+	orquestrador -.-> verificar_cobertura;
+	redator --> guardrail_saida;
+	verificar_cobertura -.-> orquestrador;
+	verificar_cobertura -.-> redator;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

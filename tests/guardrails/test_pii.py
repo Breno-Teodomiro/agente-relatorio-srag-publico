@@ -143,3 +143,48 @@ def test_inversao_bidirecional_e_removida():
 @pytest.mark.parametrize("vazio", ["", None])
 def test_vazio(vazio):
     assert mascarar_pii(vazio) == ("", [])
+
+
+# --- Identificadores (UUID, hash) não podem esconder um documento colado neles ----------------
+# O hash hexadecimal fica fora do mascaramento (senão "…446655440000" viraria cartão SUS). Mas um
+# documento COLADO num texto hexadecimal longo não pode sumir junto com ele.
+HEX = "b" * 50
+
+
+@pytest.mark.parametrize(
+    "texto,tipo",
+    [
+        (HEX + "123.456.789-09", "cpf"),  # o caso que vazava: devolvia []
+        ("123.456.789-09" + HEX, "cpf"),
+        (HEX + "12345678909", "cpf"),  # sem pontuação, dígito verificador confere
+        # o pedaço hexadecimal tem tamanho exato de hash (29 + "123" = 32; 40): o documento
+        # atravessa a borda do "identificador" e sai mesmo assim
+        ("b" * 29 + "123.456.789-09", "cpf"),
+        ("a" * 40 + "@exemplo.com", "email"),
+        (HEX + "fulano@exemplo.com", "email"),
+        ("dead" * 10 + "beef@exemplo.com.br", "email"),
+        (HEX + "11 98765-4321", "telefone"),
+        (HEX + "(11) 98765-4321", "telefone"),
+    ],
+)
+def test_documento_colado_em_texto_hexadecimal_longo_e_mascarado(texto, tipo):
+    mascarado, tipos = mascarar_pii(texto)
+    assert tipos == [tipo]
+    assert MASCARA in mascarado
+    assert "98765" not in mascarado and "456" not in mascarado and "@" not in mascarado
+
+
+@pytest.mark.parametrize(
+    "identificador",
+    [
+        "3f786850e387550fdab836ed7e6dc881de23001b",  # sha1 (git)
+        "d41d8cd98f00b204e9800998ecf8427e",  # md5
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",  # sha256
+        "a1234567890123456789012345678901",  # 32 hex com 31 dígitos seguidos: ainda é hash
+        "550e8400-e29b-41d4-a716-446655440000",  # UUID
+    ],
+)
+@pytest.mark.parametrize("molde", ["{}", "commit {} ok", '{{"id": "{}"}}', "({})", "{}, {}"])
+def test_hash_e_uuid_legitimos_continuam_intactos(identificador, molde):
+    texto = molde.format(identificador, identificador)
+    assert mascarar_pii(texto) == (texto, [])

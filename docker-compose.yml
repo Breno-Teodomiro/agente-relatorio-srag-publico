@@ -13,5 +13,26 @@ services:
       interval: 5s
       retries: 10
 
+  # Aplicação (opcional): make docker-build && make docker-relatorio UF=SP
+  app:
+    build:
+      context: .
+      args:
+        SRAG_VERSAO_CODIGO: ${SRAG_VERSAO_CODIGO:-desconhecida}
+    profiles: ["app"]
+    env_file: .env
+    environment:
+      PG_HOST: banco
+      PG_PORTA: "5432"
+      TZ: America/Sao_Paulo  # a data de execução do relatório é a do Brasil, não a UTC
+    volumes:
+      - ./dados:/app/dados:ro
+      - ./relatorios:/app/relatorios
+      - ./docs:/app/docs
+      - ./.cache:/app/.cache
+    depends_on:
+      banco:
+        condition: service_healthy
+
 volumes:
   dados_pg:

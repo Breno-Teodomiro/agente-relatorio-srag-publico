@@ -1,10 +1,14 @@
-"""Configuração única do projeto, lida das variáveis de ambiente e do `.env`."""
+"""Configuração única do projeto, lida das variáveis de ambiente e do `.env`.
+
+Nada aqui depende da pasta de onde a CLI é chamada: o `.env` e os caminhos relativos
+(dados, relatórios, cache) são os da raiz do projeto.
+"""
 
 from pathlib import Path
 from typing import Literal
 
 from psycopg.conninfo import make_conninfo
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Papel = Literal["admin", "etl", "agente", "auditor"]
@@ -17,8 +21,32 @@ USUARIOS: dict[Papel, str] = {
 }
 
 
+def raiz_do_projeto(inicio: Path, limite: Path | None = None) -> Path:
+    """Primeira pasta, de `inicio` para cima, com `pyproject.toml` (para em `limite`).
+
+    Com o pacote instalado fora do repositório (site-packages) não há pyproject acima dele:
+    vale a pasta atual. No Docker a imagem copia o pyproject para /app, a raiz de lá.
+    """
+    for pasta in (inicio, *inicio.parents):
+        if (pasta / "pyproject.toml").is_file():
+            return pasta
+        if pasta == limite:
+            break
+    return Path.cwd()
+
+
+RAIZ_PROJETO = raiz_do_projeto(Path(__file__).resolve().parent)
+
+
 class Config(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=RAIZ_PROJETO / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        # Sem isto, o erro de validação repete o que recebeu (input_value={'pg_senha_admin':
+        # 'segre...'}) e a senha ou a chave aparecem na tela e no log.
+        hide_input_in_errors=True,
+    )
 
     pg_host: str = "localhost"
     pg_porta: int = 5435
@@ -44,12 +72,23 @@ class Config(BaseSettings):
     preco_entrada_usd_mtok: float = 0.40
     preco_saida_usd_mtok: float = 1.60
 
+    # Tetos de uma execução (guardrails.limites.Limites; mesmos padrões do spec §6).
     max_chamadas_ferramenta: int = 12
     max_tokens_execucao: int = 60_000
+    max_segundos_execucao: float = 300.0
+    max_voltas_cobertura: int = 2
+    max_tentativas_redacao: int = 2
 
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
+
+    @field_validator(
+        "arquivo_dados", "arquivo_dicionario", "pasta_relatorios", "pasta_cache_modelos"
+    )
+    @classmethod
+    def _da_raiz(cls, caminho: Path) -> Path:
+        return caminho if caminho.is_absolute() else RAIZ_PROJETO / caminho
 
     def _senha(self, papel: Papel) -> str:
         senhas = {

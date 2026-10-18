@@ -1,0 +1,16 @@
+# Fora da imagem: segredos, dados (montados em tempo de execução), saídas e o que não roda.
+.git
+.venv
+.env
+.env.*
+dados
+relatorios
+.cache
+docs
+tests
+*.zip
+*.pdf
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.coverage

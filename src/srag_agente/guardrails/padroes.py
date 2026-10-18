@@ -106,11 +106,15 @@ _DADOS_PESSOAIS: tuple[tuple[str, re.Pattern[str], Validador], ...] = (
 # (U+2212) e as formas pequenas e de largura total (U+FE58, U+FE63, U+FF0D) viram "-".
 TRACOS = dict.fromkeys((*range(0x2010, 0x2016), 0x2212, 0xFE58, 0xFE63, 0xFF0D), "-")
 # Identificadores que a auditoria grava e que têm trechos só de dígitos: UUID canônico e hash
-# hexadecimal (git, sha256). Ficam de fora do mascaramento, senão "…-a716-446655440000" vira
-# cartão SUS.
+# hexadecimal com tamanho de hash de verdade (md5 32, sha1/git 40, sha256 64, sha512 128). Um
+# achado que cabe INTEIRO dentro de um deles não é mascarado, senão "…-a716-446655440000" vira
+# cartão SUS. Duas regras impedem que o identificador esconda um documento colado nele:
+# - tamanho exato: "b"*50 + "12345678909" não é hash (61 caracteres), então o CPF aparece;
+# - só o achado inteiro lá dentro é poupado: o que atravessa a borda ("<hash>123.456.789-09",
+#   "<hex>beef@exemplo.com") é documento colado e sai.
 _IDENTIFICADOR = re.compile(
     r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"
-    r"|\b(?=[0-9a-f]*[a-f])[0-9a-f]{32,}\b",
+    r"|\b(?=[0-9a-f]*[a-f])(?:[0-9a-f]{128}|[0-9a-f]{64}|[0-9a-f]{40}|[0-9a-f]{32})\b",
     re.IGNORECASE,
 )
 MASCARA = "[dado removido]"
@@ -120,14 +124,22 @@ def _sem_invisiveis(texto: str) -> str:
     return "".join(c for c in texto if unicodedata.category(c) != "Cf")
 
 
+def _dentro_de_identificador(achado: re.Match[str], identificadores: list[tuple[int, int]]) -> bool:
+    return any(ini <= achado.start() and achado.end() <= fim for ini, fim in identificadores)
+
+
 def _trocar_padrao(
     texto: str, tipo: str, padrao: re.Pattern[str], valido: Validador, encontrados: list[str]
 ) -> str:
-    """Mascara cada achado válido. O inválido não consome o texto: a busca recomeça um caractere
-    adiante, para um candidato falso não esconder um documento que começa dentro dele."""
+    """Mascara cada achado válido. O inválido (ou inteiro dentro de um identificador) não
+    consome o texto: a busca recomeça um caractere adiante, para um candidato falso não esconder
+    um documento que começa dentro dele."""
+    # Recalculado a cada padrão: a troca do padrão anterior muda as posições do texto.
+    identificadores = [a.span() for a in _IDENTIFICADOR.finditer(texto)]
     pedacos, inicio, posicao = [], 0, 0
     while achado := padrao.search(texto, posicao):
-        if valido is None or valido(achado.group(0)):
+        poupar = _dentro_de_identificador(achado, identificadores)
+        if not poupar and (valido is None or valido(achado.group(0))):
             pedacos += [texto[inicio : achado.start()], MASCARA]
             inicio = posicao = achado.end()
             encontrados.append(tipo)
@@ -137,20 +149,11 @@ def _trocar_padrao(
     return "".join(pedacos)
 
 
-def _trocar_trecho(texto: str, encontrados: list[str]) -> str:
-    for tipo, padrao, valido in _DADOS_PESSOAIS:
-        texto = _trocar_padrao(texto, tipo, padrao, valido, encontrados)
-    return texto
-
-
 def _trocar(texto: str) -> tuple[str, list[str]]:
     encontrados: list[str] = []
-    pedacos, inicio = [], 0
-    for achado in _IDENTIFICADOR.finditer(texto):
-        pedacos += [_trocar_trecho(texto[inicio : achado.start()], encontrados), achado.group(0)]
-        inicio = achado.end()
-    pedacos.append(_trocar_trecho(texto[inicio:], encontrados))
-    return "".join(pedacos), encontrados
+    for tipo, padrao, valido in _DADOS_PESSOAIS:
+        texto = _trocar_padrao(texto, tipo, padrao, valido, encontrados)
+    return texto, encontrados
 
 
 def mascarar_pii(texto: str) -> tuple[str, list[str]]:
