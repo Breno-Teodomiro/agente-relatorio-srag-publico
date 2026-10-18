@@ -70,4 +70,20 @@ def estrutura_mermaid() -> str:
         auditoria=None,
         limites=Limites(),
     )
-    return construir_grafo(vazias).get_graph().draw_mermaid()
+    return _com_texto_legivel(construir_grafo(vazias).get_graph().draw_mermaid())
+
+
+# O estilo padrão do LangGraph pinta a caixa de claro mas deixa o texto na cor do tema da página:
+# no tema escuro do GitHub o nome do nó fica claro sobre claro e some. Fixa texto e borda.
+_ESTILOS = {
+    "classDef default fill:#f2f0ff,line-height:1.2": (
+        "classDef default fill:#f2f0ff,stroke:#5b4fcf,color:#1a1a2e,line-height:1.2"
+    ),
+    "classDef last fill:#bfb6fc": "classDef last fill:#bfb6fc,stroke:#5b4fcf,color:#1a1a2e",
+}
+
+
+def _com_texto_legivel(mermaid: str) -> str:
+    for original, legivel in _ESTILOS.items():
+        mermaid = mermaid.replace(original, legivel)
+    return mermaid

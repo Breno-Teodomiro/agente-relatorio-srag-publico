@@ -417,6 +417,14 @@ def test_estrutura_mermaid_traz_os_nos_do_grafo():
         assert no in mermaid
 
 
+def test_estrutura_mermaid_fixa_cor_do_texto_para_ler_no_tema_escuro():
+    """Sem `color`, o nome do nó herda a cor clara do tema escuro e some sobre a caixa clara."""
+    estilos = [linha.strip() for linha in estrutura_mermaid().splitlines() if "classDef" in linha]
+    for nome in ("default", "last"):
+        (linha,) = [e for e in estilos if e.startswith(f"classDef {nome} ")]
+        assert "color:#1a1a2e" in linha and "fill:#" in linha
+
+
 # ---- revisão da Task 13 ------------------------------------------------------------------------
 
 
