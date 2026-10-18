@@ -1,7 +1,9 @@
 """`python -m srag_agente.rag.avaliar` — mede a busca no dicionário com o modelo real.
 
-Lê tests/dados/perguntas_rag.json (pergunta -> campo esperado) e imprime o acerto no 1º lugar
-e entre os 3 primeiros. Usa o índice já gravado (`make indexar`) do banco de PG_BANCO.
+Dois conjuntos (pergunta -> campo esperado), cada um com acerto no 1º lugar e entre os 3
+primeiros: o original e o de validação, escrito antes de qualquer ajuste e nunca usado para
+escolher o ajuste (anti-sobreajuste, ADR 0006). Mudança na busca só vale se melhora a validação.
+Usa o índice já gravado (`make indexar`) do banco de PG_BANCO.
 """
 
 import json
@@ -12,7 +14,10 @@ from srag_agente.config import Config
 from srag_agente.ferramentas.dicionario import BuscaDicionario
 from srag_agente.rag.embeddings import criar_embedder
 
-PERGUNTAS = Path("tests/dados/perguntas_rag.json")
+CONJUNTOS = {
+    "original": Path("tests/dados/perguntas_rag.json"),
+    "validação": Path("tests/dados/perguntas_rag_validacao.json"),
+}
 
 
 def avaliar(busca: BuscaDicionario, casos: list[dict[str, str]]) -> tuple[int, int]:
@@ -28,11 +33,13 @@ def avaliar(busca: BuscaDicionario, casos: list[dict[str, str]]) -> tuple[int, i
 
 if __name__ == "__main__":
     cfg = Config()
-    casos = json.loads(PERGUNTAS.read_text(encoding="utf-8"))
     with conectar(cfg, "agente", autocommit=True) as conn:
         busca = BuscaDicionario(conn, criar_embedder(cfg.pasta_cache_modelos), k=3)
-        primeiro, top3 = avaliar(busca, casos)
-    total = len(casos)
-    print(f"Perguntas: {total}")
-    print(f"Acerto no 1º lugar: {primeiro}/{total}")
-    print(f"Acerto entre os 3 primeiros: {top3}/{total}")
+        for nome, arquivo in CONJUNTOS.items():
+            casos = json.loads(arquivo.read_text(encoding="utf-8"))
+            print(f"== Conjunto {nome} ({arquivo})")
+            primeiro, top3 = avaliar(busca, casos)
+            total = len(casos)
+            print(f"Perguntas: {total}")
+            print(f"Acerto no 1º lugar: {primeiro}/{total}")
+            print(f"Acerto entre os 3 primeiros: {top3}/{total}")

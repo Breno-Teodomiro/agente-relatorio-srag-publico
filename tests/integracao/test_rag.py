@@ -1,7 +1,6 @@
 import pytest
 
 from srag_agente.banco import conectar
-from srag_agente.config import Config
 from srag_agente.ferramentas.dicionario import BuscaDicionario
 from srag_agente.rag import indexar
 from srag_agente.rag.embeddings import DIMENSAO, criar_embedder
@@ -9,13 +8,43 @@ from tests.fakes import embedder_falso
 
 pytestmark = pytest.mark.integracao
 
-PAGINAS = [
-    "Evolução do caso 1-Cura 2-Óbito 3-Óbito por outras causas 9-Ignorado\nEVOLUCAO\n"
-    "Internado em UTI? 1-Sim 2-Não 9-Ignorado. O paciente foi internado em UTI?\nUTI\n",
-    "Recebeu vacina contra COVID-19? 1-Sim 2-Não 9-Ignorado, conforme o cartão.\nVACINA_COV\n"
-    "Classificação final do caso: 1-SRAG por influenza 2-SRAG por outro vírus.\nCLASSI_FIN\n"
-    "Outra saída: texto da primeira ocorrência do campo repetido no dicionário.\nSOR_OUT\n"
-    "Outra saída: texto da segunda ocorrência do campo repetido no dicionário.\nSOR_OUT\n",
+LINHAS = [
+    (1, ["Evolução do caso", "Varchar2(1)", "1-Cura 2-Óbito 9-Ignorado", "", "", "EVOLUCAO"]),
+    (
+        1,
+        [
+            "Internado em UTI?",
+            "Varchar2(1)",
+            "1-Sim 2-Não 9-Ignorado",
+            "O paciente foi internado em UTI?",
+            "",
+            "UTI",
+        ],
+    ),
+    (
+        2,
+        [
+            "Recebeu vacina COVID-19?",
+            "Varchar(1)",
+            "1-Sim 2-Não 9-Ignorado",
+            "Conforme o cartão.",
+            "",
+            "VACINA COV _",
+        ],
+    ),
+    (
+        2,
+        [
+            "Classificação final do caso",
+            "Varchar2(1)",
+            "1-SRAG por influenza",
+            "",
+            "",
+            "CLASSI FIN _",
+        ],
+    ),
+    (2, ["Outra saída", "", "", "Primeira ocorrência do campo repetido.", "", "SOR OUT _"]),
+    (2, ["Outra saída", "", "", "Segunda ocorrência do campo repetido.", "", "SOR OUT _"]),
 ]
 CAMPOS = {"EVOLUCAO", "UTI", "VACINA_COV", "CLASSI_FIN", "SOR_OUT"}
 
@@ -29,7 +58,7 @@ def conn_indexador(cfg_teste, banco_carregado):
 
 @pytest.fixture
 def paginas_falsas(monkeypatch):
-    monkeypatch.setattr(indexar, "extrair_paginas", lambda pdf: PAGINAS)
+    monkeypatch.setattr(indexar, "extrair_linhas", lambda pdf: LINHAS)
 
 
 def indexar_amostra(conn):
@@ -109,6 +138,6 @@ def test_pergunta_sem_nome_de_campo_usa_so_a_similaridade(
     assert len(resultado) == 2
 
 
-def test_dimensao_do_embedder_real_bate_com_a_da_tabela_e_a_do_falso():
-    vetor = criar_embedder(Config().pasta_cache_modelos)(["teste"])[0]
+def test_dimensao_do_embedder_real_bate_com_a_da_tabela_e_a_do_falso(cfg_teste):
+    vetor = criar_embedder(cfg_teste.pasta_cache_modelos)(["teste"])[0]
     assert len(vetor) == DIMENSAO == len(embedder_falso(["teste"])[0])

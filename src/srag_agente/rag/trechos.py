@@ -1,4 +1,4 @@
-"""Divide o texto do dicionário (uma tabela por campo) em um trecho por campo."""
+"""Divide o dicionário (uma linha de tabela por campo) em um trecho por campo."""
 
 import re
 from dataclasses import dataclass
@@ -6,62 +6,69 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Trecho:
-    campo: str | None
+    campo: str
     pagina: int
     texto: str
 
 
-_CABECALHO_PAGINA = re.compile(r"^SIVEP Gripe-\s*Sistema de Informação.*Página\s+\d+$")
-_IDENTIFICADOR = re.compile(r"^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$")
-_OU = re.compile(r"\s+ou(?:\s+|$)", flags=re.IGNORECASE)
+# (página, [nome do campo, tipo, categoria, descrição, características, DBF])
+Linha = tuple[int, list[str]]
+
+_COLUNAS = 6
+_OU = re.compile(r"\s+ou\s+", flags=re.IGNORECASE)
 
 
-def _nomes_de_campo(linha: str, campos_conhecidos: set[str]) -> list[str]:
-    """Nomes de campo numa linha composta ('ID_MUNICIP OU', 'PAC_COCBO ou'); vazio se não for."""
-    partes = [p.strip() for p in _OU.split(linha)]
-    if len(partes) < 2:
-        return []
-    return [p for p in partes if p in campos_conhecidos or _IDENTIFICADOR.match(p)]
+def _juntar_continuacoes(linhas: list[Linha]) -> list[Linha]:
+    """Linha sem DBF continua a anterior: é a mesma linha da tabela cortada pela quebra de página
+    (no PDF, o '2-Feminino' do sexo cai na página seguinte). O cabeçalho repetido é descartado.
+    """
+    juntas: list[Linha] = []
+    for pagina, brutas in linhas:
+        celulas = [" ".join(c.split()) for c in brutas]
+        if len(celulas) != _COLUNAS or celulas[-1] == "DBF":
+            continue
+        if celulas[-1]:
+            juntas.append((pagina, celulas))
+        elif juntas:
+            anterior_pagina, anterior = juntas[-1]
+            unidas = [f"{a} {b}".strip() for a, b in zip(anterior, celulas, strict=True)]
+            juntas[-1] = (anterior_pagina, unidas)
+    return juntas
+
+
+def _nomes_de_campo(dbf: str, campos_conhecidos: set[str]) -> list[str]:
+    """A célula DBF sai do PDF com o sublinhado deslocado ('CS SEXO _'), às vezes composta
+    ('PAC COCBO ou _ PAC DSCBO _'): compara sem espaço nem sublinhado com os nomes da raw.
+    """
+    sem_sublinhado = {c.replace("_", ""): c for c in campos_conhecidos}
+    partes = (re.sub(r"[\s_]", "", p) for p in _OU.split(dbf))
+    return [sem_sublinhado[p] for p in partes if p in sem_sublinhado]
+
+
+def _texto(campo: str, celulas: list[str], maximo_caracteres: int) -> str:
+    """Nome e rótulo no início: o modelo de embedding lê só os primeiros ~128 tokens.
+
+    O formato é o que foi medido em `make avaliar-rag` (ADR 0006); mudá-lo pede nova medição.
+    """
+    nome, tipo, categoria, descricao, caracteristicas, _dbf = celulas
+    texto = (
+        f"Campo {campo}: {nome}. Tipo: {tipo}. Categorias: {categoria}. "
+        f"Descrição: {descricao}. {caracteristicas}"
+    )
+    return texto[:maximo_caracteres]
 
 
 def dividir_em_trechos(
-    paginas: list[str],
-    campos_conhecidos: set[str],
-    minimo_caracteres: int = 40,
-    maximo_caracteres: int = 1500,
+    linhas: list[Linha], campos_conhecidos: set[str], maximo_caracteres: int = 1500
 ) -> list[Trecho]:
-    """No PDF extraído, o nome do campo aparece DEPOIS da sua descrição: ele fecha o trecho.
+    """Um trecho por campo da raw, com a página onde a linha do campo começa.
 
-    Alguns campos vêm em duas linhas ('ID_UN_INTE OU' e depois 'CO_UN_INTE'): a linha composta
-    fecha o trecho do primeiro nome e o nome seguinte vira um trecho de mesmo texto.
+    Campo do dicionário que não existe na raw (CPF, CNS, nome, endereço: a base pública não os
+    traz) não vira trecho. Linha composta ('ID_MN_RESI ou CO_MUN_RES') vira um trecho por nome,
+    com o mesmo texto.
     """
-    trechos: list[Trecho] = []
-    buffer: list[str] = []
-    alias_de: str | None = None
-    pagina_atual = 1
-
-    def fechar(campo: str, pagina: int, acumulado: str) -> None:
-        trechos.append(Trecho(campo, pagina, f"Campo {campo}: {acumulado[:maximo_caracteres]}"))
-
-    for pagina_atual, texto in enumerate(paginas, start=1):
-        for linha in (bruta.strip() for bruta in texto.splitlines()):
-            if not linha or _CABECALHO_PAGINA.match(linha):
-                continue
-            acumulado = " ".join(buffer)
-            if alias_de is not None:
-                alias_de = None
-                if linha in campos_conhecidos or _IDENTIFICADOR.match(linha):
-                    fechar(linha, pagina_atual, trechos[-1].texto.split(": ", 1)[1])
-                    continue
-            nomes = _nomes_de_campo(linha, campos_conhecidos)
-            if nomes and acumulado:
-                fechar(nomes[0], pagina_atual, acumulado)
-                buffer, alias_de = [], nomes[0]
-            elif linha in campos_conhecidos and len(acumulado) >= minimo_caracteres:
-                fechar(linha, pagina_atual, acumulado)
-                buffer = []
-            else:
-                buffer.append(linha)
-    if buffer:
-        trechos.append(Trecho(None, pagina_atual, " ".join(buffer)[:maximo_caracteres]))
-    return trechos
+    return [
+        Trecho(campo, pagina, _texto(campo, celulas, maximo_caracteres))
+        for pagina, celulas in _juntar_continuacoes(linhas)
+        for campo in _nomes_de_campo(celulas[-1], campos_conhecidos)
+    ]

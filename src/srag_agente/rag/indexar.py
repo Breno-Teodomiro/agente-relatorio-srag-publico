@@ -8,12 +8,19 @@ import pymupdf
 from pgvector.psycopg import register_vector
 
 from srag_agente.rag.embeddings import Embedder
-from srag_agente.rag.trechos import dividir_em_trechos
+from srag_agente.rag.trechos import Linha, dividir_em_trechos
 
 
-def extrair_paginas(pdf: Path) -> list[str]:
+def extrair_linhas(pdf: Path) -> list[Linha]:
+    """Linhas da tabela do dicionário (detecção de tabela do PyMuPDF), com a página de cada uma."""
+    pymupdf.no_recommend_layout()  # sem o aviso do pacote opcional de layout no stdout
     with pymupdf.open(pdf) as documento:
-        return [pagina.get_text() for pagina in documento]
+        return [
+            (numero, [celula or "" for celula in celulas])
+            for numero, pagina in enumerate(documento, start=1)
+            for tabela in pagina.find_tables().tables
+            for celulas in tabela.extract()
+        ]
 
 
 def campos_da_raw(conn: psycopg.Connection) -> set[str]:
@@ -33,14 +40,15 @@ def indexar_dicionario(
     """Troca o índice inteiro numa transação. `conn` deve estar em autocommit (sem transação
     aberta), para que `conn.transaction()` seja a transação de fato e confirme ao sair.
 
-    Os nomes de campo vêm da raw (o PDF não os distingue de palavras em maiúsculas). Sem eles
-    o PDF viraria 1 trecho: por isso falha ANTES de apagar o índice que já existe.
+    Os nomes de campo vêm da raw (a coluna DBF do PDF sai com o sublinhado deslocado e só vira
+    trecho o campo que existe na base). Sem eles não haveria trecho: por isso falha ANTES de
+    apagar o índice que já existe.
     """
     if not conn.autocommit:
         raise ValueError("indexar_dicionario exige conexão em autocommit")
     if not campos_conhecidos:
         raise ValueError("sem campos conhecidos (raw.srag vazia ou ausente): índice preservado")
-    trechos = dividir_em_trechos(extrair_paginas(pdf), campos_conhecidos)
+    trechos = dividir_em_trechos(extrair_linhas(pdf), campos_conhecidos)
     faltam = CAMPOS_DAS_METRICAS - {t.campo for t in trechos}
     if faltam:
         raise ValueError(f"campos das métricas sem trecho {sorted(faltam)}: índice preservado")
