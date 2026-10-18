@@ -542,4 +542,17 @@ ocupação real de UTI via CNES, multiagente, previsão de casos e deploy em nuv
 
 ## 9. Exemplo de relatório
 
-<!-- EXEMPLO: preencher com links para relatorios/exemplo/relatorio.md e relatorio.html -->
+Uma execução real do agente (UF `BR`, LLM e busca de notícias reais, situação `ok`) está versionada em
+[`relatorios/exemplo/`](relatorios/exemplo/), gerada pelo comando `make relatorio UF=BR` a partir do
+código do commit registrado no próprio anexo do relatório:
+
+| Arquivo | O que é |
+|---|---|
+| [`relatorio.md`](relatorios/exemplo/relatorio.md) | O relatório em Markdown: o GitHub o exibe com as tabelas e os gráficos. Termina na seção "Como este relatório foi gerado" (modelo, tokens, custo, versão do código, hash dos prompts e a tabela de eventos). |
+| [`relatorio.html`](relatorios/exemplo/relatorio.html) | O mesmo relatório em HTML autocontido (baixe o arquivo e abra no navegador; o GitHub o mostra como texto). Tem tema escuro e claro, gráficos em SVG e as notícias citadas. |
+| [`auditoria.jsonl`](relatorios/exemplo/auditoria.jsonl) | A trilha da execução: uma linha por etapa, com a ferramenta chamada, o motivo declarado pelo modelo, o resultado resumido e a decisão dos guardrails. |
+| [`graficos/`](relatorios/exemplo/graficos/) | Os dois gráficos em PNG (diário de 30 dias e mensal de 12 meses). |
+
+O texto dos comentários varia de uma execução para outra, porque o modelo reescreve a cada vez; os
+números das tabelas e dos gráficos não variam, porque saem do SQL. Execuções novas ficam em
+`relatorios/<data>_<uf>_<id>/`, pasta que o Git ignora.

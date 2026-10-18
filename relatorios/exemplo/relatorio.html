@@ -1,0 +1,2440 @@
+<!doctype html>
+<html lang="pt-BR" data-tema="escuro">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;; script-src &#39;sha256-C4sGuBKdL7R4HyoFXICuWYCOrASb6seUv86Rwjbarko=&#39;; base-uri &#39;none&#39;; form-action &#39;none&#39;">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório SRAG — Brasil</title>
+<style>
+:root{--fundo:#1f2228;--cartao:#2a2e36;--texto:#d6d9de;--suave:#9aa0a8;--borda:#3a3f48;
+--acento:#6fa8dc;--alerta:#e8b07c;--perigo:#ec9a9a}
+[data-tema="claro"]{--fundo:#f6f7f9;--cartao:#ffffff;--texto:#2b2f36;--suave:#5f6670;
+--borda:#e3e6ea;--acento:#2f6db5;--alerta:#a8590f;--perigo:#b42318}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--texto);
+font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.6rem;margin:0 0 4px}
+h2{font-size:1.15rem;margin:32px 0 12px;border-bottom:1px solid var(--borda);padding-bottom:6px}
+.topo{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.meta,.pequeno{color:var(--suave);font-size:.88rem}
+.faixa{border-left:4px solid var(--alerta);background:var(--cartao);padding:10px 14px;
+margin:12px 0;border-radius:6px}
+.faixa.perigo{border-color:var(--perigo)}
+.cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.cartao,details,figure{background:var(--cartao);border:1px solid var(--borda);border-radius:10px}
+.cartao{padding:14px}
+.valor{font-size:1.9rem;font-weight:650;color:var(--acento)}
+figure{margin:12px 0;padding:8px;overflow-x:auto}
+figure svg{display:block;margin:0 auto;width:100%;max-width:640px;min-width:450px;height:auto}
+figure details{background:none;border:0;padding:4px 0}
+[data-tema="escuro"] .graf-claro,[data-tema="claro"] .graf-escuro{display:none}
+.tabela{overflow-x:auto}
+.tabela.larga table{min-width:640px}
+.tabela.larga td:nth-child(5){min-width:16rem}
+.dica{display:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{border-bottom:1px solid var(--borda);padding:6px 8px;text-align:left;vertical-align:top}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+details{padding:10px 14px}
+a{color:var(--acento)}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+clip:rect(0,0,0,0);white-space:nowrap;border:0}
+:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+button[aria-pressed="true"]{border-color:var(--acento)}
+button{background:var(--cartao);color:var(--texto);border:1px solid var(--borda);
+border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
+footer{margin-top:40px;color:var(--suave);font-size:.85rem}
+@media(max-width:700px){
+.dica{display:block;margin:0 0 6px}
+ol a{display:inline-block;min-height:44px;line-height:44px;padding:0 10px}
+}
+</style>
+</head>
+<body>
+<main>
+<header class="topo">
+  <div>
+    <h1>Relatório de SRAG — Brasil</h1>
+    <div class="meta">Dados até <strong>25/06/2025</strong> (Open DATASUS,
+      SIVEP-Gripe) · gerado em 18/10/2026 · situação:
+      <strong>concluído</strong> · execução 11aeb54c</div>
+  </div>
+  <button type="button" id="tema" aria-pressed="true">Tema escuro</button>
+</header>
+
+
+<h2>Resumo</h2>
+<p>No período de 29 de maio a 11 de junho de 2025, houve uma queda de 14,3% na taxa de casos de Síndrome Respiratória Aguda Grave (SRAG) no Brasil, apesar de um aumento de 28,6% nos 30 dias consolidados anteriores. A taxa de mortalidade por SRAG no período de dezembro de 2024 a junho de 2025 foi de 8,0%. A proporção de casos internados em UTI foi de 29,4%, e a taxa de vacinação contra COVID-19 entre os casos internados foi de 76,1%, com 32,1% vacinados contra a gripe. A maior parte dos casos permanece sem especificação do agente etiológico.</p>
+
+<h2>Métricas</h2>
+<div class="cartoes">
+  <section class="cartao">
+    <div class="pequeno">Taxa de aumento de casos</div>
+    <div class="valor">−14,3%</div>
+    <div class="pequeno">
+      10.224 casos contra 11.928 na semana anterior
+      · 29/05/2025 a 11/06/2025</div>
+    <div class="pequeno">30 dias consolidados: 51.268 contra 39.878 nos 30 anteriores (+28,6%)</div>
+<p>A taxa de aumento de casos entre 29 de maio e 11 de junho de 2025 foi de queda de 14,3%, indicando redução recente nos casos de SRAG. Contudo, a variação nos 30 dias consolidados até 11 de junho mostra alta de 28,6%, sinalizando aumento em período anterior. Esse cenário é consistente com relatos de alerta para quadros graves de infecções respiratórias no país <a href="#ref-1">[1]</a>.</p>    <details>
+      <summary class="pequeno">Como é calculada</summary>
+      <p class="pequeno">Variação entre os casos dos 7 dias consolidados mais recentes e os dos 7 dias anteriores, pela data dos primeiros sintomas. Consolidado = até 14 dias antes da data de referência.</p>
+      <p class="pequeno"><strong>Limitação:</strong> Os 14 dias mais recentes ficam de fora porque ainda recebem notificações atrasadas; incluí-los mostraria uma queda que não aconteceu.</p>
+      <p class="pequeno">Fora do cálculo: 10.092 registros.</p>
+    </details>
+  </section>
+  <section class="cartao">
+    <div class="pequeno">Taxa de mortalidade</div>
+    <div class="valor">8,0%</div>
+    <div class="pequeno">
+      9.885 de 124.188
+      · 29/12/2024 a 25/06/2025</div>
+<p>A taxa de mortalidade por SRAG no Brasil, considerando o período de 29 de dezembro de 2024 a 25 de junho de 2025, foi de 8,0%. Esse indicador reflete os óbitos entre casos com desfecho conhecido, conforme definido na base de dados. O estado do Rio de Janeiro, por exemplo, registrou 676 mortes até junho de 2025 <a href="#ref-2">[2]</a>.</p>    <details>
+      <summary class="pequeno">Como é calculada</summary>
+      <p class="pequeno">Óbitos por SRAG divididos pelos casos com desfecho conhecido (cura, óbito por SRAG ou óbito por outras causas), em todo o período da base.</p>
+      <p class="pequeno"><strong>Limitação:</strong> Casos ainda sem desfecho ou com desfecho ignorado ficam fora do denominador.</p>
+      <p class="pequeno">Fora do cálculo: 41.209 registros.</p>
+    </details>
+  </section>
+  <section class="cartao">
+    <div class="pequeno">Taxa de internação em UTI</div>
+    <div class="valor">29,4%</div>
+    <div class="pequeno">
+      42.519 de 144.540
+      · 29/12/2024 a 25/06/2025</div>
+<p>A taxa de internação em UTI entre os casos de SRAG com informação disponível foi de 29,4% no período de 29 de dezembro de 2024 a 25 de junho de 2025. Essa métrica representa a proporção de casos internados em UTI, não a ocupação de leitos, que depende de dados adicionais do CNES.</p>    <details>
+      <summary class="pequeno">Como é calculada</summary>
+      <p class="pequeno">Casos internados em UTI divididos pelos casos com essa informação preenchida (sim ou não).</p>
+      <p class="pequeno"><strong>Limitação:</strong> Não é a taxa de ocupação de leitos: a base não traz a capacidade de UTI. A ocupação real exigiria cruzar com o cadastro de leitos do CNES.</p>
+      <p class="pequeno">Fora do cálculo: 20.857 registros.</p>
+    </details>
+  </section>
+  <section class="cartao">
+    <div class="pequeno">Taxa de vacinação contra COVID-19 entre os casos</div>
+    <div class="valor">76,1%</div>
+    <div class="pequeno">
+      124.808 de 164.025
+      · 29/12/2024 a 25/06/2025</div>
+    <div class="pequeno">Vacina contra gripe: 32,1%</div>
+<p>A taxa de vacinação contra COVID-19 entre os casos internados por SRAG foi de 76,1% no período de 29 de dezembro de 2024 a 25 de junho de 2025. Além disso, 32,1% dos internados receberam vacina contra a gripe. Esses dados indicam cobertura vacinal significativa entre os casos graves, embora não representem a cobertura vacinal da população geral.</p>    <details>
+      <summary class="pequeno">Como é calculada</summary>
+      <p class="pequeno">Casos com vacina contra COVID-19 divididos pelos casos com essa informação preenchida. A vacinação contra a gripe aparece como complemento.</p>
+      <p class="pequeno"><strong>Limitação:</strong> Mede a vacinação entre os internados por SRAG, não a cobertura vacinal da população.</p>
+      <p class="pequeno">Fora do cálculo: 1.372 registros.</p>
+    </details>
+  </section>
+</div>
+
+<h2>Evolução dos casos</h2>
+<figure tabindex="0" role="region" aria-label="Gráfico de casos">
+  <p class="pequeno dica">Arraste o gráfico para o lado para ver tudo.</p>
+  <div class="graf-escuro"><svg role="img" aria-label="Casos diários de SRAG — 30 dias até 25/06/2025. Barras de casos por dia." xmlns:xlink="http://www.w3.org/1999/xlink" width="437.45pt" height="298.423466pt" viewBox="0 0 437.45 298.423466" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="diario-escuro-figure_1">
+  <g id="diario-escuro-patch_1">
+   <path d="M 0 298.423466 
+L 437.45 298.423466 
+L 437.45 0 
+L 0 0 
+z
+" style="fill: #24272e"/>
+  </g>
+  <g id="diario-escuro-axes_1">
+   <g id="diario-escuro-patch_2">
+    <path d="M 39.65 243.758281 
+L 430.25 243.758281 
+L 430.25 21.998281 
+L 39.65 21.998281 
+z
+" style="fill: #24272e"/>
+   </g>
+   <g id="diario-escuro-matplotlib.axis_1">
+    <g id="diario-escuro-xtick_1">
+     <g id="diario-escuro-line2d_1">
+      <defs>
+       <path id="diario-escuro-m10679276c4" d="M 0 0 
+L 0 3.5 
+" style="stroke: #d6d9de; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#diario-escuro-m10679276c4" x="62.170866" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_1">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="62.170866" y="258.355937" transform="rotate(-0 62.170866 258.355937)">27/05</text>
+     </g>
+    </g>
+    <g id="diario-escuro-xtick_2">
+     <g id="diario-escuro-line2d_2">
+      <g>
+       <use xlink:href="#diario-escuro-m10679276c4" x="121.749878" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_2">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="121.749878" y="258.355937" transform="rotate(-0 121.749878 258.355937)">01/06</text>
+     </g>
+    </g>
+    <g id="diario-escuro-xtick_3">
+     <g id="diario-escuro-line2d_3">
+      <g>
+       <use xlink:href="#diario-escuro-m10679276c4" x="181.32889" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_3">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="181.32889" y="258.355937" transform="rotate(-0 181.32889 258.355937)">06/06</text>
+     </g>
+    </g>
+    <g id="diario-escuro-xtick_4">
+     <g id="diario-escuro-line2d_4">
+      <g>
+       <use xlink:href="#diario-escuro-m10679276c4" x="240.907901" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_4">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="240.907901" y="258.355937" transform="rotate(-0 240.907901 258.355937)">11/06</text>
+     </g>
+    </g>
+    <g id="diario-escuro-xtick_5">
+     <g id="diario-escuro-line2d_5">
+      <g>
+       <use xlink:href="#diario-escuro-m10679276c4" x="300.486913" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_5">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="300.486913" y="258.355937" transform="rotate(-0 300.486913 258.355937)">16/06</text>
+     </g>
+    </g>
+    <g id="diario-escuro-xtick_6">
+     <g id="diario-escuro-line2d_6">
+      <g>
+       <use xlink:href="#diario-escuro-m10679276c4" x="360.065924" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_6">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="360.065924" y="258.355937" transform="rotate(-0 360.065924 258.355937)">21/06</text>
+     </g>
+    </g>
+   </g>
+   <g id="diario-escuro-matplotlib.axis_2">
+    <g id="diario-escuro-ytick_1">
+     <g id="diario-escuro-line2d_7">
+      <path d="M 39.65 232.761918 
+L 430.25 232.761918 
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-escuro-line2d_8">
+      <defs>
+       <path id="diario-escuro-mbbca9671d6" d="M 0 0 
+L -3.5 0 
+" style="stroke: #d6d9de; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#diario-escuro-mbbca9671d6" x="39.65" y="232.761918" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_7">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="32.65" y="236.560746" transform="rotate(-0 32.65 236.560746)">0</text>
+     </g>
+    </g>
+    <g id="diario-escuro-ytick_2">
+     <g id="diario-escuro-line2d_9">
+      <path d="M 39.65 193.212343 
+L 430.25 193.212343 
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-escuro-line2d_10">
+      <g>
+       <use xlink:href="#diario-escuro-mbbca9671d6" x="39.65" y="193.212343" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_8">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="32.65" y="197.011171" transform="rotate(-0 32.65 197.011171)">500</text>
+     </g>
+    </g>
+    <g id="diario-escuro-ytick_3">
+     <g id="diario-escuro-line2d_11">
+      <path d="M 39.65 153.662769 
+L 430.25 153.662769 
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-escuro-line2d_12">
+      <g>
+       <use xlink:href="#diario-escuro-mbbca9671d6" x="39.65" y="153.662769" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_9">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="32.65" y="157.461597" transform="rotate(-0 32.65 157.461597)">1000</text>
+     </g>
+    </g>
+    <g id="diario-escuro-ytick_4">
+     <g id="diario-escuro-line2d_13">
+      <path d="M 39.65 114.113195 
+L 430.25 114.113195 
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-escuro-line2d_14">
+      <g>
+       <use xlink:href="#diario-escuro-mbbca9671d6" x="39.65" y="114.113195" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_10">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="32.65" y="117.912023" transform="rotate(-0 32.65 117.912023)">1500</text>
+     </g>
+    </g>
+    <g id="diario-escuro-ytick_5">
+     <g id="diario-escuro-line2d_15">
+      <path d="M 39.65 74.56362 
+L 430.25 74.56362 
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-escuro-line2d_16">
+      <g>
+       <use xlink:href="#diario-escuro-mbbca9671d6" x="39.65" y="74.56362" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_11">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="32.65" y="78.362449" transform="rotate(-0 32.65 78.362449)">2000</text>
+     </g>
+    </g>
+    <g id="diario-escuro-ytick_6">
+     <g id="diario-escuro-line2d_17">
+      <path d="M 39.65 35.014046 
+L 430.25 35.014046 
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-escuro-line2d_18">
+      <g>
+       <use xlink:href="#diario-escuro-mbbca9671d6" x="39.65" y="35.014046" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-escuro-text_12">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="32.65" y="38.812874" transform="rotate(-0 32.65 38.812874)">2500</text>
+     </g>
+    </g>
+   </g>
+   <g id="diario-escuro-patch_3">
+    <path d="M 57.404545 232.761918 
+L 66.937187 232.761918 
+L 66.937187 102.643818 
+L 57.404545 102.643818 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_4">
+    <path d="M 69.320348 232.761918 
+L 78.85299 232.761918 
+L 78.85299 99.163456 
+L 69.320348 99.163456 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_5">
+    <path d="M 81.23615 232.761918 
+L 90.768792 232.761918 
+L 90.768792 114.350492 
+L 81.23615 114.350492 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_6">
+    <path d="M 93.151952 232.761918 
+L 102.684594 232.761918 
+L 102.684594 101.378232 
+L 93.151952 101.378232 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_7">
+    <path d="M 105.067755 232.761918 
+L 114.600397 232.761918 
+L 114.600397 108.180759 
+L 105.067755 108.180759 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_8">
+    <path d="M 116.983557 232.761918 
+L 126.516199 232.761918 
+L 126.516199 49.48919 
+L 116.983557 49.48919 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_9">
+    <path d="M 128.899359 232.761918 
+L 138.432001 232.761918 
+L 138.432001 92.993722 
+L 128.899359 92.993722 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_10">
+    <path d="M 140.815162 232.761918 
+L 150.347804 232.761918 
+L 150.347804 107.943461 
+L 140.815162 107.943461 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_11">
+    <path d="M 152.730964 232.761918 
+L 162.263606 232.761918 
+L 162.263606 111.502923 
+L 152.730964 111.502923 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_12">
+    <path d="M 164.646766 232.761918 
+L 174.179408 232.761918 
+L 174.179408 105.728685 
+L 164.646766 105.728685 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_13">
+    <path d="M 176.562569 232.761918 
+L 186.09521 232.761918 
+L 186.09521 103.672107 
+L 176.562569 103.672107 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_14">
+    <path d="M 188.478371 232.761918 
+L 198.011013 232.761918 
+L 198.011013 119.412838 
+L 188.478371 119.412838 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_15">
+    <path d="M 200.394173 232.761918 
+L 209.926815 232.761918 
+L 209.926815 120.678424 
+L 200.394173 120.678424 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_16">
+    <path d="M 212.309976 232.761918 
+L 221.842617 232.761918 
+L 221.842617 119.887433 
+L 212.309976 119.887433 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_17">
+    <path d="M 224.225778 232.761918 
+L 233.75842 232.761918 
+L 233.75842 108.892651 
+L 224.225778 108.892651 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_18">
+    <path d="M 236.14158 232.761918 
+L 245.674222 232.761918 
+L 245.674222 142.351591 
+L 236.14158 142.351591 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="diario-escuro-patch_19">
+    <path d="M 248.057383 232.761918 
+L 257.590024 232.761918 
+L 257.590024 135.707262 
+L 248.057383 135.707262 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_20">
+    <path d="M 259.973185 232.761918 
+L 269.505827 232.761918 
+L 269.505827 131.515007 
+L 259.973185 131.515007 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_21">
+    <path d="M 271.888987 232.761918 
+L 281.421629 232.761918 
+L 281.421629 143.458979 
+L 271.888987 143.458979 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_22">
+    <path d="M 283.80479 232.761918 
+L 293.337431 232.761918 
+L 293.337431 141.560599 
+L 283.80479 141.560599 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_23">
+    <path d="M 295.720592 232.761918 
+L 305.253234 232.761918 
+L 305.253234 151.843489 
+L 295.720592 151.843489 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_24">
+    <path d="M 307.636394 232.761918 
+L 317.169036 232.761918 
+L 317.169036 168.533409 
+L 307.636394 168.533409 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_25">
+    <path d="M 319.552196 232.761918 
+L 329.084838 232.761918 
+L 329.084838 166.318633 
+L 319.552196 166.318633 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_26">
+    <path d="M 331.467999 232.761918 
+L 341.000641 232.761918 
+L 341.000641 172.883862 
+L 331.467999 172.883862 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_27">
+    <path d="M 343.383801 232.761918 
+L 352.916443 232.761918 
+L 352.916443 173.912151 
+L 343.383801 173.912151 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_28">
+    <path d="M 355.299603 232.761918 
+L 364.832245 232.761918 
+L 364.832245 195.901714 
+L 355.299603 195.901714 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_29">
+    <path d="M 367.215406 232.761918 
+L 376.748048 232.761918 
+L 376.748048 204.998116 
+L 367.215406 204.998116 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_30">
+    <path d="M 379.131208 232.761918 
+L 388.66385 232.761918 
+L 388.66385 215.043708 
+L 379.131208 215.043708 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_31">
+    <path d="M 391.04701 232.761918 
+L 400.579652 232.761918 
+L 400.579652 227.224977 
+L 391.04701 227.224977 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_32">
+    <path d="M 402.962813 232.761918 
+L 412.495455 232.761918 
+L 412.495455 231.496331 
+L 402.962813 231.496331 
+z
+" clip-path="url(#diario-escuro-p1c6a30eddd)" style="fill: url(#diario-escuro-h7685c0c48b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-escuro-patch_33">
+    <path d="M 39.65 243.758281 
+L 39.65 21.998281 
+" style="fill: none; stroke: #3a3f48; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="diario-escuro-patch_34">
+    <path d="M 39.65 243.758281 
+L 430.25 243.758281 
+" style="fill: none; stroke: #3a3f48; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="diario-escuro-text_13">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #d6d9de" x="39.65" y="15.998281" transform="rotate(-0 39.65 15.998281)">Casos diários de SRAG — 30 dias até 25/06/2025</text>
+   </g>
+   <g id="diario-escuro-legend_1">
+    <g id="diario-escuro-patch_35">
+     <path d="M 80.851016 285.461356 
+L 98.851016 285.461356 
+L 98.851016 279.161356 
+L 80.851016 279.161356 
+z
+" style="fill: #6fa8dc; stroke: #6fa8dc; stroke-linejoin: miter"/>
+    </g>
+    <g id="diario-escuro-text_14">
+     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #d6d9de" x="106.051016" y="285.461356" transform="rotate(-0 106.051016 285.461356)">Consolidado</text>
+    </g>
+    <g id="diario-escuro-patch_36">
+     <path d="M 179.191484 285.461356 
+L 197.191484 285.461356 
+L 197.191484 279.161356 
+L 179.191484 279.161356 
+z
+" style="fill: url(#diario-escuro-h09012a9f20)"/>
+    </g>
+    <g id="diario-escuro-text_15">
+     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #d6d9de" x="204.391484" y="285.461356" transform="rotate(-0 204.391484 285.461356)">Em consolidação (14 dias mais recentes)</text>
+    </g>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="diario-escuro-p1c6a30eddd">
+   <rect x="39.65" y="21.998281" width="390.6" height="221.76"/>
+  </clipPath>
+ </defs>
+ <defs>
+  <pattern id="diario-escuro-h7685c0c48b" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#5b86ad"/>
+   <path d="M -36 36 
+L 36 -36 
+M -30 42 
+L 42 -30 
+M -24 48 
+L 48 -24 
+M -18 54 
+L 54 -18 
+M -12 60 
+L 60 -12 
+M -6 66 
+L 66 -6 
+M 0 72 
+L 72 0 
+M 6 78 
+L 78 6 
+M 12 84 
+L 84 12 
+M 18 90 
+L 90 18 
+M 24 96 
+L 96 24 
+M 30 102 
+L 102 30 
+M 36 108 
+L 108 36 
+" style="fill: #24272e; stroke: #24272e; stroke-width: 1.0; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+  <pattern id="diario-escuro-h09012a9f20" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#5b86ad"/>
+   <path d="M -36 36 
+L 36 -36 
+M -30 42 
+L 42 -30 
+M -24 48 
+L 48 -24 
+M -18 54 
+L 54 -18 
+M -12 60 
+L 60 -12 
+M -6 66 
+L 66 -6 
+M 0 72 
+L 72 0 
+M 6 78 
+L 78 6 
+M 12 84 
+L 84 12 
+M 18 90 
+L 90 18 
+M 24 96 
+L 96 24 
+M 30 102 
+L 102 30 
+M 36 108 
+L 108 36 
+" style="fill: #000000; stroke: #000000; stroke-width: 1.0; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+ </defs>
+</svg>
+</div>
+  <div class="graf-claro"><svg role="img" aria-label="Casos diários de SRAG — 30 dias até 25/06/2025. Barras de casos por dia." xmlns:xlink="http://www.w3.org/1999/xlink" width="437.45pt" height="298.423466pt" viewBox="0 0 437.45 298.423466" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="diario-claro-figure_1">
+  <g id="diario-claro-patch_1">
+   <path d="M 0 298.423466 
+L 437.45 298.423466 
+L 437.45 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="diario-claro-axes_1">
+   <g id="diario-claro-patch_2">
+    <path d="M 39.65 243.758281 
+L 430.25 243.758281 
+L 430.25 21.998281 
+L 39.65 21.998281 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="diario-claro-matplotlib.axis_1">
+    <g id="diario-claro-xtick_1">
+     <g id="diario-claro-line2d_1">
+      <defs>
+       <path id="diario-claro-m109a4ef922" d="M 0 0 
+L 0 3.5 
+" style="stroke: #2b2f36; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#diario-claro-m109a4ef922" x="62.170866" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_1">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="62.170866" y="258.355937" transform="rotate(-0 62.170866 258.355937)">27/05</text>
+     </g>
+    </g>
+    <g id="diario-claro-xtick_2">
+     <g id="diario-claro-line2d_2">
+      <g>
+       <use xlink:href="#diario-claro-m109a4ef922" x="121.749878" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_2">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="121.749878" y="258.355937" transform="rotate(-0 121.749878 258.355937)">01/06</text>
+     </g>
+    </g>
+    <g id="diario-claro-xtick_3">
+     <g id="diario-claro-line2d_3">
+      <g>
+       <use xlink:href="#diario-claro-m109a4ef922" x="181.32889" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_3">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="181.32889" y="258.355937" transform="rotate(-0 181.32889 258.355937)">06/06</text>
+     </g>
+    </g>
+    <g id="diario-claro-xtick_4">
+     <g id="diario-claro-line2d_4">
+      <g>
+       <use xlink:href="#diario-claro-m109a4ef922" x="240.907901" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_4">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="240.907901" y="258.355937" transform="rotate(-0 240.907901 258.355937)">11/06</text>
+     </g>
+    </g>
+    <g id="diario-claro-xtick_5">
+     <g id="diario-claro-line2d_5">
+      <g>
+       <use xlink:href="#diario-claro-m109a4ef922" x="300.486913" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_5">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="300.486913" y="258.355937" transform="rotate(-0 300.486913 258.355937)">16/06</text>
+     </g>
+    </g>
+    <g id="diario-claro-xtick_6">
+     <g id="diario-claro-line2d_6">
+      <g>
+       <use xlink:href="#diario-claro-m109a4ef922" x="360.065924" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_6">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="360.065924" y="258.355937" transform="rotate(-0 360.065924 258.355937)">21/06</text>
+     </g>
+    </g>
+   </g>
+   <g id="diario-claro-matplotlib.axis_2">
+    <g id="diario-claro-ytick_1">
+     <g id="diario-claro-line2d_7">
+      <path d="M 39.65 232.761918 
+L 430.25 232.761918 
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-claro-line2d_8">
+      <defs>
+       <path id="diario-claro-mfadcb3daae" d="M 0 0 
+L -3.5 0 
+" style="stroke: #2b2f36; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#diario-claro-mfadcb3daae" x="39.65" y="232.761918" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_7">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="32.65" y="236.560746" transform="rotate(-0 32.65 236.560746)">0</text>
+     </g>
+    </g>
+    <g id="diario-claro-ytick_2">
+     <g id="diario-claro-line2d_9">
+      <path d="M 39.65 193.212343 
+L 430.25 193.212343 
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-claro-line2d_10">
+      <g>
+       <use xlink:href="#diario-claro-mfadcb3daae" x="39.65" y="193.212343" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_8">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="32.65" y="197.011171" transform="rotate(-0 32.65 197.011171)">500</text>
+     </g>
+    </g>
+    <g id="diario-claro-ytick_3">
+     <g id="diario-claro-line2d_11">
+      <path d="M 39.65 153.662769 
+L 430.25 153.662769 
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-claro-line2d_12">
+      <g>
+       <use xlink:href="#diario-claro-mfadcb3daae" x="39.65" y="153.662769" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_9">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="32.65" y="157.461597" transform="rotate(-0 32.65 157.461597)">1000</text>
+     </g>
+    </g>
+    <g id="diario-claro-ytick_4">
+     <g id="diario-claro-line2d_13">
+      <path d="M 39.65 114.113195 
+L 430.25 114.113195 
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-claro-line2d_14">
+      <g>
+       <use xlink:href="#diario-claro-mfadcb3daae" x="39.65" y="114.113195" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_10">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="32.65" y="117.912023" transform="rotate(-0 32.65 117.912023)">1500</text>
+     </g>
+    </g>
+    <g id="diario-claro-ytick_5">
+     <g id="diario-claro-line2d_15">
+      <path d="M 39.65 74.56362 
+L 430.25 74.56362 
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-claro-line2d_16">
+      <g>
+       <use xlink:href="#diario-claro-mfadcb3daae" x="39.65" y="74.56362" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_11">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="32.65" y="78.362449" transform="rotate(-0 32.65 78.362449)">2000</text>
+     </g>
+    </g>
+    <g id="diario-claro-ytick_6">
+     <g id="diario-claro-line2d_17">
+      <path d="M 39.65 35.014046 
+L 430.25 35.014046 
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="diario-claro-line2d_18">
+      <g>
+       <use xlink:href="#diario-claro-mfadcb3daae" x="39.65" y="35.014046" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="diario-claro-text_12">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="32.65" y="38.812874" transform="rotate(-0 32.65 38.812874)">2500</text>
+     </g>
+    </g>
+   </g>
+   <g id="diario-claro-patch_3">
+    <path d="M 57.404545 232.761918 
+L 66.937187 232.761918 
+L 66.937187 102.643818 
+L 57.404545 102.643818 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_4">
+    <path d="M 69.320348 232.761918 
+L 78.85299 232.761918 
+L 78.85299 99.163456 
+L 69.320348 99.163456 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_5">
+    <path d="M 81.23615 232.761918 
+L 90.768792 232.761918 
+L 90.768792 114.350492 
+L 81.23615 114.350492 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_6">
+    <path d="M 93.151952 232.761918 
+L 102.684594 232.761918 
+L 102.684594 101.378232 
+L 93.151952 101.378232 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_7">
+    <path d="M 105.067755 232.761918 
+L 114.600397 232.761918 
+L 114.600397 108.180759 
+L 105.067755 108.180759 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_8">
+    <path d="M 116.983557 232.761918 
+L 126.516199 232.761918 
+L 126.516199 49.48919 
+L 116.983557 49.48919 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_9">
+    <path d="M 128.899359 232.761918 
+L 138.432001 232.761918 
+L 138.432001 92.993722 
+L 128.899359 92.993722 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_10">
+    <path d="M 140.815162 232.761918 
+L 150.347804 232.761918 
+L 150.347804 107.943461 
+L 140.815162 107.943461 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_11">
+    <path d="M 152.730964 232.761918 
+L 162.263606 232.761918 
+L 162.263606 111.502923 
+L 152.730964 111.502923 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_12">
+    <path d="M 164.646766 232.761918 
+L 174.179408 232.761918 
+L 174.179408 105.728685 
+L 164.646766 105.728685 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_13">
+    <path d="M 176.562569 232.761918 
+L 186.09521 232.761918 
+L 186.09521 103.672107 
+L 176.562569 103.672107 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_14">
+    <path d="M 188.478371 232.761918 
+L 198.011013 232.761918 
+L 198.011013 119.412838 
+L 188.478371 119.412838 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_15">
+    <path d="M 200.394173 232.761918 
+L 209.926815 232.761918 
+L 209.926815 120.678424 
+L 200.394173 120.678424 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_16">
+    <path d="M 212.309976 232.761918 
+L 221.842617 232.761918 
+L 221.842617 119.887433 
+L 212.309976 119.887433 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_17">
+    <path d="M 224.225778 232.761918 
+L 233.75842 232.761918 
+L 233.75842 108.892651 
+L 224.225778 108.892651 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_18">
+    <path d="M 236.14158 232.761918 
+L 245.674222 232.761918 
+L 245.674222 142.351591 
+L 236.14158 142.351591 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: #2f6db5"/>
+   </g>
+   <g id="diario-claro-patch_19">
+    <path d="M 248.057383 232.761918 
+L 257.590024 232.761918 
+L 257.590024 135.707262 
+L 248.057383 135.707262 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_20">
+    <path d="M 259.973185 232.761918 
+L 269.505827 232.761918 
+L 269.505827 131.515007 
+L 259.973185 131.515007 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_21">
+    <path d="M 271.888987 232.761918 
+L 281.421629 232.761918 
+L 281.421629 143.458979 
+L 271.888987 143.458979 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_22">
+    <path d="M 283.80479 232.761918 
+L 293.337431 232.761918 
+L 293.337431 141.560599 
+L 283.80479 141.560599 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_23">
+    <path d="M 295.720592 232.761918 
+L 305.253234 232.761918 
+L 305.253234 151.843489 
+L 295.720592 151.843489 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_24">
+    <path d="M 307.636394 232.761918 
+L 317.169036 232.761918 
+L 317.169036 168.533409 
+L 307.636394 168.533409 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_25">
+    <path d="M 319.552196 232.761918 
+L 329.084838 232.761918 
+L 329.084838 166.318633 
+L 319.552196 166.318633 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_26">
+    <path d="M 331.467999 232.761918 
+L 341.000641 232.761918 
+L 341.000641 172.883862 
+L 331.467999 172.883862 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_27">
+    <path d="M 343.383801 232.761918 
+L 352.916443 232.761918 
+L 352.916443 173.912151 
+L 343.383801 173.912151 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_28">
+    <path d="M 355.299603 232.761918 
+L 364.832245 232.761918 
+L 364.832245 195.901714 
+L 355.299603 195.901714 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_29">
+    <path d="M 367.215406 232.761918 
+L 376.748048 232.761918 
+L 376.748048 204.998116 
+L 367.215406 204.998116 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_30">
+    <path d="M 379.131208 232.761918 
+L 388.66385 232.761918 
+L 388.66385 215.043708 
+L 379.131208 215.043708 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_31">
+    <path d="M 391.04701 232.761918 
+L 400.579652 232.761918 
+L 400.579652 227.224977 
+L 391.04701 227.224977 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_32">
+    <path d="M 402.962813 232.761918 
+L 412.495455 232.761918 
+L 412.495455 231.496331 
+L 402.962813 231.496331 
+z
+" clip-path="url(#diario-claro-p1c6a30eddd)" style="fill: url(#diario-claro-h7fbf65768b); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="diario-claro-patch_33">
+    <path d="M 39.65 243.758281 
+L 39.65 21.998281 
+" style="fill: none; stroke: #e3e6ea; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="diario-claro-patch_34">
+    <path d="M 39.65 243.758281 
+L 430.25 243.758281 
+" style="fill: none; stroke: #e3e6ea; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="diario-claro-text_13">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #2b2f36" x="39.65" y="15.998281" transform="rotate(-0 39.65 15.998281)">Casos diários de SRAG — 30 dias até 25/06/2025</text>
+   </g>
+   <g id="diario-claro-legend_1">
+    <g id="diario-claro-patch_35">
+     <path d="M 80.851016 285.461356 
+L 98.851016 285.461356 
+L 98.851016 279.161356 
+L 80.851016 279.161356 
+z
+" style="fill: #2f6db5; stroke: #2f6db5; stroke-linejoin: miter"/>
+    </g>
+    <g id="diario-claro-text_14">
+     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #2b2f36" x="106.051016" y="285.461356" transform="rotate(-0 106.051016 285.461356)">Consolidado</text>
+    </g>
+    <g id="diario-claro-patch_36">
+     <path d="M 179.191484 285.461356 
+L 197.191484 285.461356 
+L 197.191484 279.161356 
+L 179.191484 279.161356 
+z
+" style="fill: url(#diario-claro-hfebccaffab)"/>
+    </g>
+    <g id="diario-claro-text_15">
+     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #2b2f36" x="204.391484" y="285.461356" transform="rotate(-0 204.391484 285.461356)">Em consolidação (14 dias mais recentes)</text>
+    </g>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="diario-claro-p1c6a30eddd">
+   <rect x="39.65" y="21.998281" width="390.6" height="221.76"/>
+  </clipPath>
+ </defs>
+ <defs>
+  <pattern id="diario-claro-h7fbf65768b" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#6495cc"/>
+   <path d="M -36 36 
+L 36 -36 
+M -30 42 
+L 42 -30 
+M -24 48 
+L 48 -24 
+M -18 54 
+L 54 -18 
+M -12 60 
+L 60 -12 
+M -6 66 
+L 66 -6 
+M 0 72 
+L 72 0 
+M 6 78 
+L 78 6 
+M 12 84 
+L 84 12 
+M 18 90 
+L 90 18 
+M 24 96 
+L 96 24 
+M 30 102 
+L 102 30 
+M 36 108 
+L 108 36 
+" style="fill: #ffffff; stroke: #ffffff; stroke-width: 1.0; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+  <pattern id="diario-claro-hfebccaffab" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#6495cc"/>
+   <path d="M -36 36 
+L 36 -36 
+M -30 42 
+L 42 -30 
+M -24 48 
+L 48 -24 
+M -18 54 
+L 54 -18 
+M -12 60 
+L 60 -12 
+M -6 66 
+L 66 -6 
+M 0 72 
+L 72 0 
+M 6 78 
+L 78 6 
+M 12 84 
+L 84 12 
+M 18 90 
+L 90 18 
+M 24 96 
+L 96 24 
+M 30 102 
+L 102 30 
+M 36 108 
+L 108 36 
+" style="fill: #000000; stroke: #000000; stroke-width: 1.0; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+ </defs>
+</svg>
+</div>
+  <figcaption class="pequeno">Últimos 30 dias até a data de referência. Os 14 dias mais recentes ainda estão em consolidação (notificações atrasadas).
+    <details>
+      <summary>Como ler as células <code>&lt;5</code> e <code>oculto</code></summary>
+      <p>Contagens de 1 a 4 aparecem como &#34;&lt;5&#34;. Quando há alguma, a menor contagem exibida também aparece como &#34;oculto&#34; (supressão complementar): sem isso, o total menos as demais revelaria o valor escondido. O total é exato e inclui as células escondidas. Aqui o oculto fica no mesmo trecho do valor escondido (cada semana do aumento de casos, os dias em consolidação, cada mês), porque a soma desses trechos também é publicada.</p>
+    </details>
+  </figcaption>
+</figure>
+<figure tabindex="0" role="region" aria-label="Gráfico de casos">
+  <p class="pequeno dica">Arraste o gráfico para o lado para ver tudo.</p>
+  <div class="graf-escuro"><svg role="img" aria-label="Casos mensais de SRAG — últimos 12 meses. Barras de casos por mês." xmlns:xlink="http://www.w3.org/1999/xlink" width="443.8125pt" height="316.370984pt" viewBox="0 0 443.8125 316.370984" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="mensal-escuro-figure_1">
+  <g id="mensal-escuro-patch_1">
+   <path d="M 0 316.370984 
+L 443.8125 316.370984 
+L 443.8125 0 
+L 0 0 
+z
+" style="fill: #24272e"/>
+  </g>
+  <g id="mensal-escuro-axes_1">
+   <g id="mensal-escuro-patch_2">
+    <path d="M 46.0125 243.758281 
+L 436.6125 243.758281 
+L 436.6125 21.998281 
+L 46.0125 21.998281 
+z
+" style="fill: #24272e"/>
+   </g>
+   <g id="mensal-escuro-matplotlib.axis_1">
+    <g id="mensal-escuro-xtick_1">
+     <g id="mensal-escuro-line2d_1">
+      <defs>
+       <path id="mensal-escuro-m10679276c4" d="M 0 0 
+L 0 3.5 
+" style="stroke: #d6d9de; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="75.804025" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_1">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(54.315161 275.921339) rotate(-45)">jul/24</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_2">
+     <g id="mensal-escuro-line2d_2">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="105.896475" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_2">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(79.66889 280.659507) rotate(-45)">ago/24</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_3">
+     <g id="mensal-escuro-line2d_3">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="135.988925" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_3">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(112.103632 278.317216) rotate(-45)">set/24</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_4">
+     <g id="mensal-escuro-line2d_4">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="166.081375" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_4">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(141.422683 279.090614) rotate(-45)">out/24</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_5">
+     <g id="mensal-escuro-line2d_5">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="196.173825" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_5">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(170.102025 280.503722) rotate(-45)">nov/24</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_6">
+     <g id="mensal-escuro-line2d_6">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="226.266275" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_6">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(200.636416 280.062333) rotate(-45)">dez/24</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_7">
+     <g id="mensal-escuro-line2d_7">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="256.358725" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_7">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(232.501053 278.290147) rotate(-45)">jan/25</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_8">
+     <g id="mensal-escuro-line2d_8">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="286.451175" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_8">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(262.34712 278.536529) rotate(-45)">fev/25</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_9">
+     <g id="mensal-escuro-line2d_9">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="316.543625" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_9">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(289.337139 281.638408) rotate(-45)">mar/25</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_10">
+     <g id="mensal-escuro-line2d_10">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="346.636075" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_10">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(321.828228 279.240321) rotate(-45)">abr/25</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_11">
+     <g id="mensal-escuro-line2d_11">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="376.728525" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_11">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(350.46448 280.696519) rotate(-45)">mai/25</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-xtick_12">
+     <g id="mensal-escuro-line2d_12">
+      <g>
+       <use xlink:href="#mensal-escuro-m10679276c4" x="406.820975" y="243.758281" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_12">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #d6d9de" transform="translate(382.815252 278.438197) rotate(-45)">jun/25</text>
+     </g>
+    </g>
+   </g>
+   <g id="mensal-escuro-matplotlib.axis_2">
+    <g id="mensal-escuro-ytick_1">
+     <g id="mensal-escuro-line2d_13">
+      <path d="M 46.0125 232.761918 
+L 436.6125 232.761918 
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-escuro-line2d_14">
+      <defs>
+       <path id="mensal-escuro-mbbca9671d6" d="M 0 0 
+L -3.5 0 
+" style="stroke: #d6d9de; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#mensal-escuro-mbbca9671d6" x="46.0125" y="232.761918" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_13">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="39.0125" y="236.560746" transform="rotate(-0 39.0125 236.560746)">0</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-ytick_2">
+     <g id="mensal-escuro-line2d_15">
+      <path d="M 46.0125 198.489959 
+L 436.6125 198.489959 
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-escuro-line2d_16">
+      <g>
+       <use xlink:href="#mensal-escuro-mbbca9671d6" x="46.0125" y="198.489959" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_14">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="39.0125" y="202.288787" transform="rotate(-0 39.0125 202.288787)">10000</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-ytick_3">
+     <g id="mensal-escuro-line2d_17">
+      <path d="M 46.0125 164.218 
+L 436.6125 164.218 
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-escuro-line2d_18">
+      <g>
+       <use xlink:href="#mensal-escuro-mbbca9671d6" x="46.0125" y="164.218" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_15">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="39.0125" y="168.016828" transform="rotate(-0 39.0125 168.016828)">20000</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-ytick_4">
+     <g id="mensal-escuro-line2d_19">
+      <path d="M 46.0125 129.946041 
+L 436.6125 129.946041 
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-escuro-line2d_20">
+      <g>
+       <use xlink:href="#mensal-escuro-mbbca9671d6" x="46.0125" y="129.946041" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_16">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="39.0125" y="133.744869" transform="rotate(-0 39.0125 133.744869)">30000</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-ytick_5">
+     <g id="mensal-escuro-line2d_21">
+      <path d="M 46.0125 95.674082 
+L 436.6125 95.674082 
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-escuro-line2d_22">
+      <g>
+       <use xlink:href="#mensal-escuro-mbbca9671d6" x="46.0125" y="95.674082" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_17">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="39.0125" y="99.47291" transform="rotate(-0 39.0125 99.47291)">40000</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-ytick_6">
+     <g id="mensal-escuro-line2d_23">
+      <path d="M 46.0125 61.402123 
+L 436.6125 61.402123 
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-escuro-line2d_24">
+      <g>
+       <use xlink:href="#mensal-escuro-mbbca9671d6" x="46.0125" y="61.402123" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_18">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="39.0125" y="65.200951" transform="rotate(-0 39.0125 65.200951)">50000</text>
+     </g>
+    </g>
+    <g id="mensal-escuro-ytick_7">
+     <g id="mensal-escuro-line2d_25">
+      <path d="M 46.0125 27.130164 
+L 436.6125 27.130164 
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: none; stroke: #3a3f48; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-escuro-line2d_26">
+      <g>
+       <use xlink:href="#mensal-escuro-mbbca9671d6" x="46.0125" y="27.130164" style="fill: #d6d9de; stroke: #d6d9de; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-escuro-text_19">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #d6d9de" x="39.0125" y="30.928992" transform="rotate(-0 39.0125 30.928992)">60000</text>
+     </g>
+    </g>
+   </g>
+   <g id="mensal-escuro-patch_3">
+    <path d="M 63.767045 232.761918 
+L 87.841005 232.761918 
+L 87.841005 232.761918 
+L 63.767045 232.761918 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_4">
+    <path d="M 93.859495 232.761918 
+L 117.933455 232.761918 
+L 117.933455 232.761918 
+L 93.859495 232.761918 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_5">
+    <path d="M 123.951945 232.761918 
+L 148.025905 232.761918 
+L 148.025905 232.761918 
+L 123.951945 232.761918 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_6">
+    <path d="M 154.044395 232.761918 
+L 178.118355 232.761918 
+L 178.118355 232.761918 
+L 154.044395 232.761918 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_7">
+    <path d="M 184.136845 232.761918 
+L 208.210805 232.761918 
+L 208.210805 232.761918 
+L 184.136845 232.761918 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_8">
+    <path d="M 214.229295 232.761918 
+L 238.303255 232.761918 
+L 238.303255 228.525903 
+L 214.229295 228.525903 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: url(#mensal-escuro-hc81549502b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="mensal-escuro-patch_9">
+    <path d="M 244.321745 232.761918 
+L 268.395705 232.761918 
+L 268.395705 184.222542 
+L 244.321745 184.222542 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_10">
+    <path d="M 274.414195 232.761918 
+L 298.488155 232.761918 
+L 298.488155 178.886398 
+L 274.414195 178.886398 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_11">
+    <path d="M 304.506645 232.761918 
+L 328.580605 232.761918 
+L 328.580605 158.467165 
+L 304.506645 158.467165 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_12">
+    <path d="M 334.599095 232.761918 
+L 358.673055 232.761918 
+L 358.673055 124.417974 
+L 334.599095 124.417974 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_13">
+    <path d="M 364.691545 232.761918 
+L 388.765505 232.761918 
+L 388.765505 49.48919 
+L 364.691545 49.48919 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: #6fa8dc"/>
+   </g>
+   <g id="mensal-escuro-patch_14">
+    <path d="M 394.783995 232.761918 
+L 418.857955 232.761918 
+L 418.857955 138.476332 
+L 394.783995 138.476332 
+z
+" clip-path="url(#mensal-escuro-p0308baa3ea)" style="fill: url(#mensal-escuro-hc81549502b); stroke: #24272e; stroke-linejoin: miter"/>
+   </g>
+   <g id="mensal-escuro-patch_15">
+    <path d="M 46.0125 243.758281 
+L 46.0125 21.998281 
+" style="fill: none; stroke: #3a3f48; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="mensal-escuro-patch_16">
+    <path d="M 46.0125 243.758281 
+L 436.6125 243.758281 
+" style="fill: none; stroke: #3a3f48; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="mensal-escuro-text_20">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="226.266275" y="224.363794" transform="rotate(-0 226.266275 224.363794)">1.236</text>
+   </g>
+   <g id="mensal-escuro-text_21">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="256.358725" y="180.060433" transform="rotate(-0 256.358725 180.060433)">14.163</text>
+   </g>
+   <g id="mensal-escuro-text_22">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="286.451175" y="174.724289" transform="rotate(-0 286.451175 174.724289)">15.720</text>
+   </g>
+   <g id="mensal-escuro-text_23">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="316.543625" y="154.305056" transform="rotate(-0 316.543625 154.305056)">21.678</text>
+   </g>
+   <g id="mensal-escuro-text_24">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="346.636075" y="120.255865" transform="rotate(-0 346.636075 120.255865)">31.613</text>
+   </g>
+   <g id="mensal-escuro-text_25">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="376.728525" y="45.327081" transform="rotate(-0 376.728525 45.327081)">53.476</text>
+   </g>
+   <g id="mensal-escuro-text_26">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #d6d9de" x="406.820975" y="134.314222" transform="rotate(-0 406.820975 134.314222)">27.511</text>
+   </g>
+   <g id="mensal-escuro-text_27">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #9aa0a8" transform="translate(78.322268 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-escuro-text_28">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #9aa0a8" transform="translate(108.414718 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-escuro-text_29">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #9aa0a8" transform="translate(138.507167 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-escuro-text_30">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #9aa0a8" transform="translate(168.599617 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-escuro-text_31">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #9aa0a8" transform="translate(198.692067 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-escuro-text_32">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #d6d9de" x="46.0125" y="15.998281" transform="rotate(-0 46.0125 15.998281)">Casos mensais de SRAG — últimos 12 meses</text>
+   </g>
+   <g id="mensal-escuro-legend_1">
+    <g id="mensal-escuro-patch_17">
+     <path d="M 150.158672 303.408875 
+L 168.158672 303.408875 
+L 168.158672 297.108875 
+L 150.158672 297.108875 
+z
+" style="fill: #6fa8dc; stroke: #6fa8dc; stroke-linejoin: miter"/>
+    </g>
+    <g id="mensal-escuro-text_33">
+     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #d6d9de" x="175.358672" y="303.408875" transform="rotate(-0 175.358672 303.408875)">Mês completo</text>
+    </g>
+    <g id="mensal-escuro-patch_18">
+     <path d="M 256.219453 303.408875 
+L 274.219453 303.408875 
+L 274.219453 297.108875 
+L 256.219453 297.108875 
+z
+" style="fill: url(#mensal-escuro-hf99329a38c)"/>
+    </g>
+    <g id="mensal-escuro-text_34">
+     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #d6d9de" x="281.419453" y="303.408875" transform="rotate(-0 281.419453 303.408875)">Mês parcial</text>
+    </g>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="mensal-escuro-p0308baa3ea">
+   <rect x="46.0125" y="21.998281" width="390.6" height="221.76"/>
+  </clipPath>
+ </defs>
+ <defs>
+  <pattern id="mensal-escuro-hc81549502b" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#6fa8dc"/>
+   <path d="M -36 36 
+L 36 -36 
+M -30 42 
+L 42 -30 
+M -24 48 
+L 48 -24 
+M -18 54 
+L 54 -18 
+M -12 60 
+L 60 -12 
+M -6 66 
+L 66 -6 
+M 0 72 
+L 72 0 
+M 6 78 
+L 78 6 
+M 12 84 
+L 84 12 
+M 18 90 
+L 90 18 
+M 24 96 
+L 96 24 
+M 30 102 
+L 102 30 
+M 36 108 
+L 108 36 
+" style="fill: #24272e; stroke: #24272e; stroke-width: 1.0; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+  <pattern id="mensal-escuro-hf99329a38c" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#6fa8dc"/>
+   <path d="M -36 36 
+L 36 -36 
+M -30 42 
+L 42 -30 
+M -24 48 
+L 48 -24 
+M -18 54 
+L 54 -18 
+M -12 60 
+L 60 -12 
+M -6 66 
+L 66 -6 
+M 0 72 
+L 72 0 
+M 6 78 
+L 78 6 
+M 12 84 
+L 84 12 
+M 18 90 
+L 90 18 
+M 24 96 
+L 96 24 
+M 30 102 
+L 102 30 
+M 36 108 
+L 108 36 
+" style="fill: #000000; stroke: #000000; stroke-width: 1.0; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+ </defs>
+</svg>
+</div>
+  <div class="graf-claro"><svg role="img" aria-label="Casos mensais de SRAG — últimos 12 meses. Barras de casos por mês." xmlns:xlink="http://www.w3.org/1999/xlink" width="443.8125pt" height="316.370984pt" viewBox="0 0 443.8125 316.370984" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="mensal-claro-figure_1">
+  <g id="mensal-claro-patch_1">
+   <path d="M 0 316.370984 
+L 443.8125 316.370984 
+L 443.8125 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="mensal-claro-axes_1">
+   <g id="mensal-claro-patch_2">
+    <path d="M 46.0125 243.758281 
+L 436.6125 243.758281 
+L 436.6125 21.998281 
+L 46.0125 21.998281 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="mensal-claro-matplotlib.axis_1">
+    <g id="mensal-claro-xtick_1">
+     <g id="mensal-claro-line2d_1">
+      <defs>
+       <path id="mensal-claro-m109a4ef922" d="M 0 0 
+L 0 3.5 
+" style="stroke: #2b2f36; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="75.804025" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_1">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(54.315161 275.921339) rotate(-45)">jul/24</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_2">
+     <g id="mensal-claro-line2d_2">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="105.896475" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_2">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(79.66889 280.659507) rotate(-45)">ago/24</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_3">
+     <g id="mensal-claro-line2d_3">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="135.988925" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_3">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(112.103632 278.317216) rotate(-45)">set/24</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_4">
+     <g id="mensal-claro-line2d_4">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="166.081375" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_4">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(141.422683 279.090614) rotate(-45)">out/24</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_5">
+     <g id="mensal-claro-line2d_5">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="196.173825" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_5">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(170.102025 280.503722) rotate(-45)">nov/24</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_6">
+     <g id="mensal-claro-line2d_6">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="226.266275" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_6">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(200.636416 280.062333) rotate(-45)">dez/24</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_7">
+     <g id="mensal-claro-line2d_7">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="256.358725" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_7">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(232.501053 278.290147) rotate(-45)">jan/25</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_8">
+     <g id="mensal-claro-line2d_8">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="286.451175" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_8">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(262.34712 278.536529) rotate(-45)">fev/25</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_9">
+     <g id="mensal-claro-line2d_9">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="316.543625" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_9">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(289.337139 281.638408) rotate(-45)">mar/25</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_10">
+     <g id="mensal-claro-line2d_10">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="346.636075" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_10">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(321.828228 279.240321) rotate(-45)">abr/25</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_11">
+     <g id="mensal-claro-line2d_11">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="376.728525" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_11">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(350.46448 280.696519) rotate(-45)">mai/25</text>
+     </g>
+    </g>
+    <g id="mensal-claro-xtick_12">
+     <g id="mensal-claro-line2d_12">
+      <g>
+       <use xlink:href="#mensal-claro-m109a4ef922" x="406.820975" y="243.758281" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_12">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #2b2f36" transform="translate(382.815252 278.438197) rotate(-45)">jun/25</text>
+     </g>
+    </g>
+   </g>
+   <g id="mensal-claro-matplotlib.axis_2">
+    <g id="mensal-claro-ytick_1">
+     <g id="mensal-claro-line2d_13">
+      <path d="M 46.0125 232.761918 
+L 436.6125 232.761918 
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-claro-line2d_14">
+      <defs>
+       <path id="mensal-claro-mfadcb3daae" d="M 0 0 
+L -3.5 0 
+" style="stroke: #2b2f36; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#mensal-claro-mfadcb3daae" x="46.0125" y="232.761918" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_13">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="39.0125" y="236.560746" transform="rotate(-0 39.0125 236.560746)">0</text>
+     </g>
+    </g>
+    <g id="mensal-claro-ytick_2">
+     <g id="mensal-claro-line2d_15">
+      <path d="M 46.0125 198.489959 
+L 436.6125 198.489959 
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-claro-line2d_16">
+      <g>
+       <use xlink:href="#mensal-claro-mfadcb3daae" x="46.0125" y="198.489959" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_14">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="39.0125" y="202.288787" transform="rotate(-0 39.0125 202.288787)">10000</text>
+     </g>
+    </g>
+    <g id="mensal-claro-ytick_3">
+     <g id="mensal-claro-line2d_17">
+      <path d="M 46.0125 164.218 
+L 436.6125 164.218 
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-claro-line2d_18">
+      <g>
+       <use xlink:href="#mensal-claro-mfadcb3daae" x="46.0125" y="164.218" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_15">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="39.0125" y="168.016828" transform="rotate(-0 39.0125 168.016828)">20000</text>
+     </g>
+    </g>
+    <g id="mensal-claro-ytick_4">
+     <g id="mensal-claro-line2d_19">
+      <path d="M 46.0125 129.946041 
+L 436.6125 129.946041 
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-claro-line2d_20">
+      <g>
+       <use xlink:href="#mensal-claro-mfadcb3daae" x="46.0125" y="129.946041" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_16">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="39.0125" y="133.744869" transform="rotate(-0 39.0125 133.744869)">30000</text>
+     </g>
+    </g>
+    <g id="mensal-claro-ytick_5">
+     <g id="mensal-claro-line2d_21">
+      <path d="M 46.0125 95.674082 
+L 436.6125 95.674082 
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-claro-line2d_22">
+      <g>
+       <use xlink:href="#mensal-claro-mfadcb3daae" x="46.0125" y="95.674082" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_17">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="39.0125" y="99.47291" transform="rotate(-0 39.0125 99.47291)">40000</text>
+     </g>
+    </g>
+    <g id="mensal-claro-ytick_6">
+     <g id="mensal-claro-line2d_23">
+      <path d="M 46.0125 61.402123 
+L 436.6125 61.402123 
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-claro-line2d_24">
+      <g>
+       <use xlink:href="#mensal-claro-mfadcb3daae" x="46.0125" y="61.402123" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_18">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="39.0125" y="65.200951" transform="rotate(-0 39.0125 65.200951)">50000</text>
+     </g>
+    </g>
+    <g id="mensal-claro-ytick_7">
+     <g id="mensal-claro-line2d_25">
+      <path d="M 46.0125 27.130164 
+L 436.6125 27.130164 
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: none; stroke: #e3e6ea; stroke-width: 0.6; stroke-linecap: square"/>
+     </g>
+     <g id="mensal-claro-line2d_26">
+      <g>
+       <use xlink:href="#mensal-claro-mfadcb3daae" x="46.0125" y="27.130164" style="fill: #2b2f36; stroke: #2b2f36; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="mensal-claro-text_19">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #2b2f36" x="39.0125" y="30.928992" transform="rotate(-0 39.0125 30.928992)">60000</text>
+     </g>
+    </g>
+   </g>
+   <g id="mensal-claro-patch_3">
+    <path d="M 63.767045 232.761918 
+L 87.841005 232.761918 
+L 87.841005 232.761918 
+L 63.767045 232.761918 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_4">
+    <path d="M 93.859495 232.761918 
+L 117.933455 232.761918 
+L 117.933455 232.761918 
+L 93.859495 232.761918 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_5">
+    <path d="M 123.951945 232.761918 
+L 148.025905 232.761918 
+L 148.025905 232.761918 
+L 123.951945 232.761918 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_6">
+    <path d="M 154.044395 232.761918 
+L 178.118355 232.761918 
+L 178.118355 232.761918 
+L 154.044395 232.761918 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_7">
+    <path d="M 184.136845 232.761918 
+L 208.210805 232.761918 
+L 208.210805 232.761918 
+L 184.136845 232.761918 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_8">
+    <path d="M 214.229295 232.761918 
+L 238.303255 232.761918 
+L 238.303255 228.525903 
+L 214.229295 228.525903 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: url(#mensal-claro-hf7931dc660); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="mensal-claro-patch_9">
+    <path d="M 244.321745 232.761918 
+L 268.395705 232.761918 
+L 268.395705 184.222542 
+L 244.321745 184.222542 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_10">
+    <path d="M 274.414195 232.761918 
+L 298.488155 232.761918 
+L 298.488155 178.886398 
+L 274.414195 178.886398 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_11">
+    <path d="M 304.506645 232.761918 
+L 328.580605 232.761918 
+L 328.580605 158.467165 
+L 304.506645 158.467165 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_12">
+    <path d="M 334.599095 232.761918 
+L 358.673055 232.761918 
+L 358.673055 124.417974 
+L 334.599095 124.417974 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_13">
+    <path d="M 364.691545 232.761918 
+L 388.765505 232.761918 
+L 388.765505 49.48919 
+L 364.691545 49.48919 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: #2f6db5"/>
+   </g>
+   <g id="mensal-claro-patch_14">
+    <path d="M 394.783995 232.761918 
+L 418.857955 232.761918 
+L 418.857955 138.476332 
+L 394.783995 138.476332 
+z
+" clip-path="url(#mensal-claro-p0308baa3ea)" style="fill: url(#mensal-claro-hf7931dc660); stroke: #ffffff; stroke-linejoin: miter"/>
+   </g>
+   <g id="mensal-claro-patch_15">
+    <path d="M 46.0125 243.758281 
+L 46.0125 21.998281 
+" style="fill: none; stroke: #e3e6ea; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="mensal-claro-patch_16">
+    <path d="M 46.0125 243.758281 
+L 436.6125 243.758281 
+" style="fill: none; stroke: #e3e6ea; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="mensal-claro-text_20">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="226.266275" y="224.363794" transform="rotate(-0 226.266275 224.363794)">1.236</text>
+   </g>
+   <g id="mensal-claro-text_21">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="256.358725" y="180.060433" transform="rotate(-0 256.358725 180.060433)">14.163</text>
+   </g>
+   <g id="mensal-claro-text_22">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="286.451175" y="174.724289" transform="rotate(-0 286.451175 174.724289)">15.720</text>
+   </g>
+   <g id="mensal-claro-text_23">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="316.543625" y="154.305056" transform="rotate(-0 316.543625 154.305056)">21.678</text>
+   </g>
+   <g id="mensal-claro-text_24">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="346.636075" y="120.255865" transform="rotate(-0 346.636075 120.255865)">31.613</text>
+   </g>
+   <g id="mensal-claro-text_25">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="376.728525" y="45.327081" transform="rotate(-0 376.728525 45.327081)">53.476</text>
+   </g>
+   <g id="mensal-claro-text_26">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle; fill: #2b2f36" x="406.820975" y="134.314222" transform="rotate(-0 406.820975 134.314222)">27.511</text>
+   </g>
+   <g id="mensal-claro-text_27">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #5f6670" transform="translate(78.322268 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-claro-text_28">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #5f6670" transform="translate(108.414718 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-claro-text_29">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #5f6670" transform="translate(138.507167 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-claro-text_30">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #5f6670" transform="translate(168.599617 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-claro-text_31">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; fill: #5f6670" transform="translate(198.692067 232.761918) rotate(-90)">fora do período da base</text>
+   </g>
+   <g id="mensal-claro-text_32">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #2b2f36" x="46.0125" y="15.998281" transform="rotate(-0 46.0125 15.998281)">Casos mensais de SRAG — últimos 12 meses</text>
+   </g>
+   <g id="mensal-claro-legend_1">
+    <g id="mensal-claro-patch_17">
+     <path d="M 150.158672 303.408875 
+L 168.158672 303.408875 
+L 168.158672 297.108875 
+L 150.158672 297.108875 
+z
+" style="fill: #2f6db5; stroke: #2f6db5; stroke-linejoin: miter"/>
+    </g>
+    <g id="mensal-claro-text_33">
+     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #2b2f36" x="175.358672" y="303.408875" transform="rotate(-0 175.358672 303.408875)">Mês completo</text>
+    </g>
+    <g id="mensal-claro-patch_18">
+     <path d="M 256.219453 303.408875 
+L 274.219453 303.408875 
+L 274.219453 297.108875 
+L 256.219453 297.108875 
+z
+" style="fill: url(#mensal-claro-heec0b5d75e)"/>
+    </g>
+    <g id="mensal-claro-text_34">
+     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #2b2f36" x="281.419453" y="303.408875" transform="rotate(-0 281.419453 303.408875)">Mês parcial</text>
+    </g>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="mensal-claro-p0308baa3ea">
+   <rect x="46.0125" y="21.998281" width="390.6" height="221.76"/>
+  </clipPath>
+ </defs>
+ <defs>
+  <pattern id="mensal-claro-hf7931dc660" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#2f6db5"/>
+   <path d="M -36 36 
+L 36 -36 
+M -30 42 
+L 42 -30 
+M -24 48 
+L 48 -24 
+M -18 54 
+L 54 -18 
+M -12 60 
+L 60 -12 
+M -6 66 
+L 66 -6 
+M 0 72 
+L 72 0 
+M 6 78 
+L 78 6 
+M 12 84 
+L 84 12 
+M 18 90 
+L 90 18 
+M 24 96 
+L 96 24 
+M 30 102 
+L 102 30 
+M 36 108 
+L 108 36 
+" style="fill: #ffffff; stroke: #ffffff; stroke-width: 1.0; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+  <pattern id="mensal-claro-heec0b5d75e" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#2f6db5"/>
+   <path d="M -36 36 
+L 36 -36 
+M -30 42 
+L 42 -30 
+M -24 48 
+L 48 -24 
+M -18 54 
+L 54 -18 
+M -12 60 
+L 60 -12 
+M -6 66 
+L 66 -6 
+M 0 72 
+L 72 0 
+M 6 78 
+L 78 6 
+M 12 84 
+L 84 12 
+M 18 90 
+L 90 18 
+M 24 96 
+L 96 24 
+M 30 102 
+L 102 30 
+M 36 108 
+L 108 36 
+" style="fill: #000000; stroke: #000000; stroke-width: 1.0; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+ </defs>
+</svg>
+</div>
+  <figcaption class="pequeno">Últimos 12 meses até a data de referência. Meses anteriores ao início da base aparecem sem dados; o primeiro e o último mês podem estar incompletos.
+    <details>
+      <summary>Como ler as células <code>&lt;5</code> e <code>oculto</code></summary>
+      <p>Contagens de 1 a 4 aparecem como &#34;&lt;5&#34;. Quando há alguma, a menor contagem exibida também aparece como &#34;oculto&#34; (supressão complementar): sem isso, o total menos as demais revelaria o valor escondido. O total é exato e inclui as células escondidas. O mês que cabe inteiro na série diária nunca é o oculto: as barras diárias o revelariam.</p>
+    </details>
+  </figcaption>
+</figure>
+
+<h2>Perfil dos casos</h2>
+<div class="tabela" tabindex="0" role="region" aria-label="Tabela: perfil dos casos"><table>
+  <caption class="pequeno" style="text-align:left">Por agente causador · total 165.397
+    <br>Contagens de 1 a 4 aparecem como &#34;&lt;5&#34;. Quando há alguma, a menor contagem exibida também aparece como &#34;oculto&#34; (supressão complementar): sem isso, o total menos as demais revelaria o valor escondido. O total é exato e inclui as células escondidas.</caption>
+  <thead><tr><th scope="col">Categoria</th><th scope="col">Casos</th><th scope="col">%</th></tr></thead>
+  <tbody>
+    <tr><td>Não especificado</td><td class="num">61.256</td>
+      <td class="num">37,0%</td></tr>
+    <tr><td>Outro vírus respiratório</td><td class="num">46.269</td>
+      <td class="num">28,0%</td></tr>
+    <tr><td>Influenza</td><td class="num">24.874</td>
+      <td class="num">15,0%</td></tr>
+    <tr><td>Em investigação</td><td class="num">22.748</td>
+      <td class="num">13,8%</td></tr>
+    <tr><td>COVID-19</td><td class="num">8.312</td>
+      <td class="num">5,0%</td></tr>
+    <tr><td>Outro agente</td><td class="num">1.938</td>
+      <td class="num">1,2%</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Contexto do período dos dados</h2>
+<p>No período dos dados, de 29 de maio a 11 de junho de 2025, houve uma queda recente de 14,3% nos casos de SRAG, mas a variação consolidada dos 30 dias anteriores indica aumento de 28,6% nos casos. O país enfrentava alerta para quadros graves de gripe e COVID-19, com aumento de casos por influenza A e vírus sincicial respiratório em várias regiões <a href="#ref-1">[1]</a>. O estado do Rio de Janeiro, por exemplo, apresentava desaceleração nas internações, mas ainda com números elevados e 676 mortes registradas até junho de 2025 <a href="#ref-2">[2]</a>. A SRAG é causada por diversos agentes, incluindo vírus influenza e coronavírus <a href="#ref-3">[3]</a>.</p>
+<h2>Cenário atual (notícias recentes)</h2>
+<p>No cenário atual, em outubro de 2026, os casos de SRAG por rinovírus, metapneumovírus e SARS-CoV-2 apresentam tendência de alta no Brasil, enquanto os casos por vírus sincicial respiratório e influenza B estão em queda. Os novos registros semanais de SRAG por COVID-19 permanecem baixos. Algumas capitais, como Aracaju, Porto Alegre, Rio Branco, São Luís e Vitória, apresentam aumento da atividade da SRAG <a href="#ref-4">[4]</a><a href="#ref-5">[5]</a><a href="#ref-6">[6]</a>. O boletim InfoGripe indica estabilização ou oscilação dos casos no país, com Sergipe em alerta para crescimento da incidência <a href="#ref-7">[7]</a>.</p>
+<h2>Limitações</h2>
+<p>As taxas apresentadas consideram apenas casos com informações completas, excluindo casos sem desfecho conhecido ou sem dados sobre internação em UTI e vacinação. A taxa de internação em UTI refere-se à proporção de casos internados em UTI, não à ocupação de leitos hospitalares. A vacinação é medida entre os internados por SRAG, não refletindo a cobertura vacinal da população geral. Os 14 dias mais recentes dos dados ainda estão em consolidação e podem sofrer alterações com notificações atrasadas.</p>
+
+<h2>Referências</h2>
+<ol>
+  <li id="ref-1" value="1">Brasil está em alerta de risco para quadros graves de gripe e Covid-19 | CNN Brasil — www.cnnbrasil.com.br,
+    05/06/2025 ·
+    <a href="https://www.cnnbrasil.com.br/nacional/brasil/brasil-esta-em-alerta-de-risco-para-quadros-graves-de-gripe-e-covid-19" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
+  <li id="ref-2" value="2">Síndrome Respiratória Aguda Grave já matou 676 pessoas este ano no Rio | Agência Brasil — agenciabrasil.ebc.com.br,
+    18/06/2025 ·
+    <a href="https://agenciabrasil.ebc.com.br/saude/noticia/2025-06/sindrome-respiratoria-aguda-grave-ja-matou-676-pessoas-este-ano-no-rio" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
+  <li id="ref-3" value="3">Casos de Síndrome Respiratória Aguda Grave disparam no Brasil | CNN Brasil — www.cnnbrasil.com.br,
+    29/05/2025 ·
+    <a href="https://www.cnnbrasil.com.br/nacional/brasil/casos-de-sindrome-respiratoria-aguda-grave-disparam-no-brasil" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· período dos dados · fonte reconhecida</span></li>
+  <li id="ref-4" value="4">Vírus respiratórios ainda estão em alta no país, alerta Fiocruz | Agência Brasil — agenciabrasil.ebc.com.br,
+    08/10/2026 ·
+    <a href="https://agenciabrasil.ebc.com.br/saude/noticia/2026-10/virus-respiratorios-ainda-estao-em-alta-no-pais-alerta-fiocruz" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· cenário atual · fonte reconhecida</span></li>
+  <li id="ref-5" value="5">País registra tendência de alta de casos de síndrome respiratória | Radioagência Nacional — agenciabrasil.ebc.com.br,
+    09/10/2026 ·
+    <a href="https://agenciabrasil.ebc.com.br/radioagencia-nacional/saude/audio/2026-10/pais-registra-tendencia-de-alta-de-casos-de-sindrome-respiratoria" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· cenário atual · fonte reconhecida</span></li>
+  <li id="ref-6" value="6">Fiocruz alerta para aumento de vírus respiratórios no Brasil - Portal 98 FM Natal — 98fmnatal.com.br,
+    08/10/2026 ·
+    <a href="https://98fmnatal.com.br/destaque_mais/fiocruz-aumento-virus-respiratorios-srag-brasil/400372" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· cenário atual</span></li>
+  <li id="ref-7" value="7">SRAG no Brasil mantém estabilidade, mas Sergipe segue em alerta - Portal Afya — portal.afya.com.br,
+    17/10/2026 ·
+    <a href="https://portal.afya.com.br/infectologia/srag-no-brasil-mantem-estabilidade-mas-sergipe-segue-em-alerta" rel="noopener noreferrer" target="_blank">abrir<span class="sr-only"> (abre em nova aba)</span></a>
+    <span class="pequeno">· cenário atual</span></li>
+</ol>
+
+<h2>Como este relatório foi gerado</h2>
+<details open>
+  <summary>Governança e auditoria desta execução</summary>
+  <p class="pequeno">Modelo: openrouter / openai/gpt-4.1-mini · tokens:
+    15.976 de entrada e 1.476 de saída · custo
+    estimado: US$ 0,0088 · código 0690ea3 · prompts
+    388e449de8228eb1</p>
+  <p class="pequeno">Os números dos cartões, tabelas e gráficos vêm de SQL na camada gold. O texto
+    foi escrito pelo modelo e conferido automaticamente (números, citações, links, dados pessoais).
+    A trilha completa está em <code>auditoria.jsonl</code> e na tabela
+    <code>auditoria.eventos</code>.</p>
+  <p class="pequeno dica">Arraste a tabela para o lado para ver todas as colunas.</p>
+  <div class="tabela larga" tabindex="0" role="region" aria-label="Tabela da trilha de auditoria"><table>
+    <caption class="sr-only">Trilha de auditoria da execução: etapas, ferramentas e resultados</caption>
+    <thead><tr><th scope="col">#</th><th scope="col">Etapa</th><th scope="col">Tipo</th><th scope="col">Ferramenta</th>
+      <th scope="col">Motivo / resultado</th><th scope="col">ms</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>orquestrador</td><td>llm</td>
+        <td></td>
+        <td>
+ — modelo: openai/gpt-4.1-mini</td>
+        <td class="num">4728</td></tr>
+      <tr><td class="num">2</td><td>ferramentas</td><td>ferramenta</td>
+        <td>consultar_metricas</td>
+        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em 2026-10-18.
+</td>
+        <td class="num">35</td></tr>
+      <tr><td class="num">3</td><td>ferramentas</td><td>ferramenta</td>
+        <td>consultar_metricas</td>
+        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em 2026-10-18.
+</td>
+        <td class="num">50</td></tr>
+      <tr><td class="num">4</td><td>ferramentas</td><td>ferramenta</td>
+        <td>consultar_metricas</td>
+        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em 2026-10-18.
+</td>
+        <td class="num">53</td></tr>
+      <tr><td class="num">5</td><td>ferramentas</td><td>ferramenta</td>
+        <td>consultar_metricas</td>
+        <td>Coletar as 4 métricas principais para o relatório nacional de SRAG em 2026-10-18.
+</td>
+        <td class="num">51</td></tr>
+      <tr><td class="num">6</td><td>ferramentas</td><td>ferramenta</td>
+        <td>consultar_serie</td>
+        <td>Obter séries temporais para análise do cenário nacional de SRAG em 2026-10-18.
+</td>
+        <td class="num">32</td></tr>
+      <tr><td class="num">7</td><td>ferramentas</td><td>ferramenta</td>
+        <td>consultar_serie</td>
+        <td>Obter séries temporais para análise do cenário nacional de SRAG em 2026-10-18.
+</td>
+        <td class="num">33</td></tr>
+      <tr><td class="num">8</td><td>ferramentas</td><td>ferramenta</td>
+        <td>consultar_distribuicao</td>
+        <td>Analisar a distribuição dos casos de SRAG por agente causador para o relatório nacional em 2026-10-18.
+</td>
+        <td class="num">32</td></tr>
+      <tr><td class="num">9</td><td>ferramentas</td><td>ferramenta</td>
+        <td>buscar_noticias</td>
+        <td>Buscar notícias recentes para embasar o relatório nacional de SRAG no período dos dados até 2026-10-18.
+</td>
+        <td class="num">842</td></tr>
+      <tr><td class="num">10</td><td>ferramentas</td><td>ferramenta</td>
+        <td>buscar_noticias</td>
+        <td>Buscar notícias atuais para embasar o relatório nacional de SRAG no cenário atual até 2026-10-18.
+</td>
+        <td class="num">182</td></tr>
+      <tr><td class="num">11</td><td>orquestrador</td><td>llm</td>
+        <td></td>
+        <td>
+ — modelo: openai/gpt-4.1-mini</td>
+        <td class="num">1543</td></tr>
+      <tr><td class="num">12</td><td>verificar_cobertura</td><td>decisao</td>
+        <td></td>
+        <td>
+</td>
+        <td class="num"></td></tr>
+      <tr><td class="num">13</td><td>redator</td><td>llm</td>
+        <td></td>
+        <td>
+ — modelo: openai/gpt-4.1-mini</td>
+        <td class="num">6226</td></tr>
+      <tr><td class="num">14</td><td>guardrail_saida</td><td>guardrail</td>
+        <td></td>
+        <td>
+          aprovado
+</td>
+        <td class="num"></td></tr>
+    </tbody>
+  </table></div>
+</details>
+
+<footer>Prova de conceito. Não substitui avaliação clínica nem boletim epidemiológico oficial.</footer>
+</main>
+<script>
+(function () {
+  var raiz = document.documentElement;
+  try { var salvo = localStorage.getItem("srag-tema"); if (salvo) raiz.dataset.tema = salvo; }
+  catch (e) {}
+  var botao = document.getElementById("tema");
+  function marcar() { botao.setAttribute("aria-pressed", raiz.dataset.tema === "escuro"); }
+  marcar();
+  botao.addEventListener("click", function () {
+    raiz.dataset.tema = raiz.dataset.tema === "escuro" ? "claro" : "escuro";
+    try { localStorage.setItem("srag-tema", raiz.dataset.tema); } catch (e) {}
+    marcar();
+  });
+})();
+</script>
+</body>
+</html>
