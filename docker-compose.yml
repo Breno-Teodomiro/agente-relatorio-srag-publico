@@ -33,6 +33,8 @@ services:
     volumes:
       - ./dados:/app/dados:ro
       - ./relatorios:/app/relatorios
+      # Escrita só porque `grafo` e `qualidade` regravam docs/. `relatorio` não precisa; separar em
+      # outro serviço só para isso dobraria a configuração.
       - ./docs:/app/docs
       - ./.cache:/app/.cache
     depends_on:

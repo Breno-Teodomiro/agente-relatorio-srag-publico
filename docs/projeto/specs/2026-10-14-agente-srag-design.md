@@ -26,7 +26,7 @@ evolução futura) o que só agrega valor de negócio. Ver seção 10.
 
 ## 2. Os dados
 
-- Arquivo: `INFLUD25_DATASUS-Versao26-06-2025.zip` → CSV `;`, UTF-8 (medido no arquivo; o plano previa latin-1), 194 colunas, ~165 mil linhas.
+- Arquivo: `INFLUD25_DATASUS-Versao26-06-2025.zip` → CSV `;`, UTF-8 (medido no arquivo; o plano previa latin-1). Colunas e linhas: `make qualidade`.
 - Período de `DT_SIN_PRI`: 29/12/2024 a 25/06/2025.
 - `NU_NOTIFIC` é único (sem duplicados). Nenhum caso com sintoma após a notificação.
 - Idade em `NU_IDADE_N` + `TP_IDADE` (1 = dias, 2 = meses, 3 = anos).
@@ -131,7 +131,7 @@ sensível.
 
 | Schema | Conteúdo | Acesso |
 |---|---|---|
-| `raw` | CSV como veio: 194 colunas, tudo `text`, carga via `COPY` | `srag_etl` |
+| `raw` | CSV como veio: todas as colunas, tudo `text`, carga via `COPY` | `srag_etl` |
 | `silver` | colunas tipadas e limpas (lista em `docs/DICIONARIO_SILVER.md`), chave interna no lugar de `NU_NOTIFIC`, idade → faixa etária | `srag_etl` |
 | `gold` | **somente views agregadas** + a tabela `dicionario_trechos` (texto do dicionário público, para o RAG) | `srag_agente` (SELECT) |
 | `auditoria` | execuções e eventos do agente | `srag_auditor` (INSERT/SELECT; UPDATE só nas colunas de encerramento de `execucoes` e só enquanto `em_andamento`; eventos não se alteram), usado só pelo registro de auditoria, nunca pelas ferramentas do LLM |
@@ -185,7 +185,7 @@ Guardrails AI): código próprio é mais testável e explicável.
 | 1. Entrada | fora do escopo, injeção, texto > 500 car. | tamanho + regex de injeção + classificador LLM `{no_escopo, motivo}` | recusa registrada |
 | 2. Ferramentas | parâmetro inválido, SQL malicioso, consulta pesada | Pydantic + SQL fixo com bind + usuário read-only + timeout | erro ao orquestrador |
 | 3. Conteúdo externo | injeção indireta, HTML/script | limpa HTML, corta 500 car., envolve em `<noticia_externa>`, descarta item com padrão de injeção, prioriza fontes confiáveis | descarte registrado |
-| 4. Saída | número não conferido, link inventado, notícia fora da janela, CPF/CNS/telefone/e-mail, recomendação clínica | conferência numérica com tolerância de arredondamento, URL ∈ resultados, data × seção, regex PII, lista de termos clínicos | 1 nova tentativa → faixa "revisão humana necessária" |
+| 4. Saída | número não conferido, link inventado, notícia fora da janela, CPF/CNS/telefone/e-mail, recomendação clínica | conferência numérica com tolerância de arredondamento, URL ∈ resultados, data × seção, regex PII, lista de termos clínicos | 1 nova tentativa → faixa "revisão humana necessária"; dado pessoal no texto é mascarado (não conta como violação) |
 | 5. Execução | laço, custo, indisponibilidade | ≤12 chamadas de ferramenta, teto de tokens/tempo, temperatura 0,2, retry com backoff, reserva OpenRouter→OpenAI e Tavily→RSS | para, registra, entrega parcial com aviso |
 
 Aviso fixo, inserido pelo código: *"Prova de conceito. Não substitui avaliação clínica nem boletim
@@ -200,7 +200,7 @@ fora do escopo). O README mostra a tabela "ataque → resultado".
   `git sha`, hash dos prompts, data de referência e contagem da silver.
 - `auditoria.eventos`: id_execucao, sequência, timestamp, nó, tipo (`llm`, `ferramenta`, `guardrail`,
   `decisao`), ferramenta, argumentos, **motivo**, resumo do resultado, duração, tokens, erro.
-- Cada relatório gera `relatorios/<data>_<id>/auditoria.jsonl` e um anexo **"Como este relatório foi
+- Cada relatório gera `relatorios/<data>_<uf>_<id8>/auditoria.jsonl` e um anexo **"Como este relatório foi
   gerado"**: ferramentas chamadas e motivos, guardrails aprovados/reprovados, modelo, custo.
 - Prompts versionados em arquivos (`agente/prompts/*.md`), com hash registrado em cada execução.
 - Langfuse **opcional**: liga sozinho se as chaves estiverem no `.env`.
@@ -227,9 +227,9 @@ fora do escopo). O README mostra a tabela "ataque → resultado".
 ```
 src/srag_agente/
   config.py                  # pydantic-settings, lê .env
-  dados/                     # carga_raw.py, transformar.py, sql/00_roles.sql … 03_gold.sql
+  dados/                     # carga_raw.py, transformar.py, sql/00_estrutura.sql … 04_auditoria.sql
   metricas/catalogo.py
-  ferramentas/               # metricas.py, series.py, noticias.py, dicionario.py
+  ferramentas/               # registro.py (as ferramentas fechadas), noticias.py, dicionario.py
   rag/indexar.py
   agente/                    # estado.py, grafo.py, nos.py, prompts/
   guardrails/                # entrada.py, conteudo_externo.py, saida.py, limites.py

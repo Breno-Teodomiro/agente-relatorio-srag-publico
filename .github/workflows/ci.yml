@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,6 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: astral-sh/setup-uv@v5.4.2
+        with:
+          python-version-file: .python-version
       - run: uv sync --all-extras --frozen
       - run: uv run ruff check . && uv run ruff format --check .
       - run: uv run pytest --cov=srag_agente --cov-report=term-missing

@@ -52,16 +52,24 @@ testes:
 lint:
 	uv run ruff check . && uv run ruff format --check .
 
+# Pastas de saída criadas aqui: se não existirem, o daemon as cria como root (Linux nativo) e o
+# usuário `srag` da imagem não consegue escrever nelas.
+PASTAS_SAIDA = relatorios .cache
+
 docker-build:
+	mkdir -p $(PASTAS_SAIDA)
 	$(DOCKER) compose --profile app build --build-arg SRAG_VERSAO_CODIGO=$(VERSAO_CODIGO) app
 
 docker-carga:
+	mkdir -p $(PASTAS_SAIDA)
 	$(DOCKER) compose --profile app run --rm app carga
 
 docker-indexar:
+	mkdir -p $(PASTAS_SAIDA)
 	$(DOCKER) compose --profile app run --rm app indexar
 
 docker-relatorio:
+	mkdir -p $(PASTAS_SAIDA)
 	$(DOCKER) compose --profile app run --rm app relatorio --uf $(UF) $(COM_PERGUNTA)
 
 tudo: subir carga indexar relatorio

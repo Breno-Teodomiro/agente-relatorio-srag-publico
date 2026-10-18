@@ -6,7 +6,7 @@ verdade deste documento); a decisão de não levar colunas está no ADR
 [0004](adr/0004-silver-sem-colunas-sensiveis.md).
 
 - **Acesso:** só o papel `srag_etl`. O agente (`srag_agente`) lê apenas a `gold`, que são agregados.
-- **Idempotente:** a tabela é recriada inteira a cada `make transformar`, a partir da `raw`.
+- **Idempotente:** a tabela é recriada inteira a cada `make carga` (que carrega a `raw` e reconstrói a silver), a partir da `raw`.
 - **Números de qualidade não ficam aqui.** Quantas linhas cada regra de limpeza afetou muda a cada
   carga; quem mede é `make qualidade`, que gera `docs/QUALIDADE_DADOS.md`.
 - **Como a `raw` representa vazio:** como texto `''`, não `NULL`. Toda regra abaixo trata os dois.
@@ -21,7 +21,7 @@ do CSV). Os tipos vêm do `CREATE TABLE ... AS` (inteiro, texto ou data).
 | `id_caso` | `int` (chave primária) | gerada; no lugar de `nu_notific` | `row_number()` ordenado por `dt_sin_pri` e `nu_notific` | Número interno do caso. Não é o número da notificação e não aparece fora da silver | nenhuma view da gold (só contagem) |
 | `uf` | `text`, pode ser nulo | `sg_uf_not` | Mantém só as 27 siglas válidas; qualquer outra coisa (inclusive vazio) vira `NULL`. Na gold, `NULL` aparece como `ND` | Estado onde o caso foi notificado | todas as views da gold (filtro por UF; `BR` = país inteiro) |
 | `faixa_etaria` | `text` | `nu_idade_n` + `tp_idade` | Converte para anos completos (`tp_idade` 1 = dias ÷ 365, 2 = meses ÷ 12, 3 = anos; idade em anos acima de 120 ou valor não numérico → ignorado) e agrupa em `<1`, `1-4`, `5-11`, `12-17`, `18-39`, `40-59`, `60+` ou `ignorado` | Faixa de idade do paciente. A idade exata não passa da raw | `gold.distribuicao` |
-| `dt_notificacao` | `date`, pode ser nulo | `dt_notific` | Função `silver.para_data` com a janela de datas aceitas (ver abaixo) | Dia em que o caso foi notificado | nenhuma view da gold; define a janela de datas |
+| `dt_notificacao` | `date`, pode ser nulo | `dt_notific` | Função `silver.para_data` com a janela de datas aceitas (ver abaixo) | Dia em que o caso foi notificado | nenhuma view da gold (a janela de datas aceitas usa a coluna `dt_notific` da raw, não esta) |
 | `dt_sintomas` | `date`, pode ser nulo | `dt_sin_pri` | idem | Dia do primeiro sintoma. É a data de referência das métricas | `gold.referencia`, `casos_diarios`, `indicadores`, `janelas_aumento` |
 | `dt_internacao` | `date`, pode ser nulo | `dt_interna` | idem; aceita também o formato `AAAA-MM-DD hh:mm:ss.nnnnnnnnn` | Dia da internação | nenhuma view da gold |
 | `dt_entrada_uti` | `date`, pode ser nulo | `dt_entuti` | idem | Dia da entrada na UTI | nenhuma view da gold |
@@ -38,7 +38,7 @@ do CSV). Os tipos vêm do `CREATE TABLE ... AS` (inteiro, texto ou data).
 
 A coluna "Usada por" foi conferida lendo `03_gold.sql`: as colunas marcadas "nenhuma view da gold"
 ficam na silver por estarem entre os campos de desfecho e cronologia previstos no desenho, mas
-nenhuma métrica atual as consulta (ver "Pontos em aberto" no fim).
+nenhuma métrica atual as consulta (ver o limite de minimização no ADR 0004).
 
 ### Datas: a janela de datas aceitas
 
@@ -103,19 +103,6 @@ caso ordenado por `dt_sin_pri` e `nu_notific`). A proteção é o papel do banco
 | Pergunta | Comando |
 |---|---|
 | Quantas linhas cada regra de limpeza alterou | `make qualidade` (gera `docs/QUALIDADE_DADOS.md`) |
-| Colunas e tipos reais da silver no banco | `docker compose exec <serviço do postgres> psql -U srag_etl -d <banco> -c '\d silver.casos'` (ajustar serviço, usuário e banco ao `docker-compose.yml`) |
+| Colunas e tipos reais da silver no banco | `docker compose exec banco psql -U postgres -d srag -c '\d silver.casos'` |
 | Janela de datas aceitas nesta carga | `SELECT * FROM silver.limites;` com o mesmo `psql` |
-| Reconstruir a silver | `make transformar` |
-
-## Pontos em aberto
-
-Divergências entre este código e os documentos de desenho, para decisão do responsável; nada foi alterado
-fora deste arquivo.
-
-- O ADR 0004 e o spec §5 dizem que **ficam** "sintomas" e que a silver tem "~20 colunas". O SQL real
-  cria 16 colunas e **não leva sintomas**. Este dicionário segue o SQL. O mesmo ADR também lista sintomas
-  entre os removidos, então o próprio texto se contradiz.
-- Seis colunas (`dt_notificacao`, `dt_internacao`, `dt_entrada_uti`, `dt_evolucao`, `hospitalizado`,
-  `suporte_ventilatorio`) não são lidas por nenhuma view da gold hoje. Se continuarem sem uso, o
-  critério de minimização do ADR 0004 pede avaliar a remoção. Ressalva: `dt_notificacao` vem de
-  `dt_notific`, que é a base da janela de datas em `silver.limites` (a coluna da silver em si não é lida).
+| Reconstruir a silver | `make carga` |

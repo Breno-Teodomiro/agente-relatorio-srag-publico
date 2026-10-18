@@ -6,12 +6,13 @@ consolidação, cada mês). Por isso a supressão complementar da série diária
 janelas (`janelas_publicadas` + `suprimir_com_janelas`), e o mês que cabe inteiro na série diária
 não serve de complemento na série mensal.
 
-Limites que sobram (o ADR da Task 18 deve registrar):
+Limites que sobram (registrados no ADR 0011):
 1. Bloco sem nenhuma célula >= 5 (só zeros e "<5") não tem o que esconder. Se a soma do bloco
    fixar um "<5" (um "<5" entre zeros; dois "<5" somando 8), só mascarar o agregado da janela
    protege, e isso é no catálogo/relatório. Some quando a janela publicada é ela própria "<5".
-2. O corte do mês corrente pode criar bloco de um dia só (dia de referência 13, 15, 20, 22, 27
-   ou 29): o dia sai direto de numerador, excluídos e rótulo do mês, sem olhar a série diária. A
+2. O corte do mês corrente pode criar bloco de um dia só (dia de referência 1, 13, 15, 20, 22,
+   27 ou 29; em 1º de março, depois de um fevereiro de 28 dias, são três blocos): o dia sai
+   direto de numerador, excluídos e rótulo do mês, sem olhar a série diária. A
    base atual tem referência em 25/06/2025 (blocos de 2 a 14 dias); outra base pode cair aí.
 3. A proteção supõe que as janelas acima são as únicas somas exatas que tocam os 30 dias. Métrica
    nova sobre dias (ou mudança das janelas em 03_gold.sql) precisa entrar em `janelas_publicadas`;

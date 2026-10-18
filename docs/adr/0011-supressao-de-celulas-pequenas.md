@@ -62,7 +62,7 @@ que abrem o mesmo canal por subtração.
    usar `janelas_publicadas` e mascarar numerador, denominador e excluídos quando a janela isolar
    uma célula suprimida. Simulando `janelas_publicadas` para todos os dias do mês, também o
    **dia 1** cria bloco de um dia (o próprio dia de referência é o mês corrente inteiro), e uma
-   referência em 1º de março, depois de fevereiro com 28 dias, cria três. Isso ainda não está na
+   referência em 1º de março, depois de fevereiro com 28 dias, cria três. Os dois casos estão na
    docstring de `series.py`.
 3. **Toda métrica nova baseada em dias** (ou mudança das janelas em `03_gold.sql`) precisa entrar
    em `janelas_publicadas`. O teste `test_janelas_da_serie_somam_o_mesmo_que_a_gold`
