@@ -202,7 +202,7 @@ No Streamlit Community Cloud, crie um app a partir do seu fork:
 |---|---|
 | Repositório e branch | o seu fork, branch `main` |
 | *Main file path* | `demo/streamlit_app.py` |
-| *Advanced settings*, versão do Python | 3.12 |
+| *Advanced settings*, versão do Python | 3.12 se a lista oferecer (o projeto exige 3.12 ou mais; o CI e os testes usam 3.12). A demonstração publicada subiu no padrão da plataforma, que na criação era 3.14, e funcionou. Trocar a versão exige recriar o app |
 | *Advanced settings*, *Secrets* | o bloco abaixo |
 
 A entrada `demo/streamlit_app.py` põe `src/` no caminho de importação e chama a mesma tela do
@@ -375,3 +375,12 @@ DELETE FROM auditoria.execucoes WHERE inicio < now() - interval '30 days';
 | o app reinicia sozinho | falta de memória | confira as linhas de memória no log; mantenha `BUSCA_DICIONARIO = "texto"` |
 | versão do código `desconhecida` na trilha | sem `git` no contêiner da plataforma | limite conhecido do ADR 0013 |
 | os números não batem com o seu banco local | o banco remoto tem o pacote de outra carga | compare o sha256 do rodapé com o da última exportação; exporte e carregue de novo |
+
+## Depois de mudar o código: reiniciar o app
+
+A plataforma baixa o código novo quando você faz *push* na branch (o log mostra "Updated app!"), mas o
+processo que já está rodando **não recarrega os módulos já importados**: o `.streamlit/config.toml`
+desliga o monitor de arquivos (`fileWatcherType = "none"`), de propósito. Por isso, depois de qualquer
+mudança em `src/` ou em `demo/`, use *Manage app*, menu, *Reboot app* e espere cerca de dois minutos.
+Mudar só os *secrets* também pede o reinício. Sinal de que o app ainda roda o código antigo: o log
+não traz a linha `opções do Streamlit observadas`, que só existe nas versões novas.

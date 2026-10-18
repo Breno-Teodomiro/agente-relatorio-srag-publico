@@ -93,7 +93,7 @@ dos gráficos não mudam, porque saem do SQL.
 
 ## Demonstração online
 
-**Endereço:** <!-- LINK-DEMO --> a publicar.
+**Endereço:** [agente-srag-healthcare.streamlit.app](https://agente-srag-healthcare.streamlit.app)
 
 A demonstração online é **opcional e gratuita**: a mesma tela, publicada no Streamlit Community
 Cloud, lendo um Postgres gerenciado (Neon) que recebe só os agregados da gold. Ela tem **tetos
