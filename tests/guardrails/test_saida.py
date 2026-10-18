@@ -5,6 +5,8 @@ Evidências de `evidencias_completas()`: aumento de casos +20,0% (84 contra 70),
 período dos dados ("alta de 15%") e [2] do cenário atual.
 """
 
+import re
+
 import pytest
 
 from srag_agente.ferramentas.registro import Evidencia
@@ -563,11 +565,13 @@ def test_violacao_com_dado_pessoal_e_mascarada(evidencias, monkeypatch):
     from srag_agente.guardrails import saida
 
     def conferir(nome, *_):
-        return [f"numero_nao_conferido: '123.456.789-09' em {nome}"]
+        violacao = f"numero_nao_conferido: '123.456.789-09' em {nome}"
+        return [violacao], [f"Na seção {nome}, '123.456.789-09' não está no JSON: remova-o."]
 
     monkeypatch.setattr(saida, "_conferir_secao", conferir)
-    violacoes = _violacoes(evidencias)
-    assert violacoes and all("123.456" not in v and "[dado removido]" in v for v in violacoes)
+    resultado = _verificar(texto_valido(), evidencias)
+    for mensagens in (resultado.violacoes, resultado.instrucoes):  # a instrução também
+        assert mensagens and all("123.456" not in m and "[dado removido]" in m for m in mensagens)
 
 
 def test_texto_original_nao_e_alterado(evidencias):
@@ -790,3 +794,112 @@ def test_numero_em_palavras_que_confere_com_as_evidencias_passa():
     assert verificar_saida(texto, metricas, []).violacoes == []
     triplicou = texto.model_copy(update={"resumo_executivo": "Os casos triplicaram."})
     assert _tem(verificar_saida(triplicou, metricas, []).violacoes, "numero_nao_conferido")
+
+
+# ---- realimentação da nova tentativa (execuções reais de 18/10/2026) --------------------------
+# Em execuções reais seguidas, a maioria das reprovadas repetiu o erro na nova tentativa: a
+# violação ("numero_nao_conferido: 'um terço dos casos' em comentario_uti") não dizia o valor
+# certo nem o que fazer. A violação continua curta (trilha e relatório); a instrução com o valor
+# exato do JSON vai só ao LLM da nova tentativa. A regra NÃO afrouxa: o erro continua barrado.
+def _real(**secoes):
+    return verificar_saida(texto_neutro().model_copy(update=secoes), _evidencias_reais(), [])
+
+
+def _comentario(metrica, texto):
+    comentarios = [ComentarioMetrica(metrica=c.metrica, comentario=texto if c.metrica == metrica
+                                     else c.comentario)
+                   for c in texto_neutro().comentarios_metricas]  # fmt: skip
+    return {"comentarios_metricas": comentarios}
+
+
+def _numericas(instrucao):
+    """Violações numéricas da própria instrução, fora do trecho citado entre aspas simples: a
+    instrução só pode trazer valor que o guardrail aceita (nenhum número inventado)."""
+    sem_trecho = re.sub(r"'[^']*'", " ", instrucao)
+    texto = texto_neutro().model_copy(update={"limitacoes": sem_trecho})
+    violacoes = verificar_saida(texto, _evidencias_reais(), []).violacoes
+    numericas = ("numero_nao_conferido", "sentido_invertido", "data_nao_conferida")
+    return [v for v in violacoes if v.split(":")[0] in numericas]
+
+
+@pytest.mark.parametrize(
+    "comentario,bruto",
+    [
+        ("Um terço dos casos foi para a UTI.", "Um terço dos casos"),  # 87147fff e cb2f4cc8
+        ("Quase um terço dos pacientes precisou de UTI.", "um terço dos pacientes"),  # 2ª vez
+    ],
+)
+def test_fracao_da_uti_continua_barrada_e_a_instrucao_traz_o_valor_exato(comentario, bruto):
+    resultado = _real(**_comentario("uti", comentario))
+    # a violação (trilha e relatório) não muda: curta, sem o valor sugerido
+    assert resultado.violacoes == [f"numero_nao_conferido: '{bruto}' em comentario_uti"]
+    (instrucao,) = resultado.instrucoes
+    assert "uti.valor" in instrucao and "29,4%" in instrucao and f"'{bruto}'" in instrucao
+    assert "Escreva exatamente 29,4%" in instrucao
+    assert _numericas(instrucao) == []
+
+
+def test_fracao_fora_do_comentario_da_metrica_lista_os_percentuais_das_metricas():
+    resultado = _real(resumo_executivo="Um terço dos casos foi para a UTI.")
+    assert resultado.violacoes == ["numero_nao_conferido: 'Um terço dos casos' em resumo_executivo"]
+    (instrucao,) = resultado.instrucoes
+    for trecho in ("uti.valor = 29,4%", "mortalidade.valor = 8,0%", "vacinacao.valor = 76,1%",
+                   "vacinacao.complemento.vacina_gripe = 32,1%"):  # fmt: skip
+        assert trecho in instrucao
+    assert "outro_virus" not in instrucao  # a lista é a das métricas, não a de cada categoria
+    assert _numericas(instrucao) == []
+
+
+def test_multiplicador_sem_evidencia_instrui_remover_e_mostra_as_variacoes_exatas():
+    resultado = _real(contexto_periodo_dados="Os casos de SRAG seguem dobrando no país.")
+    assert resultado.violacoes == ["numero_nao_conferido: 'dobrando' em contexto_periodo_dados"]
+    (instrucao,) = resultado.instrucoes
+    assert "Remova" in instrucao
+    assert "aumento_casos.valor = queda de 14,3%" in instrucao
+    assert "aumento_casos.complemento.variacao_30d = alta de 28,6%" in instrucao
+    assert _numericas(instrucao) == []
+
+
+def test_data_nao_conferida_lista_as_datas_permitidas():
+    resultado = _real(contexto_periodo_dados="O boletim tratou do dia 24 de maio.")  # a309fb82
+    assert resultado.violacoes == ["data_nao_conferida: '24 de maio' em contexto_periodo_dados"]
+    (instrucao,) = resultado.instrucoes
+    for data in ("29/12/2024", "29/05/2025", "11/06/2025", "25/06/2025"):
+        assert data in instrucao
+    assert "24/05" not in instrucao
+    assert _numericas(instrucao) == []
+
+
+def test_numero_de_noticia_sem_citacao_instrui_citar_na_mesma_frase(evidencias):
+    resultado = _verificar(texto_valido(contexto_periodo_dados="As internações subiram 15%."),
+                           evidencias)  # fmt: skip
+    assert _tem(resultado.violacoes, "numero_nao_conferido: '15%'")
+    (instrucao,) = resultado.instrucoes
+    assert "[1]" in instrucao and "MESMA frase" in instrucao and "remova" in instrucao
+
+
+def test_percentual_mal_arredondado_aponta_o_valor_do_json_e_o_arredondamento_certo():
+    resultado = _real(resumo_executivo="Outros vírus responderam por 27,9% dos casos.")  # e51b435a
+    assert resultado.violacoes == ["numero_nao_conferido: '27,9%' em resumo_executivo"]
+    (instrucao,) = resultado.instrucoes
+    assert "outro_virus" in instrucao and "28,0%" in instrucao
+    assert _numericas(instrucao) == []
+
+
+def test_percentual_sem_vizinho_no_json_nao_ganha_valor_sugerido():
+    resultado = _real(resumo_executivo="A taxa chegou a 50,0%.")
+    (instrucao,) = resultado.instrucoes
+    assert "não calcule" in instrucao.lower() and "remova" in instrucao
+    assert extrair_numeros(re.sub(r"'[^']*'", " ", instrucao)) == []  # nada sugerido
+
+
+def test_texto_aprovado_nao_tem_instrucao(evidencias):
+    assert _verificar(texto_valido(), evidencias).instrucoes == []
+
+
+def test_instrucao_nao_entra_na_violacao(evidencias):
+    resultado = _real(**_comentario("uti", "Um terço dos casos foi para a UTI."),
+                      contexto_periodo_dados="Os casos seguem dobrando.")  # fmt: skip
+    assert len(resultado.instrucoes) == 2
+    for violacao in resultado.violacoes:
+        assert "Escreva" not in violacao and "29,4%" not in violacao and "Remova" not in violacao

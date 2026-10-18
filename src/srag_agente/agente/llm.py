@@ -125,10 +125,12 @@ def mensagem_do_redator(contexto: ContextoRedacao) -> str:
 
     Notícia e trecho do dicionário não vão no JSON cru: passam pelos mesmos formatadores que o
     orquestrador usa (campos escapados, em uma linha, dentro de <noticia_externa>). O número do
-    atributo `indice` é o `id` da notícia (a numeração é sequencial).
+    atributo `indice` é o `id` da notícia (a numeração é sequencial). Numa nova tentativa, as
+    instruções de correção (texto nosso, montado pelo guardrail de saída) vão por último.
     """
     base = contexto.model_dump(
-        mode="json", exclude={"noticias", "trechos_dicionario", "pergunta_extra"}
+        mode="json",
+        exclude={"noticias", "trechos_dicionario", "pergunta_extra", "instrucoes_correcao"},
     )
     partes = [json.dumps(base, ensure_ascii=False)]
     if contexto.noticias:
@@ -144,6 +146,11 @@ def mensagem_do_redator(contexto: ContextoRedacao) -> str:
         partes.append(dicionario.para_llm())
     if contexto.pergunta_extra:
         partes.append(pergunta_como_dado(contexto.pergunta_extra))
+    if contexto.instrucoes_correcao:
+        partes.append(
+            "Correções obrigatórias (o texto anterior foi rejeitado; refaça-o seguindo cada uma):\n"
+            + "\n".join(f"- {instrucao}" for instrucao in contexto.instrucoes_correcao)
+        )
     return "\n".join(partes)
 
 

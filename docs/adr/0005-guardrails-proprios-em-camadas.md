@@ -23,12 +23,15 @@ classificador de escopo da pergunta). Três momentos, que cobrem as cinco camada
    número contra as evidências com tolerância só de arredondamento; sentido de variação; links
    que não estão nos resultados; notícia de uma janela usada na outra; contagem de 1 a 4 (que a
    supressão nunca exibe, ADR 0011); recomendação clínica; HTML e instrução a modelo. Violação
-   → 1 nova redação → faixa "revisão humana necessária" (status `revisao_humana`); o texto
+   → até 2 novas redações, cada uma com uma **instrução de correção** só para o LLM (o valor
+   exato do campo do JSON, a notícia a citar na mesma frase, as datas permitidas ou o que
+   remover; só valores das evidências) → faixa "revisão humana necessária" (status
+   `revisao_humana`). A instrução não muda o que barra e não vai à trilha; o texto
    reprovado é retido (`agente/nos.py`): o relatório sai com o que vem do SQL, a faixa com as
    violações e um aviso de retenção no lugar dos comentários; a trilha guarda as violações e o
    tamanho e o SHA-256 do texto retido, nunca o texto.
 3. **Execução** — `guardrails/limites.py`: 12 chamadas de ferramenta, 60.000 tokens, 300 s,
-   2 voltas de cobertura, 2 tentativas de redação. Reserva OpenRouter → OpenAI
+   2 voltas de cobertura, 3 tentativas de redação. Reserva OpenRouter → OpenAI
    (`agente/llm.py`, `with_fallbacks`) e Tavily → RSS (ADR 0009). Teto atingido → para,
    registra e entrega relatório parcial com aviso.
 

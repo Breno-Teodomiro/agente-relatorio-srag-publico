@@ -347,6 +347,7 @@ class NosAgente:
             data_execucao=estado["data_execucao"],
             pergunta_extra=estado.get("pergunta_extra"),
             violacoes_anteriores=estado["violacoes"],
+            instrucoes_correcao=estado["instrucoes_correcao"],
             avisos=estado["avisos"],
         )
         inicio = perf_counter()
@@ -390,19 +391,23 @@ class NosAgente:
         Os avisos (ex.: notícia sem data citada, ADR 0007) vão à auditoria em TODA tentativa, mas
         ao estado (e daí ao relatório) só os do texto final: `avisos` acumula entre os nós, e o
         de uma tentativa refeita se repetiria ou sobraria sem a citação que o gerou.
+
+        As instruções de correção (valor exato a usar, notícia a citar, o que remover) seguem só
+        para a próxima redação: a trilha guarda as violações curtas, nunca as instruções.
         """
         texto = estado["texto"]
         if texto is None:
-            violacoes, pii, avisos = estado["violacoes"], [], []
+            violacoes, pii, avisos, instrucoes = estado["violacoes"], [], [], []
         else:
             resultado = verificar_saida(
                 texto, estado["evidencias"], numerar_noticias(estado["evidencias"])
             )
-            texto, violacoes, pii, avisos = (
+            texto, violacoes, pii, avisos, instrucoes = (
                 resultado.texto,
                 resultado.violacoes,
                 resultado.dados_pessoais_mascarados,
                 resultado.avisos,
+                resultado.instrucoes,
             )
         if not violacoes:
             status = "parcial" if estado["cobertura_incompleta"] else "ok"
@@ -426,7 +431,12 @@ class NosAgente:
         )
         # Em revisão humana o texto reprovado fica retido: não segue ao relatório (que publica só
         # o que vem do SQL, a faixa e as violações) nem à trilha (que guarda tamanho e hash).
-        atualizacao = {"texto": None if retido else texto, "violacoes": violacoes, "status": status}
+        atualizacao = {
+            "texto": None if retido else texto,
+            "violacoes": violacoes,
+            "instrucoes_correcao": instrucoes if status == "em_andamento" else [],
+            "status": status,
+        }
         if status != "em_andamento":
             atualizacao["avisos"] = avisos
         return atualizacao

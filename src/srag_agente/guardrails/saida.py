@@ -30,6 +30,12 @@ Barra (violação → nova redação → revisão humana):
 Avisa (não barra): citação de notícia sem data, porque a busca aceita item sem data em qualquer
 janela.
 
+Instrução de correção: cada violação de número, data ou fração ganha uma instrução acionável para
+a nova redação ("uti.valor é 29,4%: escreva exatamente 29,4%"; "cite [5] na MESMA frase ou remova
+o número"; as datas e as variações que o JSON traz). Ela só usa valores das evidências, cada um
+com o campo de onde veio, e vai SÓ ao LLM da nova tentativa: a violação, que vai à trilha e ao
+relatório, continua curta. A instrução não muda o que barra.
+
 Não são números a conferir: ordinais ("1º semestre", "2ª onda"), as janelas da metodologia só
 quando seguidas da unidade (7, 12, 14 e 30 dias/semanas/meses; 1 e 2 semanas), "4 métricas",
 "2 gráficos", "27 UFs", "por 100 mil habitantes", semana epidemiológica de 1 a 53 e os rótulos
@@ -45,6 +51,7 @@ contagem; domínio sem esquema nem ``www`` só é reconhecido nas terminações 
 lista de termos clínicos não cobre paráfrase.
 """
 
+import contextlib
 import math
 import re
 from dataclasses import dataclass, field
@@ -219,6 +226,12 @@ _HTML = re.compile(
     re.IGNORECASE,
 )
 _CHAVES_FRACAO = frozenset({"valor", "percentual", "vacina_gripe"})
+_CAMPOS_DE_DATA = frozenset({"periodo_inicio", "periodo_fim", "data_referencia"})
+# Percentual citado a menos de 1 ponto de um valor do JSON: provável arredondamento errado
+# ("27,9%" para 27,97%). A instrução mostra os vizinhos com o campo; o redator escolhe pelo sentido.
+_JANELA_VIZINHO = 1.0
+_MAX_VIZINHOS = 3
+_MAX_DATAS = 12
 
 
 # ---- modelos ------------------------------------------------------------------------------------
@@ -239,6 +252,30 @@ class ResultadoSaida(BaseModel):
     violacoes: list[str]
     dados_pessoais_mascarados: list[str]
     avisos: list[str] = []
+    # Só para o LLM da nova tentativa: não vão à trilha nem ao relatório.
+    instrucoes: list[str] = []
+
+
+def _pct(valor: float) -> str:
+    """Percentual como o redator deve escrever: uma casa, vírgula, sem sinal."""
+    return f"{abs(valor):.1f}".replace(".", ",") + "%"
+
+
+def _variacao(valor: float) -> str:
+    return f"{'alta' if valor > 0 else 'queda' if valor < 0 else 'variação'} de {_pct(valor)}"
+
+
+@dataclass(frozen=True)
+class _Rotulo:
+    """Um percentual das evidências com o caminho dele no JSON que o redator vê."""
+
+    campo: str  # "uti.valor", "aumento_casos.complemento.variacao_30d"
+    valor: float  # fração vezes 100; com sinal quando é variação
+    variacao: bool
+    metrica: bool  # veio de consultar_metricas (não de uma categoria de distribuição)
+
+    def __str__(self) -> str:
+        return f"{self.campo} = {_variacao(self.valor) if self.variacao else _pct(self.valor)}"
 
 
 @dataclass
@@ -255,6 +292,9 @@ class _Permitidos:
     limites_idade: set[int] = field(default_factory=set)
     percentuais_noticia: dict[int, set[float]] = field(default_factory=dict)
     contagens_noticia: dict[int, set[float]] = field(default_factory=dict)
+    # para a instrução de correção: o mesmo valor, com o campo de onde veio
+    rotulos: list[_Rotulo] = field(default_factory=list)
+    rotulos_data: dict[date, list[str]] = field(default_factory=dict)
 
 
 # ---- normalização e extração -------------------------------------------------------------------
@@ -398,6 +438,32 @@ def _coletar(valor: object, chave: str, eh_variacao: bool, p: _Permitidos) -> No
             p.fracoes.add(abs(valor) * 100)
 
 
+def _rotular(valor: object, caminho: str, eh_variacao: bool, metrica: bool,
+             p: _Permitidos) -> None:  # fmt: skip
+    """Os percentuais e as datas de período de `_coletar`, com o caminho no JSON: a instrução
+    de correção diz QUAL campo usar e nunca traz valor que não esteja nas evidências."""
+    chave = caminho.rsplit(".", 1)[-1]
+    if isinstance(valor, bool) or valor is None:
+        return
+    if isinstance(valor, dict):
+        for k, v in valor.items():
+            _rotular(v, f"{caminho}.{k}", eh_variacao, metrica, p)
+    elif isinstance(valor, list):
+        for item in valor:
+            categoria = item.get("categoria") if isinstance(item, dict) else None
+            destino = f"{caminho}.{categoria}" if isinstance(categoria, str) else caminho
+            _rotular(item, destino, eh_variacao, metrica, p)
+    elif isinstance(valor, str):
+        if chave in _CAMPOS_DE_DATA and re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
+            with contextlib.suppress(ValueError):
+                p.rotulos_data.setdefault(date.fromisoformat(valor), []).append(caminho)
+    elif isinstance(valor, int | float) and math.isfinite(valor):
+        if chave.startswith("variacao") or (chave == "valor" and eh_variacao):
+            p.rotulos.append(_Rotulo(caminho, valor * 100, True, metrica))
+        elif chave in _CHAVES_FRACAO or chave.startswith("taxa"):
+            p.rotulos.append(_Rotulo(caminho, abs(valor) * 100, False, metrica))
+
+
 def _so_datas(valor: object, p: _Permitidos) -> None:
     if isinstance(valor, dict):
         for v in valor.values():
@@ -421,6 +487,10 @@ def _permitidos(evidencias: list[Evidencia], noticias: list[NoticiaCitavel]) -> 
         else:
             eh_variacao = evidencia.dados.get("chave") == "aumento_casos"
             _coletar(evidencia.dados, "", eh_variacao, p)
+            base = str(evidencia.dados.get("chave") or evidencia.dados.get("dimensao")
+                       or evidencia.dados.get("tipo") or evidencia.ferramenta)  # fmt: skip
+            metrica = evidencia.ferramenta == "consultar_metricas"
+            _rotular(evidencia.dados, base, eh_variacao, metrica, p)
     for noticia in noticias:
         texto, datas = _datas_do_texto(_normalizar(f"{noticia.titulo} {noticia.trecho}"))
         for _bruto, dia, mes, ano in datas:
@@ -438,6 +508,9 @@ def _permitidos(evidencias: list[Evidencia], noticias: list[NoticiaCitavel]) -> 
         p.contagens_noticia[noticia.id] = contagens
         if noticia.data:
             _registrar_data(noticia.data, p)
+            with contextlib.suppress(ValueError):
+                publicada = date.fromisoformat(noticia.data)
+                p.rotulos_data.setdefault(publicada, []).append(f"notícia [{noticia.id}]")
     return p
 
 
@@ -505,6 +578,7 @@ class _Secao:
     p: _Permitidos
     violacoes: list[str] = field(default_factory=list)
     citadas: set[int] = field(default_factory=set)
+    instrucoes: list[str] = field(default_factory=list)
 
     def links(self, frase: str) -> tuple[str, set[int]]:
         """Confere os links da frase; devolve a frase sem eles e as notícias que eles citam."""
@@ -540,7 +614,9 @@ class _Secao:
         cont_citadas = set().union(*(p.contagens_noticia.get(i, set()) for i in citadas))
         for achado in _ROTULO_MENOS_DE_5.finditer(frase):
             if not p.tem_rotulo_suprimido:
-                self._nao_conferido(achado.group(0).strip(), None)
+                bruto = achado.group(0).strip()
+                self._nao_conferido(bruto, None, f"'{bruto}' só vale quando o JSON traz '<5': "
+                                                 "remova-o.")  # fmt: skip
         self._por_extenso(frase)
         self._em_palavras(frase, p.fracoes | perc_citadas)
         texto = _limpar_para_numeros(_apagar_rotulos_dos_dados(frase, p))
@@ -548,7 +624,8 @@ class _Secao:
         for numero, ano in _tokens(texto):
             if ano:
                 if int(numero.valor) not in p.anos:
-                    self._nao_conferido(numero.bruto, None)
+                    instrucao = f"o ano '{numero.bruto}' não aparece nas evidências: remova-o."
+                    self._nao_conferido(numero.bruto, None, instrucao)
             elif numero.percentual:
                 self._percentual(numero, texto[: numero.inicio], perc_citadas)
             elif (0 < numero.valor < LIMIAR_SUPRESSAO and numero.valor.is_integer()
@@ -558,13 +635,77 @@ class _Secao:
             elif not _perto(numero, p.contagens | cont_citadas):
                 self._nao_conferido(numero.bruto, numero)
 
+    def _instruir(self, instrucao: str) -> None:
+        self.instrucoes.append(f"Na seção {self.nome}, {instrucao}")
+
     def _suprimido(self, bruto: str) -> None:
         self.violacoes.append(f"valor_suprimido: '{bruto}' em {self.nome} "
                               "(contagens de 1 a 4 nunca são exibidas)")  # fmt: skip
+        self._instruir(f"'{bruto}' é contagem de 1 a 4, que nunca é exibida: remova o número.")
 
     def _extenso_nao_conferido(self, bruto: str) -> None:
         self.violacoes.append(f"numero_nao_conferido: '{bruto}' em {self.nome} (número por "
                               "extenso não é conferido: escreva com algarismos)")  # fmt: skip
+        self._instruir(f"'{bruto}' está por extenso: escreva com algarismos o valor exato do JSON "
+                       "ou remova-o.")  # fmt: skip
+
+    # ---- instruções de correção (só valores das evidências, sempre com o campo) -----------
+    def _da_secao(self) -> list[_Rotulo]:
+        """Percentuais da métrica de um comentário (comentario_uti → uti.*); vazio fora deles."""
+        metrica = self.nome.removeprefix("comentario_")
+        if metrica == self.nome:
+            return []
+        return [r for r in self.p.rotulos if r.metrica and r.campo.startswith(f"{metrica}.")]
+
+    def _instrucao_fracao(self, bruto: str) -> str:
+        da_secao = [r for r in self._da_secao() if not r.variacao]
+        if len(da_secao) == 1:
+            campo, valor = da_secao[0].campo, _pct(da_secao[0].valor)
+            return (f"'{bruto}' é fração em palavras e não confere com o JSON: {campo} é {valor}. "
+                    f"Escreva exatamente {valor} no lugar de '{bruto}', sem fração, aproximação "
+                    "nem número por extenso.")  # fmt: skip
+        opcoes = da_secao or [r for r in self.p.rotulos if r.metrica and not r.variacao]
+        if not opcoes:
+            return f"'{bruto}' é fração em palavras sem percentual no JSON que confirme: remova-a."
+        return (f"'{bruto}' é fração em palavras e não confere com o JSON. Troque pelo percentual "
+                "exato, com algarismos, do campo de que a frase fala "
+                f"({'; '.join(map(str, opcoes))}) ou remova a fração.")  # fmt: skip
+
+    def _instrucao_multiplicador(self, bruto: str) -> str:
+        variacoes = [r for r in self.p.rotulos if r.metrica and r.variacao]
+        exatas = (f"; para falar de variação, use só a exata: {'; '.join(map(str, variacoes))}"
+                  if variacoes else "")  # fmt: skip
+        return (f"'{bruto}' é variação em palavras que não está no JSON (nem quando uma notícia "
+                f"a usa). Remova '{bruto}'{exatas}.")  # fmt: skip
+
+    def _instrucao_percentual(self, numero: NumeroCitado) -> str:
+        bruto = numero.bruto
+        vizinhos = sorted(
+            (r for r in self.p.rotulos if abs(abs(r.valor) - numero.valor) < _JANELA_VIZINHO),
+            key=lambda r: abs(abs(r.valor) - numero.valor),
+        )[:_MAX_VIZINHOS]
+        if vizinhos:
+            return (f"'{bruto}' não confere com o JSON (arredonde para uma casa, não trunque). "
+                    f"Valores do JSON próximos: {'; '.join(map(str, vizinhos))}. Se a frase "
+                    "fala de um deles, escreva exatamente esse valor; senão, remova o "
+                    "número.")  # fmt: skip
+        if da_secao := self._da_secao():
+            exatos = "; ".join(map(str, da_secao))
+            return (f"'{bruto}' não está no JSON. Nesta seção use só {exatos}, sem calcular, ou "
+                    "remova o número.")  # fmt: skip
+        return (f"'{bruto}' não está no JSON nem é arredondamento de um valor dele. Não calcule "
+                "(diferença, soma, razão, média): use um valor do JSON com o mesmo significado ou "
+                "remova o número.")  # fmt: skip
+
+    def _instrucao_data(self, bruto: str) -> str:
+        datas = sorted(self.p.rotulos_data.items())[:_MAX_DATAS]
+        if not datas:
+            return f"a data '{bruto}' não está nas evidências: remova-a."
+        lista = "; ".join(f"{dia:%d/%m/%Y} ({', '.join(dict.fromkeys(campos))})"
+                          for dia, campos in datas)  # fmt: skip
+        return (f"a data '{bruto}' não está nas evidências (data sem ano tirada de notícia não é "
+                f"conferida). Remova-a ou use só datas do JSON: {lista}; ou os dias e meses das "
+                "séries.")  # fmt: skip
 
     def _por_extenso(self, frase: str) -> None:
         """Número por extenso não tem casa decimal a conferir: percentual e contagem barram.
@@ -596,11 +737,13 @@ class _Secao:
                 percentual = 100 * parte / todo if parte < todo else None
             if percentual is None or not any(abs(percentual - f) <= 0.5 + _EPSILON
                                              for f in fracoes):  # fmt: skip
-                self._nao_conferido(achado.group(0), None)
+                bruto = achado.group(0)
+                self._nao_conferido(bruto, None, self._instrucao_fracao(bruto))
         for achado in _MULTIPLICADOR.finditer(frase):
             variacao = _VARIACAO_MULTIPLICADOR[achado.lastgroup]
             if not any(abs(variacao - v) <= 0.5 + _EPSILON for v in self.p.variacoes):
-                self._nao_conferido(achado.group(0), None)
+                bruto = achado.group(0)
+                self._nao_conferido(bruto, None, self._instrucao_multiplicador(bruto))
 
     def _proporcoes(self, texto: str, fracoes: set[float]) -> str:
         """Proporção ("1 em cada 10") vale como o percentual inteiro que ela é: 10,0% → "1 em cada
@@ -611,7 +754,8 @@ class _Secao:
             percentual = 100 * parte / todo if 0 < parte < todo else None
             if percentual is None or not any(abs(percentual - f) <= 0.5 + _EPSILON
                                              for f in fracoes):  # fmt: skip
-                self._nao_conferido(achado.group(0), None)
+                bruto = achado.group(0)
+                self._nao_conferido(bruto, None, self._instrucao_fracao(bruto))
             texto = _apagar(texto, achado.start(), achado.end())
         return texto
 
@@ -631,22 +775,42 @@ class _Secao:
             real = "queda" if sentido > 0 else "alta"
             self.violacoes.append(f"sentido_invertido: '{numero.bruto}' em {self.nome} (nas "
                                   f"evidências a variação é de {real})")  # fmt: skip
+            self._instruir(f"'{numero.bruto}' está com o sentido trocado: no JSON a variação é "
+                           f"de {real}. Corrija o sentido (alta ou queda) ou remova o "
+                           "número.")  # fmt: skip
         else:
             self._nao_conferido(numero.bruto, numero)
 
-    def _nao_conferido(self, bruto: str, numero: NumeroCitado | None) -> None:
+    def _nao_conferido(self, bruto: str, numero: NumeroCitado | None,
+                       instrucao: str | None = None) -> None:  # fmt: skip
+        """Violação curta (trilha e relatório) e, à parte, a instrução para a nova redação.
+
+        Sem `instrucao` explícita, ela vem do número: da notícia (citar na mesma frase),
+        percentual (vizinhos do JSON) ou contagem.
+        """
         dica = ""
         if numero is not None:
             fonte = self.p.percentuais_noticia if numero.percentual else self.p.contagens_noticia
             if ids := [i for i, valores in fonte.items() if _perto(numero, valores)]:
                 dica = (f" (número da notícia [{ids[0]}]: cite a notícia na mesma frase do "
                         "número)")  # fmt: skip
+                instrucao = (f"'{bruto}' é número da notícia [{ids[0]}]: escreva [{ids[0]}] na "
+                             "MESMA frase do número ou remova o número.")  # fmt: skip
+            elif instrucao is None and numero.percentual:
+                instrucao = self._instrucao_percentual(numero)
+            elif instrucao is None:
+                instrucao = (f"'{bruto}' não está no JSON: use só contagens que aparecem nele "
+                             "(numerador, denominador, casos), sem somar nem subtrair, ou remova "
+                             "o número.")  # fmt: skip
         self.violacoes.append(f"numero_nao_conferido: '{bruto}' em {self.nome}{dica}")
+        if instrucao:
+            self._instruir(instrucao)
 
     def datas(self, frase: str) -> None:
         for bruto, dia, mes, ano in _datas_do_texto(_apagar_padrao(frase, _URL_ESQUEMA))[1]:
             if not _data_confere(dia, mes, ano, self.p):
                 self.violacoes.append(f"data_nao_conferida: '{bruto}' em {self.nome}")
+                self._instruir(self._instrucao_data(bruto))
 
 
 def _janela_exigida(secao: str) -> str | None:
@@ -690,8 +854,9 @@ def _conferir_citacoes(secao: str, ids: list[int], noticias: dict[int, NoticiaCi
     return violacoes
 
 
-def _conferir_secao(nome: str, texto: str, noticias: dict[int, NoticiaCitavel],
-                    p: _Permitidos, avisos: list[str]) -> list[str]:  # fmt: skip
+def _conferir_secao(nome: str, texto: str, noticias: dict[int, NoticiaCitavel], p: _Permitidos,
+                    avisos: list[str]) -> tuple[list[str], list[str]]:  # fmt: skip
+    """(violações, instruções de correção) de uma seção."""
     secao = _Secao(nome, noticias, p)
     if achado := _HTML.search(texto):
         secao.violacoes.append(f"marcacao_html: '{_trecho(achado.group(0))}' em {nome}")
@@ -709,7 +874,7 @@ def _conferir_secao(nome: str, texto: str, noticias: dict[int, NoticiaCitavel],
         ids_secao += sorted(citadas) + sorted(citadas_por_link)
         secao.datas(sem_links)
         secao.numeros(sem_links, citadas | citadas_por_link)
-    return secao.violacoes + _conferir_citacoes(nome, ids_secao, noticias, avisos)
+    return secao.violacoes + _conferir_citacoes(nome, ids_secao, noticias, avisos), secao.instrucoes
 
 
 def verificar_saida(texto: TextoRelatorio, evidencias: list[Evidencia],
@@ -723,11 +888,17 @@ def verificar_saida(texto: TextoRelatorio, evidencias: list[Evidencia],
     permitidos = _permitidos(evidencias, noticias)
     por_id = {n.id: n for n in noticias}
     violacoes: list[str] = []
+    instrucoes: list[str] = []
     avisos: list[str] = []
     for nome, conteudo in mascaradas.items():
-        violacoes += _conferir_secao(nome, _normalizar(conteudo), por_id, permitidos, avisos)
+        da_secao, instrucoes_da_secao = _conferir_secao(
+            nome, _normalizar(conteudo), por_id, permitidos, avisos
+        )
+        violacoes += da_secao
+        instrucoes += instrucoes_da_secao
     # Segunda barreira: a mensagem repete trechos do texto; nenhum dado pessoal sai por ela.
     violacoes = list(dict.fromkeys(mascarar_pii(v)[0] for v in violacoes))
+    instrucoes = list(dict.fromkeys(mascarar_pii(i)[0] for i in instrucoes))[:LIMITE_VIOLACOES]
     if len(violacoes) > LIMITE_VIOLACOES:
         excedentes = len(violacoes) - LIMITE_VIOLACOES
         violacoes = [*violacoes[:LIMITE_VIOLACOES], f"violacoes_truncadas: mais {excedentes}"]
@@ -736,4 +907,5 @@ def verificar_saida(texto: TextoRelatorio, evidencias: list[Evidencia],
         violacoes=violacoes,
         dados_pessoais_mascarados=pii,
         avisos=list(dict.fromkeys(mascarar_pii(a)[0] for a in avisos)),
+        instrucoes=instrucoes,
     )

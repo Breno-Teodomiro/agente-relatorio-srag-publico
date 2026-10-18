@@ -9,7 +9,8 @@ class Limites:
     max_chamadas_ferramenta: int = 12
     max_tokens: int = 60_000
     max_voltas_cobertura: int = 2
-    max_tentativas_redacao: int = 2  # 1ª redação + 1 nova tentativa (spec §6)
+    # 1ª redação + 2 novas tentativas, cada uma com a instrução de correção (ADR 0005)
+    max_tentativas_redacao: int = 3
     max_segundos: float = 300.0
     # Teto próprio de `buscar_noticias` (spec §3.3: duas janelas; a folga cobre um segundo termo).
     # A primeira execução real pediu 8 buscas e estourou o teto geral de chamadas.

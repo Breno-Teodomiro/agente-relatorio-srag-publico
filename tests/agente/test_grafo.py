@@ -22,6 +22,7 @@ from srag_agente.auditoria.registro import Auditoria
 from srag_agente.ferramentas.registro import Ferramenta
 from srag_agente.guardrails.entrada import ClassificacaoEscopo
 from srag_agente.guardrails.limites import Limites
+from srag_agente.modelos import ComentarioMetrica
 from tests.fakes import (
     CHAMADAS_COMPLETAS,
     HOJE,
@@ -245,11 +246,11 @@ def test_limite_de_chamadas_para_e_marca_parcial():
     assert estado["status"] == "parcial"
 
 
-def test_texto_reprovado_duas_vezes_vai_para_revisao_humana():
+def test_texto_reprovado_em_todas_as_tentativas_vai_para_revisao_humana():
     errado = texto_valido(resumo_executivo="A mortalidade foi de 50,0%.")
     deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), _redator(errado))
     estado = _rodar(deps)
-    assert estado["tentativas_redacao"] == 2
+    assert estado["tentativas_redacao"] == 3
     assert estado["status"] == "revisao_humana"
     assert any("50,0%" in v for v in estado["violacoes"])
 
@@ -270,12 +271,13 @@ def test_texto_reprovado_na_ultima_tentativa_e_retido_e_a_trilha_guarda_so_taman
     )
     deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), _redator(errado))
     estado = _rodar(deps)
-    assert (estado["status"], estado["tentativas_redacao"]) == ("revisao_humana", 2)
+    assert (estado["status"], estado["tentativas_redacao"]) == ("revisao_humana", 3)
     assert estado["texto"] is None
     assert any(v.startswith("conteudo_clinico") for v in estado["violacoes"])
     assert any(v.startswith("link_nao_verificado") for v in estado["violacoes"])
-    primeira, ultima = _resultados_saida(deps)
-    assert "texto_retido" not in primeira  # 1ª reprovação: o texto ainda vai ser refeito
+    *anteriores, ultima = _resultados_saida(deps)
+    assert len(anteriores) == 2  # reprovações que ainda vão ser refeitas: nada retido
+    assert all("texto_retido" not in r for r in anteriores)
     retido = ultima["texto_retido"]
     # tamanho e hash do texto MASCARADO: o CPF não entra nem pelo hash
     mascarado = errado.secoes() | {"limitacoes": f"{clinico} Contato: CPF [dado removido]."}
@@ -776,3 +778,84 @@ def test_teto_de_buscar_noticias_soma_os_turnos():
     estado = _rodar(deps)
     assert len(buscador.chamadas) == 4  # 2 + 2; a do 3º turno é recusada
     assert estado["chamadas_por_ferramenta"]["buscar_noticias"] == 4
+
+
+# ---- realimentação da nova tentativa (execuções reais de 18/10/2026) --------------------------
+def _uti_em_fracao():
+    """'Um terço' para a UTI de 32,2% das evidências falsas: o erro real que o LLM repetia."""
+    fracao = ComentarioMetrica(metrica="uti", comentario="Um terço dos casos foi para a UTI.")
+    comentarios = [fracao if c.metrica == "uti" else c for c in texto_valido().comentarios_metricas]
+    return texto_valido(comentarios_metricas=comentarios)
+
+
+def _estruturado_gravando(*textos):
+    """Dublê do LLM estruturado do redator: grava a lista de mensagens de cada chamada."""
+    fila, chamadas = list(textos), []
+
+    def invocar(mensagens):
+        chamadas.append(list(mensagens))
+        texto = fila.pop(0) if len(fila) > 1 else fila[0]
+        return {"raw": AIMessage(content="", usage_metadata=USO), "parsed": texto,
+                "parsing_error": None}  # fmt: skip
+
+    return RunnableLambda(invocar), chamadas
+
+
+def test_nova_tentativa_recebe_na_mensagem_ao_llm_a_instrucao_com_o_valor_exato():
+    estruturado, chamadas = _estruturado_gravando(_uti_em_fracao(), texto_valido())
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+                 criar_redator(estruturado))  # fmt: skip
+    estado = _rodar(deps)
+    assert (estado["status"], estado["tentativas_redacao"]) == ("ok", 2)
+    primeira, segunda = (mensagens[-1].content for mensagens in chamadas)
+    assert "uti.valor" not in primeira and "Escreva exatamente" not in primeira
+    assert "Escreva exatamente 32,2%" in segunda and "uti.valor" in segunda
+    # a violação curta segue na trilha; a instrução detalhada, não
+    trilha = json.dumps(deps.auditoria.eventos, ensure_ascii=False)
+    assert "numero_nao_conferido: 'Um terço dos casos' em comentario_uti" in trilha
+    assert "Escreva exatamente" not in trilha and "uti.valor" not in trilha
+
+
+def test_instrucao_nao_chega_ao_estado_final_nem_ao_relatorio():
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+                 _redator(_uti_em_fracao()))  # fmt: skip
+    estado = _rodar(deps)
+    assert estado["status"] == "revisao_humana"
+    assert estado["instrucoes_correcao"] == []
+    assert not any("Escreva" in v for v in estado["violacoes"])
+
+
+def test_padrao_e_tres_tentativas_antes_da_revisao_humana():
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+                 _redator(_uti_em_fracao(), _uti_em_fracao(), texto_valido()))  # fmt: skip
+    estado = _rodar(deps)
+    assert (estado["status"], estado["tentativas_redacao"]) == ("ok", 3)
+    assert [r["status"] for r in _resultados_saida(deps)] == ["em_andamento", "em_andamento", "ok"]
+
+
+def test_com_teto_de_duas_tentativas_a_segunda_reprovada_vai_a_revisao_humana():
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"),
+                 _redator(_uti_em_fracao(), _uti_em_fracao(), texto_valido()),
+                 limites=Limites(max_tentativas_redacao=2))  # fmt: skip
+    estado = _rodar(deps)
+    assert (estado["status"], estado["tentativas_redacao"]) == ("revisao_humana", 2)
+
+
+def test_instrucao_de_uma_tentativa_nao_sobra_depois_de_saida_fora_do_formato():
+    recebidas = []
+
+    def redator(contexto):
+        recebidas.append((contexto.violacoes_anteriores, contexto.instrucoes_correcao))
+        if len(recebidas) == 1:
+            return _uti_em_fracao(), (200, 80), None
+        if len(recebidas) == 2:
+            raise ErroRedacao("saída vazia")
+        return texto_valido(), (200, 80), None
+
+    deps = _deps(_orquestrador(CHAMADAS_COMPLETAS, "EVIDENCIAS_COMPLETAS"), redator)
+    estado = _rodar(deps)
+    assert (estado["status"], estado["tentativas_redacao"]) == ("ok", 3)
+    assert recebidas[0] == ([], [])
+    assert any("32,2%" in i for i in recebidas[1][1])
+    violacoes, instrucoes = recebidas[2]
+    assert violacoes[0].startswith("saida_invalida") and instrucoes == []

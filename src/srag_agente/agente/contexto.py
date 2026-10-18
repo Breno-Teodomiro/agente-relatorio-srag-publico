@@ -20,6 +20,7 @@ class ContextoRedacao(BaseModel):
     trechos_dicionario: list[dict]
     pergunta_extra: str | None = None
     violacoes_anteriores: list[str] = []
+    instrucoes_correcao: list[str] = []  # só na nova tentativa: o que fazer com cada violação
     avisos: list[str] = []
 
 
@@ -30,6 +31,7 @@ def montar_contexto(
     data_execucao: date,
     pergunta_extra: str | None = None,
     violacoes_anteriores: Iterable[str] = (),
+    instrucoes_correcao: Iterable[str] = (),
     avisos: Iterable[str] = (),
 ) -> ContextoRedacao:
     def dados(ferramenta: str) -> list[dict]:
@@ -47,5 +49,6 @@ def montar_contexto(
         trechos_dicionario=[t for d in dados("consultar_dicionario") for t in d["trechos"]],
         pergunta_extra=pergunta_extra,
         violacoes_anteriores=list(violacoes_anteriores),
+        instrucoes_correcao=list(instrucoes_correcao),
         avisos=list(avisos),
     )

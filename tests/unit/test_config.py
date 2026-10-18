@@ -102,7 +102,7 @@ def test_erro_de_configuracao_nao_mostra_o_valor_recebido(monkeypatch):
 def test_limites_de_execucao_tem_os_padroes_do_spec(cfg):
     assert cfg.max_segundos_execucao == 300
     assert cfg.max_voltas_cobertura == 2
-    assert cfg.max_tentativas_redacao == 2
+    assert cfg.max_tentativas_redacao == 3
 
 
 # --- M2: tetos e preços com faixa e finitude --------------------------------------------------

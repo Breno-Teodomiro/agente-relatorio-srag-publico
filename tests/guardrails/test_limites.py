@@ -8,7 +8,8 @@ from srag_agente.guardrails.limites import Limites, motivo_de_parada
 def test_padroes_do_spec():
     limites = Limites()
     assert (limites.max_chamadas_ferramenta, limites.max_tokens) == (12, 60_000)
-    assert (limites.max_voltas_cobertura, limites.max_tentativas_redacao) == (2, 2)
+    # 1ª redação + 2 novas tentativas com a instrução de correção (ADR 0005)
+    assert (limites.max_voltas_cobertura, limites.max_tentativas_redacao) == (2, 3)
 
 
 def test_para_ao_atingir_chamadas_ou_tokens():

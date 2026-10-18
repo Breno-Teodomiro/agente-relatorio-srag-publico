@@ -1,8 +1,8 @@
 """E2E 3 — saída adversarial (spec §6, camada 4): o LLM redator mente e o guardrail reage.
 
-O redator falso devolve o mesmo texto ruim nas duas tentativas. Esperado: a 2ª tentativa recebe
-as violações, a execução termina como `revisao_humana` com a faixa visível, o texto reprovado é
-retido (nem relatório, nem trilha) e os cartões, as tabelas e os gráficos continuam sendo os
+O redator falso devolve o mesmo texto ruim nas três tentativas. Esperado: cada nova tentativa
+recebe as violações, a execução termina como `revisao_humana` com a faixa visível, o texto
+reprovado é retido (nem relatório, nem trilha) e os cartões, as tabelas e os gráficos seguem os
 números do SQL: o número inventado só aparece dentro da faixa, como violação listada, nunca como
 dado.
 """
@@ -62,7 +62,7 @@ def _conferir_cartoes_do_sql(simulacao):
 
 
 @pytest.mark.parametrize("caso", TEXTOS_RUINS)
-def test_texto_reprovado_duas_vezes_vira_revisao_humana_com_faixa(
+def test_texto_reprovado_em_todas_as_tentativas_vira_revisao_humana_com_faixa(
     caso, cfg_teste, banco_carregado, conn_etl, pasta_saida
 ):
     trocas, violacao = TEXTOS_RUINS[caso]
@@ -70,10 +70,11 @@ def test_texto_reprovado_duas_vezes_vira_revisao_humana_com_faixa(
     resultado = simulacao.rodar(cfg_teste, pasta_saida)
 
     assert resultado.status == "revisao_humana"
-    # Uma nova tentativa, já sabendo o que corrigir; falhou de novo, para.
-    assert len(simulacao.contextos) == 2
+    # Duas novas tentativas, já sabendo o que corrigir; falhou em todas, para.
+    assert len(simulacao.contextos) == 3
     assert not simulacao.contextos[0].violacoes_anteriores
-    assert any(v.startswith(violacao) for v in simulacao.contextos[1].violacoes_anteriores)
+    for refeita in simulacao.contextos[1:]:
+        assert any(v.startswith(violacao) for v in refeita.violacoes_anteriores)
     # Faixa visível no HTML e no Markdown, com a violação listada.
     assert '<div class="faixa perigo"><strong>Revisão humana necessária.</strong>' in simulacao.html
     assert violacao in unescape(simulacao.html)
@@ -85,7 +86,7 @@ def test_texto_reprovado_duas_vezes_vira_revisao_humana_com_faixa(
     assert status == "revisao_humana"
     saidas = [e for e in eventos_no_banco(conn_etl, resultado.id_execucao)
               if e["no"] == "guardrail_saida"]  # fmt: skip
-    assert len(saidas) == 2 and all(e["resultado"]["aprovado"] is False for e in saidas)
+    assert len(saidas) == 3 and all(e["resultado"]["aprovado"] is False for e in saidas)
     assert saidas[-1]["resultado"]["status"] == "revisao_humana"
     assert any(v.startswith(violacao) for v in saidas[-1]["resultado"]["violacoes"])
 

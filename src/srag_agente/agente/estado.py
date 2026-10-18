@@ -31,6 +31,9 @@ class EstadoAgente(TypedDict):
     tentativas_redacao: int
     texto: TextoRelatorio | None
     violacoes: list[str]
+    # Instruções acionáveis do guardrail de saída para a próxima redação. Vão só ao LLM: não
+    # entram na trilha nem no relatório, e ficam vazias fora de uma nova tentativa.
+    instrucoes_correcao: list[str]
     avisos: Annotated[list[str], operator.add]
     status: str  # em_andamento | ok | parcial | revisao_humana
 
@@ -52,6 +55,7 @@ def estado_inicial(uf: str, pergunta_extra: str | None, data_execucao: date) -> 
         tentativas_redacao=0,
         texto=None,
         violacoes=[],
+        instrucoes_correcao=[],
         avisos=[],
         status="em_andamento",
     )

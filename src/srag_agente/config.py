@@ -80,7 +80,7 @@ class Config(BaseSettings):
     max_tokens_execucao: int = Field(60_000, gt=0)
     max_segundos_execucao: float = Field(300.0, gt=0, allow_inf_nan=False)
     max_voltas_cobertura: int = Field(2, ge=0)
-    max_tentativas_redacao: int = Field(2, gt=0)
+    max_tentativas_redacao: int = Field(3, gt=0)
 
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
